@@ -43,11 +43,11 @@ response = await client.head("https://httpbin.org/get")
 
 ## Passing Parameters in URLs
 
-To append query parameters to a URL, pass a dictionary to the `params` argument:
+To append query parameters to a URL, pass a dictionary to the `query` argument:
 
 ```python
-params = {"search": "wreq", "page": "1"}
-response = await client.get("https://httpbin.org/get", params=params)
+query = {"search": "wreq", "page": "1"}
+response = await client.get("https://httpbin.org/get", query=query)
 print(response.url)
 # https://httpbin.org/get?search=wreq&page=1
 ```
@@ -116,11 +116,11 @@ print(result)
 
 ### Form-encoded data
 
-To send HTML form data, use the `data` argument instead:
+To send HTML form data, use the `form` argument instead:
 
 ```python
 form = {"username": "john", "password": "secret"}
-response = await client.post("https://httpbin.org/post", data=form)
+response = await client.post("https://httpbin.org/post", form=form)
 ```
 
 ---
