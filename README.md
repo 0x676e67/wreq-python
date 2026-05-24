@@ -165,20 +165,6 @@ Designed for developers, it offers high accuracy, low price, low latency, and ea
 
 ---
 
-<a href="https://legionproxy.io/?utm_source=github&utm_campaign=wreq" target="_blank">
-<img src="https://legionproxy.io/Logo.svg"  width="140", height="47">
-</a>
-
-**[LegionProxy](https://legionproxy.io/?utm_source=github&utm_campaign=wreq)** powers your scraping with fast, reliable residential proxies. Get access to 74M+ IPs across 195+ countries, with native HTTP/3 & UDP support, solid anti-ban protection, and high success rates at scale.
-
-**Global Residential IPs** • **Auto Rotation** • **Anti-Ban** • **HTTP/3 & UDP** • **Scraping at Scale**
-
-**Key Offer**: Start your free trial today, with pricing as low as $0.6 per GB.
-
-**[Website](https://legionproxy.io/?utm_source=github&utm_campaign=wreq)** | **[Discord](https://discord.gg/5zNMy9a86Z)** | **[Telegram](https://t.me/legionproxy)**
-
----
-
 <a href="https://www.swiftproxy.net/?ref=wreqpython" target="_blank">
 <img src="https://raw.githubusercontent.com/0x676e67/wreq-python/main/.github/assets/swiftproxy.png" width="149" height="40">
 </a>
@@ -190,21 +176,6 @@ Designed for developers, it offers high accuracy, low price, low latency, and ea
 **Exclusive Offer**: Get 500MB free trial traffic + an exclusive 10% OFF code: PROXY90
 
 **[Linkedin](https://www.linkedin.com/company/swiftproxy/)** | **[Discord](https://discord.com/invite/VdRMfU5RWm)** | **[Telegram](https://t.me/swiftproxy357)**
-
----
-
-<a href="https://salamoonder.com/" target="_blank">
-  <img src="https://salamoonder.com/auth/assets/images/3d_logo.png" height="47" width="47">
-</a>
-
-Anti-bots evolve quickly, but **[Salamoonder](https://salamoonder.com/)** moves faster, delivering reliable anti-bot tokens with just two API requests — no browser automation or unnecessary complexity required.  
-
-**Kasada** • **Incapsula** • **Datadome** • **Akamai** • **And many more**  
-
-
-Automatic updates keep your integration simple and low-maintenance, and it’s nearly **50%** cheaper than the competition, giving you faster results at a lower cost.
-
-**[Dashboard](https://salamoonder.com/auth/register)** | **[Docs](https://apidocs.salamoonder.com/)** | **[Telegram](https://t.me/salamoonder_telegram)**
 
 ---
 
