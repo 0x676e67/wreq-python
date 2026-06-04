@@ -46,7 +46,7 @@ class DnsOptions:
     Example:
         >>> from wreq import DnsOptions, LookupIpStrategy
         >>> from ipaddress import IPv4Address
-        >>> options = DnsOptions(LookupIpStrategy.Ipv4Only)
+        >>> options = DnsOptions(LookupIpStrategy.IPV4_ONLY)
         >>> options.add_resolve("example.com", [IPv4Address("127.0.0.1")])
     """
 
