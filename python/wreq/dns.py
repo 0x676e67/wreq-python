@@ -6,7 +6,7 @@ from ipaddress import IPv4Address, IPv6Address
 
 __all__ = [
     "LookupIpStrategy",
-    "ResolverOptions",
+    "DnsOptions",
 ]
 
 
@@ -33,27 +33,35 @@ class LookupIpStrategy(Enum):
     """Prefer IPv4, fall back to IPv6."""
 
 
-class ResolverOptions:
-    """DNS resolver options for customizing DNS resolution behavior.
+class DnsOptions:
+    """DNS options for customizing DNS resolution behavior.
 
     Args:
-        lookup_ip_strategy: The IP lookup strategy to use. Defaults to IPV4_AND_IPV6.
+        system_dns: Whether to use the system DNS resolver. Defaults to False,
+            which means using the hickory DNS resolver.
+        lookup_ip_strategy: The IP lookup strategy to use. Defaults to
+            IPV4_AND_IPV6. This option only applies to the hickory DNS
+            resolver and has no effect when using the system DNS resolver.
 
     Example:
-        >>> from wreq import ResolverOptions, LookupIpStrategy
+        >>> from wreq import DnsOptions, LookupIpStrategy
         >>> from ipaddress import IPv4Address
-        >>> options = ResolverOptions(LookupIpStrategy.Ipv4Only)
+        >>> options = DnsOptions(LookupIpStrategy.IPV4_ONLY)
         >>> options.add_resolve("example.com", [IPv4Address("127.0.0.1")])
     """
 
     def __init__(
         self,
+        system_dns: bool = False,
         lookup_ip_strategy: LookupIpStrategy = LookupIpStrategy.IPV4_AND_IPV6,
     ) -> None:
-        """Create a new ResolverOptions with the given lookup IP strategy.
+        """Create a new DnsOptions.
 
         Args:
-            lookup_ip_strategy: The IP lookup strategy to use.
+            system_dns: Whether to use the system DNS resolver. When False,
+                the hickory DNS resolver is used.
+            lookup_ip_strategy: The IP lookup strategy to use. Only effective
+                when using the hickory DNS resolver.
         """
         ...
 
@@ -72,7 +80,7 @@ class ResolverOptions:
 
         Example:
             >>> from ipaddress import IPv4Address, IPv6Address
-            >>> options = ResolverOptions()
+            >>> options = DnsOptions()
             >>> options.add_resolve("api.example.com", [IPv4Address("192.168.1.1")])
             >>> options.add_resolve("cdn.example.com", [
             ...     IPv6Address("2001:db8::1"),

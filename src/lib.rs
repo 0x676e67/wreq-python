@@ -30,7 +30,7 @@ use client::{
     resp::{BlockingResponse, BlockingWebSocket, Message, Response, WebSocket},
 };
 use cookie::{Cookie, Jar, SameSite};
-use dns::{LookupIpStrategy, ResolverOptions};
+use dns::{DnsOptions, LookupIpStrategy};
 use emulate::{Emulation, Platform, Profile};
 use error::*;
 use header::{HeaderMap, OrigHeaderMap};
@@ -413,7 +413,7 @@ fn proxy_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
 #[pymodule(gil_used = false, name = "dns")]
 fn dns_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<LookupIpStrategy>()?;
-    m.add_class::<ResolverOptions>()?;
+    m.add_class::<DnsOptions>()?;
     Ok(())
 }
 

@@ -34,18 +34,24 @@ impl Default for LookupIpStrategy {
 /// DNS resolver options for customizing DNS resolution behavior.
 #[derive(Clone)]
 #[pyclass(from_py_object)]
-pub struct ResolverOptions {
+pub struct DnsOptions {
+    pub system_dns: bool,
     pub lookup_ip_strategy: LookupIpStrategy,
     pub resolve_to_addrs: Vec<(Arc<PyBackedStr>, Vec<SocketAddr>)>,
 }
 
 #[pymethods]
-impl ResolverOptions {
-    /// Create a new [`ResolverOptions`] with the given lookup ip strategy.
+impl DnsOptions {
+    /// Create a new [`DnsOptions`].
+    ///
+    /// When `system_dns` is `false`, hickory is used as the DNS resolver.
+    /// `lookup_ip_strategy` only applies to hickory and has no effect when
+    /// using the system DNS resolver.
     #[new]
-    #[pyo3(signature=(lookup_ip_strategy = LookupIpStrategy::IPV4_AND_IPV6))]
-    pub fn new(lookup_ip_strategy: LookupIpStrategy) -> Self {
-        ResolverOptions {
+    #[pyo3(signature=(system_dns = false, lookup_ip_strategy = LookupIpStrategy::IPV4_AND_IPV6))]
+    pub fn new(system_dns: bool, lookup_ip_strategy: LookupIpStrategy) -> Self {
+        DnsOptions {
+            system_dns,
             lookup_ip_strategy,
             resolve_to_addrs: Vec::new(),
         }
@@ -70,17 +76,17 @@ static RESOLVER_IPV4_THEN_IPV6: OnceLock<TokioResolver> = OnceLock::new();
 
 /// Wrapper around an [`TokioResolver`], which implements the `Resolve` trait.
 #[derive(Clone)]
-pub struct HickoryDnsResolver {
+pub struct HickoryResolver {
     /// Shared, lazily-initialized Tokio-based DNS resolver.
     resolver: &'static TokioResolver,
 }
 
-impl HickoryDnsResolver {
+impl HickoryResolver {
     /// Create a new resolver with the default configuration,
     /// which reads from `/etc/resolve.conf`. The options are
     /// overriden to look up for both IPv4 and IPv6 addresses
     /// to work with "happy eyeballs" algorithm.
-    pub fn new(strategy: LookupIpStrategy) -> HickoryDnsResolver {
+    pub fn new(strategy: LookupIpStrategy) -> HickoryResolver {
         let cell = match strategy {
             LookupIpStrategy::IPV4_ONLY => &RESOLVER_IPV4_ONLY,
             LookupIpStrategy::IPV6_ONLY => &RESOLVER_IPV6_ONLY,
@@ -89,7 +95,7 @@ impl HickoryDnsResolver {
             LookupIpStrategy::IPV4_THEN_IPV6 => &RESOLVER_IPV4_THEN_IPV6,
         };
 
-        HickoryDnsResolver {
+        HickoryResolver {
             resolver: cell.get_or_init(move || {
                 let mut builder = match TokioResolver::builder_tokio() {
                     Ok(resolver) => resolver,
@@ -112,7 +118,7 @@ struct SocketAddrs {
     iter: LookupIpIntoIter,
 }
 
-impl Resolve for HickoryDnsResolver {
+impl Resolve for HickoryResolver {
     fn resolve(&self, name: Name) -> Resolving {
         let resolver = self.clone();
         Box::pin(async move {
