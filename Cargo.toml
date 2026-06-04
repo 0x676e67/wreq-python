@@ -1,6 +1,6 @@
 [package]
 name = "wreq-python"
-version = "0.11.3"
+version = "0.12.0"
 description = "An ergonomic Python HTTP Client with TLS fingerprint"
 license = "Apache-2.0"
 readme = "README.md"
@@ -51,7 +51,7 @@ bytes = "1.11.1"
 arc-swap = "1.9.0"
 http = "1.4.0"
 http-body-util = "0.1.3"
-wreq = { version = "6.0.0-rc.28", features = [
+wreq = { version = "6.0.0-rc.29", features = [
     "query",
     "form",
     "json",
@@ -67,7 +67,7 @@ wreq = { version = "6.0.0-rc.28", features = [
     "ws",
     "parking_lot",
 ] }
-wreq-util = { version = "3.0.0-rc.10", features = ["emulation-compression"] }
+wreq-util = { version = "3.0.0-rc.12", features = ["emulation-compression"] }
 hickory-resolver = "0.25.2"
 cookie = "0.18"
 mimalloc = { version = "0.1.43", default-features = false, features = [
@@ -85,7 +85,3 @@ lto = "fat"
 opt-level = 3
 panic = "abort"
 strip = true
-
-[patch.crates-io]
-wreq = { git = "https://github.com/0x676e67/wreq" }
-wreq-util = { git = "https://github.com/0x676e67/wreq-util" }
