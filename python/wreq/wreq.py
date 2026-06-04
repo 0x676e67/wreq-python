@@ -19,7 +19,7 @@ from typing import (
 from . import redirect
 from . import emulation
 from .cookie import *
-from .dns import ResolverOptions
+from .dns import DnsOptions
 from .emulation import *
 from .header import *
 from .http1 import Http1Options
@@ -759,7 +759,7 @@ class ClientConfig(TypedDict):
 
     # ========= DNS options =========
 
-    dns_options: NotRequired[ResolverOptions]
+    dns_options: NotRequired[DnsOptions]
 
     # ========= Compression options =========
 

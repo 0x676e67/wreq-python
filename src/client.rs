@@ -8,7 +8,6 @@ mod query;
 
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
-    sync::Arc,
     time::Duration,
 };
 
@@ -24,7 +23,7 @@ use self::{
 };
 use crate::{
     cookie::Jar,
-    dns::{HickoryDnsResolver, LookupIpStrategy, ResolverOptions},
+    dns::{DnsOptions, HickoryResolver, LookupIpStrategy},
     emulate::EmulationLike,
     error::Error,
     extractor::Extractor,
@@ -154,7 +153,7 @@ struct Builder {
     interface: Option<String>,
 
     // ========= DNS options =========
-    dns_options: Option<ResolverOptions>,
+    dns_options: Option<DnsOptions>,
 
     // ========= Compression options =========
     /// Sets gzip as an accepted encoding.
@@ -438,16 +437,18 @@ impl Client {
                 apply_option!(set_if_some, builder, config.interface, interface);
 
                 // DNS options.
-                builder = {
-                    let dns_resolver = if let Some(options) = config.dns_options.take() {
-                        for (domain, addrs) in options.resolve_to_addrs {
-                            builder = builder.resolve_to_addrs(domain.as_ref().to_string(), addrs);
-                        }
-                        HickoryDnsResolver::new(options.lookup_ip_strategy)
-                    } else {
-                        HickoryDnsResolver::new(LookupIpStrategy::default())
-                    };
-                    builder.dns_resolver(Arc::new(dns_resolver))
+                if let Some(opts) = config.dns_options.take() {
+                    for (domain, addrs) in opts.resolve_to_addrs {
+                        builder = builder.resolve_to_addrs(domain.as_ref().to_string(), addrs);
+                    }
+
+                    if !opts.system_dns {
+                        builder =
+                            builder.dns_resolver(HickoryResolver::new(opts.lookup_ip_strategy));
+                    }
+                } else {
+                    builder =
+                        builder.dns_resolver(HickoryResolver::new(LookupIpStrategy::default()));
                 };
 
                 // Compression options.
