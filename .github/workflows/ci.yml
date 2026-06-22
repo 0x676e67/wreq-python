@@ -37,7 +37,7 @@ jobs:
     name: style
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions-rs/toolchain@v1
         with:
@@ -59,7 +59,7 @@ jobs:
         ports:
           - 8080:80
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: 3.x
@@ -128,7 +128,7 @@ jobs:
               CXX: arm-linux-gnueabihf-g++
               CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER: arm-linux-gnueabihf-g++
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: 3.x
@@ -176,7 +176,7 @@ jobs:
             target: i686-unknown-linux-musl
             allocator: jemalloc
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Build wheels
         env:
           MATURIN_VERSION: ${{ env.MATURIN_VERSION }}
@@ -217,7 +217,7 @@ jobs:
             allocator: mimalloc
             python-architecture: x64
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: 3.x
@@ -257,7 +257,7 @@ jobs:
             target: aarch64
             allocator: jemalloc
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: 3.x
@@ -296,7 +296,7 @@ jobs:
             features: abi3-py314
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: 3.x
@@ -360,7 +360,7 @@ jobs:
   sdist:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Build sdist
         uses: PyO3/maturin-action@v1
         with:
