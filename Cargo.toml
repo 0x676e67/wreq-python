@@ -1,7 +1,7 @@
 [package]
 name = "wreq-python"
 version = "0.12.0"
-description = "An ergonomic Python HTTP Client with TLS fingerprint"
+description = "An ergonomic, censorship-resistant Python HTTP client"
 license = "Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/0x676e67/wreq-python"
