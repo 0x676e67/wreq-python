@@ -39,39 +39,6 @@ Designed for developers, it offers high accuracy, low price, low latency, and ea
 ---
 
 
-## [RapidProxy](https://www.rapidproxy.io/?ref=wreq)
-
-<a href="https://www.rapidproxy.io/?ref=wreq" target="_blank">
-<img src="https://raw.githubusercontent.com/0x676e67/wreq-python/main/.github/assets/rapidproxy.png" width="140", height="60">
-</a>
-
-RapidProxy delivers fast, reliable proxy infrastructure for large-scale data operations. With high concurrency, non-expiring traffic, and AI-powered CAPTCHA bypass, it ensures efficient, uninterrupted data collection—trusted by developers worldwide.
-
-**90M+ Residential IPs** • **Smart Rotation** • **High Success Rate** • **Built for Scale**
-
-**Special Offer**: Try it free —  Pricing from $0.65/GB with non-expiring traffic. Use code RAPID10 for 10% off.
-
-**[Website](https://www.rapidproxy.io/?ref=wreq)** | **[Linkedin](https://www.linkedin.com/in/rapid-proxy-9b6059357/)** | **[Telegram](https://t.me/rapidproxyio)**
-
----
-
-## [Swiftproxy](https://www.swiftproxy.net/?ref=wreqpython)
-
-<a href="https://www.swiftproxy.net/?ref=wreqpython" target="_blank">
-<img src="https://raw.githubusercontent.com/0x676e67/wreq-python/main/.github/assets/swiftproxy.png" width="149" height="40">
-</a>
-
-Swiftproxy powers your web scraping with reliable residential proxies, giving you access to a dependable pool of residential IPs for efficient data extraction while delivering high success rates, anti-ban protection, and automatic rotation at scale.
-
-**Global Residential IPs** • **Auto Rotation** • **Anti-Ban** • **Scraping at Scale**
-
-**Exclusive Offer**: Get 500MB free trial traffic + an exclusive 10% OFF code: PROXY90
-
-**[Linkedin](https://www.linkedin.com/company/swiftproxy/)** | **[Discord](https://discord.com/invite/VdRMfU5RWm)** | **[Telegram](https://t.me/swiftproxy357)**
-
----
-
-
 ## [Hyper Solutions](https://hypersolutions.co?utm_source=github&utm_medium=readme&utm_campaign=wreq)
 
 <a href="https://hypersolutions.co/?utm_source=github&utm_medium=readme&utm_campaign=wreq" target="_blank"><img src="https://raw.githubusercontent.com/0x676e67/wreq-python/main/.github/assets/hypersolutions.jpg" height="47" width="149"></a>
