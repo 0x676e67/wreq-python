@@ -64,6 +64,8 @@ class Profile(Enum):
     Chrome145 = auto()
     Chrome146 = auto()
     Chrome147 = auto()
+    Chrome148 = auto()
+    Chrome149 = auto()
 
     # Microsoft Edge versions
     Edge101 = auto()
@@ -84,6 +86,7 @@ class Profile(Enum):
     Edge145 = auto()
     Edge146 = auto()
     Edge147 = auto()
+    Edge148 = auto()
 
     # Firefox versions
     Firefox109 = auto()
@@ -104,6 +107,8 @@ class Profile(Enum):
     Firefox147 = auto()
     Firefox148 = auto()
     Firefox149 = auto()
+    Firefox150 = auto()
+    Firefox151 = auto()
 
     # Safari versions
     SafariIos17_2 = auto()
@@ -118,6 +123,7 @@ class Profile(Enum):
     Safari17_2_1 = auto()
     Safari17_4_1 = auto()
     Safari17_5 = auto()
+    Safari17_6 = auto()
     Safari18 = auto()
     SafariIPad18 = auto()
     Safari18_2 = auto()
@@ -128,6 +134,8 @@ class Profile(Enum):
     Safari26 = auto()
     Safari26_1 = auto()
     Safari26_2 = auto()
+    Safari26_3 = auto()
+    Safari26_4 = auto()
     SafariIos26 = auto()
     SafariIos26_2 = auto()
     SafariIPad26 = auto()
@@ -159,6 +167,7 @@ class Profile(Enum):
     Opera128 = auto()
     Opera129 = auto()
     Opera130 = auto()
+    Opera131 = auto()
 
 
 @final
@@ -228,6 +237,8 @@ class Emulation:
     Chrome145: ClassVar[Profile] = Profile.Chrome145
     Chrome146: ClassVar[Profile] = Profile.Chrome146
     Chrome147: ClassVar[Profile] = Profile.Chrome147
+    Chrome148: ClassVar[Profile] = Profile.Chrome148
+    Chrome149: ClassVar[Profile] = Profile.Chrome149
 
     # Microsoft Edge versions
     Edge101: ClassVar[Profile] = Profile.Edge101
@@ -248,6 +259,7 @@ class Emulation:
     Edge145: ClassVar[Profile] = Profile.Edge145
     Edge146: ClassVar[Profile] = Profile.Edge146
     Edge147: ClassVar[Profile] = Profile.Edge147
+    Edge148: ClassVar[Profile] = Profile.Edge148
 
     # Firefox versions
     Firefox109: ClassVar[Profile] = Profile.Firefox109
@@ -268,6 +280,8 @@ class Emulation:
     Firefox147: ClassVar[Profile] = Profile.Firefox147
     Firefox148: ClassVar[Profile] = Profile.Firefox148
     Firefox149: ClassVar[Profile] = Profile.Firefox149
+    Firefox150: ClassVar[Profile] = Profile.Firefox150
+    Firefox151: ClassVar[Profile] = Profile.Firefox151
 
     # Safari versions
     SafariIos17_2: ClassVar[Profile] = Profile.SafariIos17_2
@@ -282,6 +296,7 @@ class Emulation:
     Safari17_2_1: ClassVar[Profile] = Profile.Safari17_2_1
     Safari17_4_1: ClassVar[Profile] = Profile.Safari17_4_1
     Safari17_5: ClassVar[Profile] = Profile.Safari17_5
+    Safari17_6: ClassVar[Profile] = Profile.Safari17_6
     Safari18: ClassVar[Profile] = Profile.Safari18
     SafariIPad18: ClassVar[Profile] = Profile.SafariIPad18
     Safari18_2: ClassVar[Profile] = Profile.Safari18_2
@@ -292,6 +307,8 @@ class Emulation:
     Safari26: ClassVar[Profile] = Profile.Safari26
     Safari26_1: ClassVar[Profile] = Profile.Safari26_1
     Safari26_2: ClassVar[Profile] = Profile.Safari26_2
+    Safari26_3: ClassVar[Profile] = Profile.Safari26_3
+    Safari26_4: ClassVar[Profile] = Profile.Safari26_4
     SafariIos26: ClassVar[Profile] = Profile.SafariIos26
     SafariIos26_2: ClassVar[Profile] = Profile.SafariIos26_2
     SafariIPad26: ClassVar[Profile] = Profile.SafariIPad26
@@ -323,6 +340,7 @@ class Emulation:
     Opera128: ClassVar[Profile] = Profile.Opera128
     Opera129: ClassVar[Profile] = Profile.Opera129
     Opera130: ClassVar[Profile] = Profile.Opera130
+    Opera131: ClassVar[Profile] = Profile.Opera131
 
     def __init__(
         self,

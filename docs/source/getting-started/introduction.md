@@ -74,31 +74,31 @@ Due to the complexity of **TLS** encryption and the widespread adoption of **HTT
 
         ---
 
-        `Chrome100` `Chrome101` `Chrome104` `Chrome105` `Chrome106` `Chrome107` `Chrome108` `Chrome109` `Chrome110` `Chrome114` `Chrome116` `Chrome117` `Chrome118` `Chrome119` `Chrome120` `Chrome123` `Chrome124` `Chrome126` `Chrome127` `Chrome128` `Chrome129` `Chrome130` `Chrome131` `Chrome132` `Chrome133` `Chrome134` `Chrome135` `Chrome136` `Chrome137` `Chrome138` `Chrome139` `Chrome140` `Chrome141` `Chrome142` `Chrome143` `Chrome144` `Chrome145` `Chrome146` `Chrome147`
+        `Chrome100` `Chrome101` `Chrome104` `Chrome105` `Chrome106` `Chrome107` `Chrome108` `Chrome109` `Chrome110` `Chrome114` `Chrome116` `Chrome117` `Chrome118` `Chrome119` `Chrome120` `Chrome123` `Chrome124` `Chrome126` `Chrome127` `Chrome128` `Chrome129` `Chrome130` `Chrome131` `Chrome132` `Chrome133` `Chrome134` `Chrome135` `Chrome136` `Chrome137` `Chrome138` `Chrome139` `Chrome140` `Chrome141` `Chrome142` `Chrome143` `Chrome144` `Chrome145` `Chrome146` `Chrome147` `Chrome148` `Chrome149`
 
     -   :fontawesome-brands-edge: **Edge**
 
         ---
 
-        `Edge101` `Edge122` `Edge127` `Edge131` `Edge134` `Edge135` `Edge136` `Edge137` `Edge138` `Edge139` `Edge140` `Edge141` `Edge142` `Edge143` `Edge144` `Edge145`, `Edge146` `Edge147`
+        `Edge101` `Edge122` `Edge127` `Edge131` `Edge134` `Edge135` `Edge136` `Edge137` `Edge138` `Edge139` `Edge140` `Edge141` `Edge142` `Edge143` `Edge144` `Edge145` `Edge146` `Edge147` `Edge148`
 
     -   :fontawesome-brands-firefox: **Firefox**
 
         ---
 
-        `Firefox109` `Firefox117` `Firefox128` `Firefox133` `Firefox135` `FirefoxPrivate135` `FirefoxAndroid135` `Firefox136` `FirefoxPrivate136` `Firefox139` `Firefox142` `Firefox143` `Firefox144` `Firefox145` `Firefox146` `Firefox147` `Firefox148` `Firefox149`
+        `Firefox109` `Firefox117` `Firefox128` `Firefox133` `Firefox135` `FirefoxPrivate135` `FirefoxAndroid135` `Firefox136` `FirefoxPrivate136` `Firefox139` `Firefox142` `Firefox143` `Firefox144` `Firefox145` `Firefox146` `Firefox147` `Firefox148` `Firefox149` `Firefox150` `Firefox151`
 
     -   :fontawesome-brands-safari: **Safari**
 
         ---
 
-        `SafariIos17_2` `SafariIos17_4_1` `SafariIos16_5` `Safari15_3` `Safari15_5` `Safari15_6_1` `Safari16` `Safari16_5` `Safari17_0` `Safari17_2_1` `Safari17_4_1` `Safari17_5` `Safari18` `SafariIPad18` `Safari18_2` `Safari18_3` `Safari18_3_1` `SafariIos18_1_1` `Safari18_5` `Safari26` `Safari26_1` `Safari26_2` `SafariIos26` `SafariIos26_2` `SafariIPad26` `SafariIpad26_2`
+        `SafariIos17_2` `SafariIos17_4_1` `SafariIos16_5` `Safari15_3` `Safari15_5` `Safari15_6_1` `Safari16` `Safari16_5` `Safari17_0` `Safari17_2_1` `Safari17_4_1` `Safari17_5` `Safari17_6` `Safari18` `SafariIPad18` `Safari18_2` `Safari18_3` `Safari18_3_1` `SafariIos18_1_1` `Safari18_5` `Safari26` `Safari26_1` `Safari26_2` `Safari26_3` `Safari26_4` `SafariIos26` `SafariIos26_2` `SafariIPad26` `SafariIpad26_2`
 
     -   :fontawesome-brands-opera: **Opera**
 
         ---
 
-        `Opera116` `Opera117` `Opera118` `Opera119` `Opera120` `Opera121` `Opera122` `Opera123` `Opera124` `Opera125` `Opera126` `Opera127` `Opera128` `Opera129` `Opera130`
+        `Opera116` `Opera117` `Opera118` `Opera119` `Opera120` `Opera121` `Opera122` `Opera123` `Opera124` `Opera125` `Opera126` `Opera127` `Opera128` `Opera129` `Opera130` `Opera131`
 
     -   :material-web: **OkHttp**
 

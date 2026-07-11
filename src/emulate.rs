@@ -48,6 +48,8 @@ define_enum!(
     Chrome145,
     Chrome146,
     Chrome147,
+    Chrome148,
+    Chrome149,
 
     Edge101,
     Edge122,
@@ -67,6 +69,7 @@ define_enum!(
     Edge145,
     Edge146,
     Edge147,
+    Edge148,
 
     Firefox109,
     Firefox117,
@@ -86,6 +89,8 @@ define_enum!(
     Firefox147,
     Firefox148,
     Firefox149,
+    Firefox150,
+    Firefox151,
 
     SafariIos17_2,
     SafariIos17_4_1,
@@ -99,6 +104,7 @@ define_enum!(
     Safari17_2_1,
     Safari17_4_1,
     Safari17_5,
+    Safari17_6,
     Safari18,
     SafariIPad18,
     Safari18_2,
@@ -109,6 +115,8 @@ define_enum!(
     Safari26,
     Safari26_1,
     Safari26_2,
+    Safari26_3,
+    Safari26_4,
     SafariIos26,
     SafariIos26_2,
     SafariIPad26,
@@ -138,6 +146,7 @@ define_enum!(
     Opera128,
     Opera129,
     Opera130,
+    Opera131,
 );
 
 define_enum!(
