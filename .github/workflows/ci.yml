@@ -92,7 +92,7 @@ jobs:
           - name: standard
             maturin_args: "--find-interpreter"
           - name: free-threaded
-            maturin_args: "--interpreter 3.13t 3.14t"
+            maturin_args: "--interpreter 3.14t"
         platform:
           - runner: ubuntu-latest
             target: x86_64
@@ -161,7 +161,7 @@ jobs:
           - name: standard
             maturin_args: "--find-interpreter"
           - name: free-threaded
-            maturin_args: "--interpreter 3.13t 3.14t"
+            maturin_args: "--interpreter 3.14t"
         platform:
           - runner: ubuntu-22.04
             target: x86_64-unknown-linux-musl
@@ -204,7 +204,7 @@ jobs:
             maturin_args: ""
             cargo_args: ""
           - name: free-threaded
-            maturin_args: "--interpreter 3.13t 3.14t"
+            maturin_args: "--interpreter 3.14t"
             cargo_args: "--no-default-features"
         platform:
           - target: x64
@@ -248,7 +248,7 @@ jobs:
           - name: standard
             maturin_args: "--find-interpreter"
           - name: free-threaded
-            maturin_args: "--interpreter 3.13t 3.14t"
+            maturin_args: "--interpreter 3.14t"
         platform:
           - runner: macos-latest
             target: x86_64
