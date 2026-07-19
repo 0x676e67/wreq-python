@@ -51,7 +51,7 @@ async def main():
     client = Client(emulation=Emulation.Chrome149)
 
     # Use the API you're already familiar with
-    resp = await client.get("https://tls.peet.ws/api/all")
+    resp = await client.get("https://pingly.us.kg/api/all")
     print(await resp.text())
 
 
