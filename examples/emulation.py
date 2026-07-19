@@ -149,7 +149,7 @@ async def request_advanced_configuration():
     )
 
     # Make request to TLS fingerprinting service
-    resp = await client.post("https://tls.peet.ws/api/all")
+    resp = await client.post("https://pingly.us.kg/api/all")
     await print_response_info(resp)
 
     return client
