@@ -304,6 +304,25 @@ async def test_client_headers_reused_by_another_client(echo):
         assert (await resp.json())["x-one"] == "1"
 
 
+def test_client_headers_concurrent_updates():
+    # Every thread updates a header of its own, so an update lost to another thread
+    # shows up as a missing key rather than as an unexpected value.
+    client = Client()
+
+    def worker(index):
+        for _ in range(20):
+            client.headers.update({f"x-{index}": str(index)})
+
+    threads = [threading.Thread(target=worker, args=(index,)) for index in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    headers = client.headers
+    assert [headers[f"x-{index}"] for index in range(4)] == [b"0", b"1", b"2", b"3"]
+
+
 def test_blocking_client_headers(echo):
     client = wreq.blocking.Client(headers={"x-one": "1"})
     client.headers.update({"x-two": "2"})

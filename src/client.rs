@@ -29,7 +29,7 @@ use crate::{
     emulate::EmulationLike,
     error::Error,
     extractor::Extractor,
-    header::{HeaderMap, OrigHeaderMap},
+    header::{HeaderMap, HeaderUpdate, OrigHeaderMap},
     http::Method,
     http1::Http1Options,
     http2::Http2Options,
@@ -762,11 +762,25 @@ impl BlockingClient {
 // ===== impl ClientHeaders =====
 
 impl ClientHeaders {
-    /// Pushes the headers of the view back onto the client they were taken from.
-    fn apply(slf: PyRefMut<'_, Self>, py: Python) -> PyResult<()> {
+    /// Applies an update to the headers of the client the view was taken from, and
+    /// refreshes the view with the result.
+    ///
+    /// The headers are read back under the rebuild lock of the client, rather than taken
+    /// from the view, so that concurrent updates cannot lose each other.
+    fn apply(mut slf: PyRefMut<'_, Self>, py: Python, update: HeaderUpdate) -> PyResult<()> {
         let client = slf.0.clone();
-        let headers = HeaderMap::clone(&slf.into_super());
-        client.set_headers(py, Some(headers))
+        let headers = py.detach(move || {
+            let _guard = client.lock();
+            let inner = client.inner.load();
+
+            let mut headers = inner.headers.clone().unwrap_or_default();
+            update.apply(&mut headers);
+            client.store(Some(headers.clone()), inner.proxies.clone())?;
+            PyResult::Ok(headers)
+        })?;
+
+        slf.as_super().0 = headers.0;
+        Ok(())
     }
 }
 
@@ -777,46 +791,41 @@ impl ClientHeaders {
     /// The value of a key that is already present is replaced, and a key that is missing
     /// is added.
     #[pyo3(signature = (headers))]
-    fn update(mut slf: PyRefMut<'_, Self>, py: Python, headers: HeaderMap) -> PyResult<()> {
-        slf.as_super().update(py, headers);
-        Self::apply(slf, py)
+    fn update(slf: PyRefMut<'_, Self>, py: Python, headers: HeaderMap) -> PyResult<()> {
+        Self::apply(slf, py, HeaderUpdate::Extend(headers))
     }
 
     /// Insert a key-value pair into the headers of the client.
     #[pyo3(signature = (key, value))]
     fn insert(
-        mut slf: PyRefMut<'_, Self>,
+        slf: PyRefMut<'_, Self>,
         py: Python,
         key: PyBackedStr,
         value: PyBackedStr,
     ) -> PyResult<()> {
-        slf.as_super().insert(py, key, value);
-        Self::apply(slf, py)
+        Self::apply(slf, py, HeaderUpdate::Insert(key, value))
     }
 
     /// Append a key-value pair to the headers of the client.
     #[pyo3(signature = (key, value))]
     fn append(
-        mut slf: PyRefMut<'_, Self>,
+        slf: PyRefMut<'_, Self>,
         py: Python,
         key: PyBackedStr,
         value: PyBackedStr,
     ) -> PyResult<()> {
-        slf.as_super().append(py, key, value);
-        Self::apply(slf, py)
+        Self::apply(slf, py, HeaderUpdate::Append(key, value))
     }
 
     /// Remove a key-value pair from the headers of the client.
     #[pyo3(signature = (key))]
-    fn remove(mut slf: PyRefMut<'_, Self>, py: Python, key: PyBackedStr) -> PyResult<()> {
-        slf.as_super().remove(py, key);
-        Self::apply(slf, py)
+    fn remove(slf: PyRefMut<'_, Self>, py: Python, key: PyBackedStr) -> PyResult<()> {
+        Self::apply(slf, py, HeaderUpdate::Remove(key))
     }
 
     /// Clears the headers of the client, removing all key-value pairs.
-    fn clear(mut slf: PyRefMut<'_, Self>, py: Python) -> PyResult<()> {
-        slf.as_super().clear();
-        Self::apply(slf, py)
+    fn clear(slf: PyRefMut<'_, Self>, py: Python) -> PyResult<()> {
+        Self::apply(slf, py, HeaderUpdate::Clear)
     }
 }
 
