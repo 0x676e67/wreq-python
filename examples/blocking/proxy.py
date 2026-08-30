@@ -11,7 +11,7 @@ def main():
     print(resp.text())
 
     # Set the proxy of the client, so every request that follows goes through it
-    client.proxies = [Proxy.all("http://127.0.0.1:6152")]
+    client.proxies = Proxy.all("http://127.0.0.1:6152")
     resp = client.post("https://httpbin.io/anything")
     print(resp.text())
 

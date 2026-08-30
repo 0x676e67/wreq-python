@@ -221,9 +221,12 @@ class Client:
         - The auto-created `Jar` if the client was constructed with `cookie_store=True`
     """
 
-    proxies: Sequence[Proxy] | None
+    proxies: Proxy | Sequence[Proxy] | None
     r"""
     Get or set the proxies used by this client.
+
+    A single `Proxy` or a sequence of them can be assigned; reading the attribute
+    always gives back a list, or `None` when the client has no proxies.
 
     Assigning a new value rebuilds the client with the given proxies, keeping the rest
     of its configuration and its cookie jar. Requests made afterwards go through the
@@ -239,7 +242,7 @@ class Client:
     import wreq
 
     client = wreq.blocking.Client(proxies=[wreq.Proxy.all("http://proxy.example.com:8080")])
-    client.proxies = [wreq.Proxy.all("http://other.example.com:8080")]
+    client.proxies = wreq.Proxy.all("http://other.example.com:8080")
     ```
     """
 

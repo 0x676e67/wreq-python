@@ -14,7 +14,7 @@ async def main():
     print(await resp.text())
 
     # Switch the client over to another proxy, without rebuilding it
-    client.proxies = [Proxy.all("http://127.0.0.1:6152")]
+    client.proxies = Proxy.all("http://127.0.0.1:6152")
     resp = await client.get("https://httpbin.io/anything")
     print(await resp.text())
 

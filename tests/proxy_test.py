@@ -73,6 +73,32 @@ def test_client_proxies(servers):
     assert client.proxies is None
 
 
+def test_client_proxies_accept_a_single_proxy(servers):
+    # A lone `Proxy` is accepted wherever a sequence of them is, and is read back as a
+    # single element list.
+    client = Client(proxies=Proxy.all(servers["first"]))
+    assert client.proxies is not None
+    assert len(client.proxies) == 1
+
+    client.proxies = Proxy.all(servers["second"])
+    assert client.proxies is not None
+    assert len(client.proxies) == 1
+
+
+@pytest.mark.asyncio
+async def test_client_switch_to_a_single_proxy(servers):
+    client = Client(proxies=Proxy.all(servers["first"]))
+
+    resp = await client.get(servers["origin"])
+    async with resp:
+        assert (await resp.json())["server"] == "first"
+
+    client.proxies = Proxy.all(servers["second"])
+    resp = await client.get(servers["origin"])
+    async with resp:
+        assert (await resp.json())["server"] == "second"
+
+
 @pytest.mark.asyncio
 async def test_client_switch_proxies(servers):
     client = Client(proxies=[Proxy.all(servers["first"])])

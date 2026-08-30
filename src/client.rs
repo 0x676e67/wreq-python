@@ -33,7 +33,7 @@ use crate::{
     http::Method,
     http1::Http1Options,
     http2::Http2Options,
-    proxy::Proxy,
+    proxy::{Proxies, Proxy},
     redirect,
     tls::{Identity, KeyLog, TlsOptions, TlsVerify, TlsVersion},
 };
@@ -146,7 +146,7 @@ struct Builder {
     /// Whether to disable the proxy for the client.
     no_proxy: Option<bool>,
     /// The proxies to use for the client.
-    proxies: Option<Vec<Proxy>>,
+    proxies: Option<Proxies>,
     /// Bind to a local IP Address.
     local_address: Option<IpAddr>,
     /// Bind to local IP Addresses (IPv4, IPv6).
@@ -285,7 +285,7 @@ impl Client {
 
             // Network options. The proxies are kept apart from the rest of the
             // configuration, since they can be replaced after the client is created.
-            proxies = config.proxies.take();
+            proxies = config.proxies.take().map(|proxies| proxies.0);
 
             raise_for_status = config.raise_for_status.unwrap_or(false);
         }
@@ -316,7 +316,8 @@ impl Client {
     /// proxies, while the ones already in flight keep using the previous ones. Setting
     /// `None` restores the default behaviour of using the system proxies.
     #[setter]
-    pub fn set_proxies(&self, py: Python, proxies: Option<Vec<Proxy>>) -> PyResult<()> {
+    pub fn set_proxies(&self, py: Python, proxies: Option<Proxies>) -> PyResult<()> {
+        let proxies = proxies.map(|proxies| proxies.0);
         py.detach(|| {
             let client = build_client(self.config.as_deref().cloned(), proxies.clone())?;
             self.inner.store(Arc::new(Inner { client, proxies }));
@@ -509,7 +510,7 @@ impl BlockingClient {
     /// `None` restores the default behaviour of using the system proxies.
     #[inline]
     #[setter]
-    pub fn set_proxies(&self, py: Python, proxies: Option<Vec<Proxy>>) -> PyResult<()> {
+    pub fn set_proxies(&self, py: Python, proxies: Option<Proxies>) -> PyResult<()> {
         self.0.set_proxies(py, proxies)
     }
 

@@ -109,7 +109,7 @@ async def main():
     client = Client(cookie_store=True)
 
     for url in POOL:
-        client.proxies = [Proxy.all(url)]
+        client.proxies = Proxy.all(url)
         resp = await client.get("https://httpbin.io/ip")
         print(await resp.text())
 
@@ -123,10 +123,18 @@ The rest of the client configuration — headers, emulation, timeouts, TLS optio
 cookie jar are kept across the change. Requests already in flight keep using the proxy they
 started with, and connections opened through the previous proxies are not reused.
 
-Reading the attribute returns the proxies currently in use, or `None` when there are none:
+Both the attribute and the `proxies=` argument of the constructor take either a single
+`Proxy` or a sequence of them, so the brackets can be dropped when there is only one:
 
 ```python
-client = Client(proxies=[Proxy.all("http://proxy.example.com:8080")])
+client = Client(proxies=Proxy.all("http://proxy.example.com:8080"))
+client.proxies = Proxy.all("http://other.example.com:8080")
+```
+
+Reading the attribute always gives back a list, or `None` when the client has no proxies:
+
+```python
+client = Client(proxies=Proxy.all("http://proxy.example.com:8080"))
 print(client.proxies)  # [<Proxy ...>]
 ```
 
@@ -140,7 +148,7 @@ from wreq.blocking import Client
 from wreq import Proxy
 
 client = Client()
-client.proxies = [Proxy.all("http://proxy.example.com:8080")]
+client.proxies = Proxy.all("http://proxy.example.com:8080")
 print(client.get("https://httpbin.io/ip").text())
 ```
 
