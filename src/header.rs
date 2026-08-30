@@ -9,7 +9,7 @@ use wreq::header::{self, HeaderName, HeaderValue};
 use crate::{buffer::PyBuffer, error::Error};
 
 /// A HTTP header map.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 #[pyclass(subclass, str, skip_from_py_object)]
 pub struct HeaderMap(pub header::HeaderMap);
 
@@ -17,6 +17,18 @@ pub struct HeaderMap(pub header::HeaderMap);
 #[derive(Clone)]
 #[pyclass(subclass, str, skip_from_py_object)]
 pub struct OrigHeaderMap(pub header::OrigHeaderMap);
+
+/// An update to apply to a `HeaderMap`.
+///
+/// A `Client` replays one of these onto its own headers, so that every operation has a
+/// single implementation whether it is applied to a plain map or to a client.
+pub enum HeaderUpdate {
+    Extend(HeaderMap),
+    Insert(PyBackedStr, PyBackedStr),
+    Append(PyBackedStr, PyBackedStr),
+    Remove(PyBackedStr),
+    Clear,
+}
 
 // ===== impl HeaderMap =====
 
@@ -100,35 +112,28 @@ impl HeaderMap {
     /// Insert a key-value pair into the header map.
     #[pyo3(signature = (key, value))]
     fn insert(&mut self, py: Python, key: PyBackedStr, value: PyBackedStr) {
-        py.detach(|| {
-            if let (Ok(name), Ok(value)) = (
-                HeaderName::from_bytes(key.as_bytes()),
-                HeaderValue::from_maybe_shared(Bytes::from_owner(value)),
-            ) {
-                self.0.insert(name, value);
-            }
-        })
+        py.detach(|| HeaderUpdate::Insert(key, value).apply(self))
     }
 
     /// Append a key-value pair to the header map.
     #[pyo3(signature = (key, value))]
     fn append(&mut self, py: Python, key: PyBackedStr, value: PyBackedStr) {
-        py.detach(|| {
-            if let (Ok(name), Ok(value)) = (
-                HeaderName::from_bytes(key.as_bytes()),
-                HeaderValue::from_maybe_shared(Bytes::from_owner(value)),
-            ) {
-                self.0.append(name, value);
-            }
-        })
+        py.detach(|| HeaderUpdate::Append(key, value).apply(self))
+    }
+
+    /// Extend the header map with the given headers.
+    ///
+    /// The value of a key that is already present is replaced, and a key that is missing
+    /// is added.
+    #[pyo3(signature = (headers))]
+    fn update(&mut self, py: Python, headers: HeaderMap) {
+        py.detach(|| HeaderUpdate::Extend(headers).apply(self))
     }
 
     /// Remove a key-value pair from the header map.
     #[pyo3(signature = (key))]
     fn remove(&mut self, py: Python, key: PyBackedStr) {
-        py.detach(|| {
-            self.0.remove::<&str>(key.as_ref());
-        })
+        py.detach(|| HeaderUpdate::Remove(key).apply(self))
     }
 
     /// Returns true if the map contains a value for the specified key.
@@ -189,7 +194,7 @@ impl HeaderMap {
     /// Clears the map, removing all key-value pairs. Keeps the allocated memory for reuse.
     #[inline]
     fn clear(&mut self) {
-        self.0.clear();
+        HeaderUpdate::Clear.apply(self)
     }
 }
 
@@ -263,6 +268,42 @@ impl FromPyObject<'_, '_> for HeaderMap {
                 },
             )
             .map(Self)
+    }
+}
+
+// ===== impl HeaderUpdate =====
+
+impl HeaderUpdate {
+    /// Applies the update to the given headers, ignoring an invalid header name or value.
+    pub fn apply(self, headers: &mut HeaderMap) {
+        match self {
+            HeaderUpdate::Extend(other) => headers.0.extend(other.0),
+            HeaderUpdate::Insert(key, value) => {
+                if let Some((name, value)) = header_pair(key, value) {
+                    headers.0.insert(name, value);
+                }
+            }
+            HeaderUpdate::Append(key, value) => {
+                if let Some((name, value)) = header_pair(key, value) {
+                    headers.0.append(name, value);
+                }
+            }
+            HeaderUpdate::Remove(key) => {
+                headers.0.remove::<&str>(key.as_ref());
+            }
+            HeaderUpdate::Clear => headers.0.clear(),
+        }
+    }
+}
+
+/// Converts a key-value pair into a header name and value, discarding an invalid one.
+fn header_pair(key: PyBackedStr, value: PyBackedStr) -> Option<(HeaderName, HeaderValue)> {
+    match (
+        HeaderName::from_bytes(key.as_bytes()),
+        HeaderValue::from_maybe_shared(Bytes::from_owner(value)),
+    ) {
+        (Ok(name), Ok(value)) => Some((name, value)),
+        _ => None,
     }
 }
 

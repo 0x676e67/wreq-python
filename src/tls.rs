@@ -7,7 +7,7 @@ use wreq::tls::compress::CertificateCompressor;
 use wreq_util::emulate::compress;
 
 pub use self::{identity::Identity, keylog::KeyLog, store::CertStore};
-use crate::buffer::PyBuffer;
+use crate::{buffer::PyBuffer, error::Error};
 
 define_enum!(
     /// The TLS version.
@@ -20,11 +20,35 @@ define_enum!(
     TLS_1_3,
 );
 
-#[derive(FromPyObject)]
+#[derive(Clone, FromPyObject)]
 pub enum TlsVerify {
     Verification(bool),
     CertificatePath(std::path::PathBuf),
     CertificateStore(CertStore),
+}
+
+// ===== impl TlsVerify =====
+
+impl TlsVerify {
+    /// Reads a certificate file into a certificate store, leaving the other variants
+    /// untouched.
+    ///
+    /// A `Client` resolves its certificate once, so that the rebuilds it goes through
+    /// neither read the file again nor pick up a certificate that has been swapped in
+    /// the meantime.
+    pub fn resolve(self) -> PyResult<Self> {
+        match self {
+            TlsVerify::CertificatePath(path) => {
+                let pem_data = std::fs::read(path)?;
+                wreq::tls::trust::CertStore::from_pem_stack(pem_data)
+                    .map(CertStore)
+                    .map(TlsVerify::CertificateStore)
+                    .map_err(Error::Library)
+                    .map_err(Into::into)
+            }
+            verify => Ok(verify),
+        }
+    }
 }
 
 define_enum!(

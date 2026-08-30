@@ -202,7 +202,7 @@ impl Emulation {
 }
 
 /// A helper enum to allow accepting either a Profile or an Emulation in the same parameter.
-#[derive(FromPyObject)]
+#[derive(Clone, FromPyObject)]
 pub enum EmulationLike {
     Profile(Profile),
     Emulation(Emulation),
