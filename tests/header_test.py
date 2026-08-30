@@ -218,7 +218,7 @@ def test_update():
     assert list(h.get_all("A")) == [b"10", b"11"]
 
 
-def test_client_headers(echo):
+def test_client_headers():
     client = Client(headers={"x-one": "1"})
     headers = client.headers
     assert isinstance(headers, HeaderMap)
