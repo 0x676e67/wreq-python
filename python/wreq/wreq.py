@@ -1104,6 +1104,28 @@ class Client:
         - The auto-created `Jar` if the client was constructed with `cookie_store=True`
     """
 
+    proxies: Sequence[Proxy] | None
+    r"""
+    Get or set the proxies used by this client.
+
+    Assigning a new value rebuilds the client with the given proxies, keeping the rest
+    of its configuration and its cookie jar. Requests made afterwards go through the
+    new proxies, while the ones already in flight keep using the previous ones.
+    Assigning `None` restores the default behaviour of using the system proxies.
+
+    Note that a client created with `no_proxy=True` never uses a proxy, exactly like
+    when both options are given to the constructor.
+
+    Examples:
+
+    ```python
+    import wreq
+
+    client = wreq.Client(proxies=[wreq.Proxy.all("http://proxy.example.com:8080")])
+    client.proxies = [wreq.Proxy.all("http://other.example.com:8080")]
+    ```
+    """
+
     def __init__(
         self,
         **kwargs: Unpack[ClientConfig],

@@ -294,7 +294,11 @@ where
     U: AsRef<str>,
 {
     // Create the request builder.
-    let mut builder = client.inner.request(method.into_ffi(), url.as_ref());
+    let mut builder = client
+        .inner
+        .load()
+        .client
+        .request(method.into_ffi(), url.as_ref());
 
     if let Some(mut request) = request {
         // Emulation options.
@@ -433,7 +437,7 @@ where
     U: AsRef<str>,
 {
     // Create the WebSocket builder.
-    let mut builder = client.inner.websocket(url.as_ref());
+    let mut builder = client.inner.load().client.websocket(url.as_ref());
 
     if let Some(mut request) = request {
         // Emulation options.

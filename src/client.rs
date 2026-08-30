@@ -8,9 +8,11 @@ mod query;
 
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    sync::Arc,
     time::Duration,
 };
 
+use arc_swap::ArcSwap;
 use pyo3::{IntoPyObjectExt, coroutine::CancelHandle, prelude::*, pybacked::PyBackedStr};
 use req::{Request, WebSocketRequest};
 use tokio_util::sync::CancellationToken;
@@ -57,12 +59,12 @@ impl SocketAddr {
 impl_print_str!(Display, SocketAddr);
 
 /// A builder for `Client`.
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Builder {
     /// The Emulation settings for the client.
     emulation: Option<EmulationLike>,
     /// The user agent to use for the client.
-    user_agent: Option<PyBackedStr>,
+    user_agent: Option<String>,
     /// The headers to use for the client.
     headers: Option<HeaderMap>,
     /// The original headers to use for the client.
@@ -228,11 +230,22 @@ impl FromPyObject<'_, '_> for Builder {
     }
 }
 
+/// The swappable state of a `Client`.
+///
+/// The proxies are stored next to the `wreq::Client` they were built into, so that
+/// both are replaced at once whenever the proxies of the client are updated.
+#[derive(Default)]
+struct Inner {
+    client: wreq::Client,
+    proxies: Option<Vec<Proxy>>,
+}
+
 /// A client for making HTTP requests.
 #[derive(Default, Clone)]
 #[pyclass(subclass, frozen, skip_from_py_object)]
 pub struct Client {
-    inner: wreq::Client,
+    inner: Arc<ArcSwap<Inner>>,
+    config: Option<Arc<Builder>>,
     cancel: CancellationToken,
     raise_for_status: bool,
 
@@ -254,222 +267,60 @@ impl Client {
     #[new]
     #[pyo3(signature = (**kwds))]
     fn new(py: Python, kwds: Option<Builder>) -> PyResult<Client> {
+        let mut config = kwds;
+        let mut cookie_jar: Option<Jar> = None;
+        let mut proxies: Option<Vec<Proxy>> = None;
+        let mut raise_for_status = false;
+
+        if let Some(config) = config.as_mut() {
+            // Cookie options. The jar is resolved upfront, so that it survives the
+            // rebuilds of the client triggered by a proxy update.
+            cookie_jar = match config.cookie_provider.take() {
+                Some(jar) => Some(jar),
+                // `cookie_store` is true and no provider was given, so create a default jar to
+                // be accessed later through the client interface.
+                None => config.cookie_store.unwrap_or_default().then(Jar::new),
+            };
+            config.cookie_provider = cookie_jar.clone();
+
+            // Network options. The proxies are kept apart from the rest of the
+            // configuration, since they can be replaced after the client is created.
+            proxies = config.proxies.take();
+
+            raise_for_status = config.raise_for_status.unwrap_or(false);
+        }
+
+        py.detach(move || {
+            let client = build_client(config.clone(), proxies.clone())?;
+            Ok(Client {
+                inner: Arc::new(ArcSwap::from_pointee(Inner { client, proxies })),
+                config: config.map(Arc::new),
+                cancel: CancellationToken::new(),
+                raise_for_status,
+                cookie_jar,
+            })
+        })
+    }
+
+    /// Get the proxies of the client.
+    #[inline]
+    #[getter]
+    pub fn proxies(&self) -> Option<Vec<Proxy>> {
+        self.inner.load().proxies.clone()
+    }
+
+    /// Set the proxies of the client.
+    ///
+    /// The client is rebuilt with the given proxies, keeping the rest of its
+    /// configuration and its cookie jar. Requests made afterwards go through the new
+    /// proxies, while the ones already in flight keep using the previous ones. Setting
+    /// `None` restores the default behaviour of using the system proxies.
+    #[setter]
+    pub fn set_proxies(&self, py: Python, proxies: Option<Vec<Proxy>>) -> PyResult<()> {
         py.detach(|| {
-            // Create the client builder.
-            let mut builder = wreq::Client::builder();
-            let mut cookie_jar: Option<Jar> = None;
-            let mut raise_for_status = false;
-
-            if let Some(mut config) = kwds {
-                // Emulation options.
-                apply_option!(set_if_some, builder, config.emulation, emulation);
-
-                // User agent options.
-                apply_option!(
-                    set_if_some_map_ref,
-                    builder,
-                    config.user_agent,
-                    user_agent,
-                    AsRef::<str>::as_ref
-                );
-
-                // Default headers options.
-                apply_option!(set_if_some_inner, builder, config.headers, default_headers);
-                apply_option!(
-                    set_if_some_inner,
-                    builder,
-                    config.orig_headers,
-                    orig_headers
-                );
-
-                // Allow redirects options.
-                apply_option!(set_if_some, builder, config.referer, referer);
-                apply_option!(set_if_some_inner, builder, config.redirect, redirect);
-
-                // Cookie options.
-                if let Some(jar) = config.cookie_provider.take() {
-                    builder = builder.cookie_provider(jar.clone().0);
-                    cookie_jar = Some(jar);
-                } else if config.cookie_store.unwrap_or_default() {
-                    // `cookie_store` is true and no provider was given, so create a default jar to
-                    // be accessed later through the client interface.
-                    let jar = Jar::new();
-                    builder = builder.cookie_provider(jar.clone().0);
-                    cookie_jar = Some(jar);
-                }
-
-                // TCP options.
-                apply_option!(set_if_some, builder, config.tcp_keepalive, tcp_keepalive);
-                apply_option!(
-                    set_if_some,
-                    builder,
-                    config.tcp_keepalive_interval,
-                    tcp_keepalive_interval
-                );
-                apply_option!(
-                    set_if_some,
-                    builder,
-                    config.tcp_keepalive_retries,
-                    tcp_keepalive_retries
-                );
-                #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
-                apply_option!(
-                    set_if_some,
-                    builder,
-                    config.tcp_user_timeout,
-                    tcp_user_timeout
-                );
-                apply_option!(set_if_some, builder, config.tcp_nodelay, tcp_nodelay);
-                apply_option!(
-                    set_if_some,
-                    builder,
-                    config.tcp_reuse_address,
-                    tcp_reuse_address
-                );
-
-                // Timeout options.
-                apply_option!(set_if_some, builder, config.timeout, timeout);
-                apply_option!(
-                    set_if_some,
-                    builder,
-                    config.connect_timeout,
-                    connect_timeout
-                );
-                apply_option!(set_if_some, builder, config.read_timeout, read_timeout);
-
-                // Pool options.
-                apply_option!(
-                    set_if_some,
-                    builder,
-                    config.pool_idle_timeout,
-                    pool_idle_timeout
-                );
-                apply_option!(
-                    set_if_some,
-                    builder,
-                    config.pool_max_idle_per_host,
-                    pool_max_idle_per_host
-                );
-                apply_option!(set_if_some, builder, config.pool_max_size, pool_max_size);
-
-                // Protocol options.
-                apply_option!(set_if_true, builder, config.http1_only, http1_only, false);
-                apply_option!(set_if_true, builder, config.http2_only, http2_only, false);
-                apply_option!(set_if_some, builder, config.https_only, https_only);
-                apply_option!(
-                    set_if_some_inner,
-                    builder,
-                    config.http1_options,
-                    http1_options
-                );
-                apply_option!(
-                    set_if_some_inner,
-                    builder,
-                    config.http2_options,
-                    http2_options
-                );
-
-                // TLS options.
-                apply_option!(
-                    set_if_some_map,
-                    builder,
-                    config.tls_min_version,
-                    tls_min_version,
-                    TlsVersion::into_ffi
-                );
-                apply_option!(
-                    set_if_some_map,
-                    builder,
-                    config.tls_max_version,
-                    tls_max_version,
-                    TlsVersion::into_ffi
-                );
-                apply_option!(set_if_some, builder, config.tls_info, tls_info);
-                apply_option!(
-                    set_if_some,
-                    builder,
-                    config.tls_verify_hostname,
-                    tls_verify_hostname
-                );
-                apply_option!(
-                    set_if_some_inner,
-                    builder,
-                    config.tls_identity,
-                    tls_identity
-                );
-                apply_option!(set_if_some_inner, builder, config.tls_keylog, tls_keylog);
-                apply_option!(set_if_some_inner, builder, config.tls_options, tls_options);
-                if let Some(verify) = config.tls_verify.take() {
-                    builder = match verify {
-                        TlsVerify::Verification(verify) => builder.tls_cert_verification(verify),
-                        TlsVerify::CertificatePath(path_buf) => {
-                            let pem_data = std::fs::read(path_buf)?;
-                            let store =
-                                CertStore::from_pem_stack(pem_data).map_err(Error::Library)?;
-                            builder.tls_cert_store(store)
-                        }
-                        TlsVerify::CertificateStore(cert_store) => {
-                            builder.tls_cert_store(cert_store.0)
-                        }
-                    }
-                }
-
-                // Network options.
-                apply_option!(set_if_some_iter_inner, builder, config.proxies, proxy);
-                apply_option!(set_if_true, builder, config.no_proxy, no_proxy, false);
-                apply_option!(set_if_some, builder, config.local_address, local_address);
-                apply_option!(
-                    set_if_some_tuple_inner,
-                    builder,
-                    config.local_addresses,
-                    local_addresses
-                );
-                #[cfg(any(
-                    target_os = "android",
-                    target_os = "fuchsia",
-                    target_os = "linux",
-                    target_os = "ios",
-                    target_os = "visionos",
-                    target_os = "macos",
-                    target_os = "tvos",
-                    target_os = "watchos"
-                ))]
-                apply_option!(set_if_some, builder, config.interface, interface);
-
-                // DNS options.
-                if let Some(opts) = config.dns_options.take() {
-                    for (domain, addrs) in opts.resolve_to_addrs {
-                        builder = builder.resolve_to_addrs(domain.as_ref().to_string(), addrs);
-                    }
-
-                    if !opts.system_dns {
-                        builder =
-                            builder.dns_resolver(HickoryResolver::new(opts.lookup_ip_strategy));
-                    }
-                } else {
-                    builder =
-                        builder.dns_resolver(HickoryResolver::new(LookupIpStrategy::default()));
-                };
-
-                // Compression options.
-                apply_option!(set_if_some, builder, config.gzip, gzip);
-                apply_option!(set_if_some, builder, config.brotli, brotli);
-                apply_option!(set_if_some, builder, config.deflate, deflate);
-                apply_option!(set_if_some, builder, config.zstd, zstd);
-
-                raise_for_status = config.raise_for_status.unwrap_or(false);
-            }
-
-            builder
-                .build()
-                .map(|inner| Client {
-                    inner,
-                    cancel: CancellationToken::new(),
-                    cookie_jar,
-                    raise_for_status,
-                })
-                .map_err(Error::Library)
-                .map_err(Into::into)
+            let client = build_client(self.config.as_deref().cloned(), proxies.clone())?;
+            self.inner.store(Arc::new(Inner { client, proxies }));
+            Ok(())
         })
     }
 
@@ -643,6 +494,25 @@ impl BlockingClient {
         self.0.cookie_jar.clone()
     }
 
+    /// Get the proxies of the client.
+    #[inline]
+    #[getter]
+    pub fn proxies(&self) -> Option<Vec<Proxy>> {
+        self.0.proxies()
+    }
+
+    /// Set the proxies of the client.
+    ///
+    /// The client is rebuilt with the given proxies, keeping the rest of its
+    /// configuration and its cookie jar. Requests made afterwards go through the new
+    /// proxies, while the ones already in flight keep using the previous ones. Setting
+    /// `None` restores the default behaviour of using the system proxies.
+    #[inline]
+    #[setter]
+    pub fn set_proxies(&self, py: Python, proxies: Option<Vec<Proxy>>) -> PyResult<()> {
+        self.0.set_proxies(py, proxies)
+    }
+
     /// Close the client, preventing any new requests.
     #[inline]
     pub fn close(&self) {
@@ -794,4 +664,207 @@ impl BlockingClient {
     ) {
         self.close();
     }
+}
+
+/// Builds the underlying client from the given configuration and proxies.
+fn build_client(
+    config: Option<Builder>,
+    mut proxies: Option<Vec<Proxy>>,
+) -> PyResult<wreq::Client> {
+    // Create the client builder.
+    let mut builder = wreq::Client::builder();
+
+    // Network options. The proxies are applied apart from the configuration, so that
+    // they can be replaced on their own when the client is rebuilt.
+    apply_option!(set_if_some_iter_inner, builder, proxies, proxy);
+
+    if let Some(mut config) = config {
+        // Emulation options.
+        apply_option!(set_if_some, builder, config.emulation, emulation);
+
+        // User agent options.
+        apply_option!(
+            set_if_some_map_ref,
+            builder,
+            config.user_agent,
+            user_agent,
+            String::as_str
+        );
+
+        // Default headers options.
+        apply_option!(set_if_some_inner, builder, config.headers, default_headers);
+        apply_option!(
+            set_if_some_inner,
+            builder,
+            config.orig_headers,
+            orig_headers
+        );
+
+        // Allow redirects options.
+        apply_option!(set_if_some, builder, config.referer, referer);
+        apply_option!(set_if_some_inner, builder, config.redirect, redirect);
+
+        // Cookie options.
+        apply_option!(
+            set_if_some_inner,
+            builder,
+            config.cookie_provider,
+            cookie_provider
+        );
+
+        // TCP options.
+        apply_option!(set_if_some, builder, config.tcp_keepalive, tcp_keepalive);
+        apply_option!(
+            set_if_some,
+            builder,
+            config.tcp_keepalive_interval,
+            tcp_keepalive_interval
+        );
+        apply_option!(
+            set_if_some,
+            builder,
+            config.tcp_keepalive_retries,
+            tcp_keepalive_retries
+        );
+        #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
+        apply_option!(
+            set_if_some,
+            builder,
+            config.tcp_user_timeout,
+            tcp_user_timeout
+        );
+        apply_option!(set_if_some, builder, config.tcp_nodelay, tcp_nodelay);
+        apply_option!(
+            set_if_some,
+            builder,
+            config.tcp_reuse_address,
+            tcp_reuse_address
+        );
+
+        // Timeout options.
+        apply_option!(set_if_some, builder, config.timeout, timeout);
+        apply_option!(
+            set_if_some,
+            builder,
+            config.connect_timeout,
+            connect_timeout
+        );
+        apply_option!(set_if_some, builder, config.read_timeout, read_timeout);
+
+        // Pool options.
+        apply_option!(
+            set_if_some,
+            builder,
+            config.pool_idle_timeout,
+            pool_idle_timeout
+        );
+        apply_option!(
+            set_if_some,
+            builder,
+            config.pool_max_idle_per_host,
+            pool_max_idle_per_host
+        );
+        apply_option!(set_if_some, builder, config.pool_max_size, pool_max_size);
+
+        // Protocol options.
+        apply_option!(set_if_true, builder, config.http1_only, http1_only, false);
+        apply_option!(set_if_true, builder, config.http2_only, http2_only, false);
+        apply_option!(set_if_some, builder, config.https_only, https_only);
+        apply_option!(
+            set_if_some_inner,
+            builder,
+            config.http1_options,
+            http1_options
+        );
+        apply_option!(
+            set_if_some_inner,
+            builder,
+            config.http2_options,
+            http2_options
+        );
+
+        // TLS options.
+        apply_option!(
+            set_if_some_map,
+            builder,
+            config.tls_min_version,
+            tls_min_version,
+            TlsVersion::into_ffi
+        );
+        apply_option!(
+            set_if_some_map,
+            builder,
+            config.tls_max_version,
+            tls_max_version,
+            TlsVersion::into_ffi
+        );
+        apply_option!(set_if_some, builder, config.tls_info, tls_info);
+        apply_option!(
+            set_if_some,
+            builder,
+            config.tls_verify_hostname,
+            tls_verify_hostname
+        );
+        apply_option!(
+            set_if_some_inner,
+            builder,
+            config.tls_identity,
+            tls_identity
+        );
+        apply_option!(set_if_some_inner, builder, config.tls_keylog, tls_keylog);
+        apply_option!(set_if_some_inner, builder, config.tls_options, tls_options);
+        if let Some(verify) = config.tls_verify.take() {
+            builder = match verify {
+                TlsVerify::Verification(verify) => builder.tls_cert_verification(verify),
+                TlsVerify::CertificatePath(path_buf) => {
+                    let pem_data = std::fs::read(path_buf)?;
+                    let store = CertStore::from_pem_stack(pem_data).map_err(Error::Library)?;
+                    builder.tls_cert_store(store)
+                }
+                TlsVerify::CertificateStore(cert_store) => builder.tls_cert_store(cert_store.0),
+            }
+        }
+
+        // Network options.
+        apply_option!(set_if_true, builder, config.no_proxy, no_proxy, false);
+        apply_option!(set_if_some, builder, config.local_address, local_address);
+        apply_option!(
+            set_if_some_tuple_inner,
+            builder,
+            config.local_addresses,
+            local_addresses
+        );
+        #[cfg(any(
+            target_os = "android",
+            target_os = "fuchsia",
+            target_os = "linux",
+            target_os = "ios",
+            target_os = "visionos",
+            target_os = "macos",
+            target_os = "tvos",
+            target_os = "watchos"
+        ))]
+        apply_option!(set_if_some, builder, config.interface, interface);
+
+        // DNS options.
+        if let Some(opts) = config.dns_options.take() {
+            for (domain, addrs) in opts.resolve_to_addrs {
+                builder = builder.resolve_to_addrs(domain.as_ref().to_string(), addrs);
+            }
+
+            if !opts.system_dns {
+                builder = builder.dns_resolver(HickoryResolver::new(opts.lookup_ip_strategy));
+            }
+        } else {
+            builder = builder.dns_resolver(HickoryResolver::new(LookupIpStrategy::default()));
+        };
+
+        // Compression options.
+        apply_option!(set_if_some, builder, config.gzip, gzip);
+        apply_option!(set_if_some, builder, config.brotli, brotli);
+        apply_option!(set_if_some, builder, config.deflate, deflate);
+        apply_option!(set_if_some, builder, config.zstd, zstd);
+    }
+
+    builder.build().map_err(Error::Library).map_err(Into::into)
 }

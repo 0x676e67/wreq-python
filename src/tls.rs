@@ -20,7 +20,7 @@ define_enum!(
     TLS_1_3,
 );
 
-#[derive(FromPyObject)]
+#[derive(Clone, FromPyObject)]
 pub enum TlsVerify {
     Verification(bool),
     CertificatePath(std::path::PathBuf),
