@@ -320,6 +320,14 @@ impl Client {
             };
             config.cookie_provider = cookie_jar.clone();
 
+            // TLS options. The certificate is resolved upfront, so that the rebuilds of
+            // the client cannot fail on, nor pick up a change of, a certificate file.
+            config.tls_verify = config
+                .tls_verify
+                .take()
+                .map(TlsVerify::resolve)
+                .transpose()?;
+
             // Default headers and network options. Both are kept apart from the rest of
             // the configuration, since they can be replaced after the client is created.
             headers = config.headers.take();
