@@ -128,6 +128,18 @@ class HeaderMap:
         """
         ...
 
+    def update(self, headers: Mapping[str, str] | "HeaderMap") -> None:
+        r"""
+        Extend the map with the given headers.
+
+        The value of a header that is already present is replaced, and a header that
+        is missing is added.
+
+        Args:
+            headers: The headers to merge into the map
+        """
+        ...
+
     def remove(self, key: str) -> None:
         r"""
         Remove all values for a header name.

@@ -9,7 +9,7 @@ use wreq::header::{self, HeaderName, HeaderValue};
 use crate::{buffer::PyBuffer, error::Error};
 
 /// A HTTP header map.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 #[pyclass(subclass, str, skip_from_py_object)]
 pub struct HeaderMap(pub header::HeaderMap);
 
@@ -99,7 +99,7 @@ impl HeaderMap {
 
     /// Insert a key-value pair into the header map.
     #[pyo3(signature = (key, value))]
-    fn insert(&mut self, py: Python, key: PyBackedStr, value: PyBackedStr) {
+    pub fn insert(&mut self, py: Python, key: PyBackedStr, value: PyBackedStr) {
         py.detach(|| {
             if let (Ok(name), Ok(value)) = (
                 HeaderName::from_bytes(key.as_bytes()),
@@ -112,7 +112,7 @@ impl HeaderMap {
 
     /// Append a key-value pair to the header map.
     #[pyo3(signature = (key, value))]
-    fn append(&mut self, py: Python, key: PyBackedStr, value: PyBackedStr) {
+    pub fn append(&mut self, py: Python, key: PyBackedStr, value: PyBackedStr) {
         py.detach(|| {
             if let (Ok(name), Ok(value)) = (
                 HeaderName::from_bytes(key.as_bytes()),
@@ -123,9 +123,18 @@ impl HeaderMap {
         })
     }
 
+    /// Extend the header map with the given headers.
+    ///
+    /// The value of a key that is already present is replaced, and a key that is missing
+    /// is added.
+    #[pyo3(signature = (headers))]
+    pub fn update(&mut self, py: Python, headers: HeaderMap) {
+        py.detach(|| self.0.extend(headers.0))
+    }
+
     /// Remove a key-value pair from the header map.
     #[pyo3(signature = (key))]
-    fn remove(&mut self, py: Python, key: PyBackedStr) {
+    pub fn remove(&mut self, py: Python, key: PyBackedStr) {
         py.detach(|| {
             self.0.remove::<&str>(key.as_ref());
         })
@@ -188,7 +197,7 @@ impl HeaderMap {
 
     /// Clears the map, removing all key-value pairs. Keeps the allocated memory for reuse.
     #[inline]
-    fn clear(&mut self) {
+    pub fn clear(&mut self) {
         self.0.clear();
     }
 }

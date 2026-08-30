@@ -1,12 +1,14 @@
 import datetime
 from typing import (
     Any,
+    Mapping,
     Sequence,
     Unpack,
 )
 
 from . import (
     ClientConfig,
+    ClientHeaders,
     Message,
     Method,
     Request,
@@ -219,6 +221,29 @@ class Client:
     Returns:
         - The provided `Jar` if the client was constructed with `cookie_provider=...`
         - The auto-created `Jar` if the client was constructed with `cookie_store=True`
+    """
+
+    headers: ClientHeaders | Mapping[str, str] | HeaderMap | None
+    r"""
+    Get or set the default headers sent with every request.
+
+    Reading gives back a `ClientHeaders`, a `HeaderMap` bound to this client: mutating
+    it, with `update()` for instance, applies the change to the requests made
+    afterwards.
+
+    Assigning rebuilds the client with the given headers, keeping the rest of its
+    configuration and its cookie jar, so the previously set headers are dropped while
+    the ones coming from the emulation are kept.
+
+    Examples:
+
+    ```python
+    import wreq
+
+    client = wreq.blocking.Client(headers={"x-api-key": "secret"})
+    client.headers.update({"x-request-id": "1"})
+    client.headers = {"x-api-key": "other"}
+    ```
     """
 
     proxies: Proxy | Sequence[Proxy] | None

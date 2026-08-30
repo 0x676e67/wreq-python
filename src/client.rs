@@ -8,7 +8,7 @@ mod query;
 
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
-    sync::Arc,
+    sync::{Arc, Mutex, MutexGuard, PoisonError},
     time::Duration,
 };
 
@@ -232,11 +232,12 @@ impl FromPyObject<'_, '_> for Builder {
 
 /// The swappable state of a `Client`.
 ///
-/// The proxies are stored next to the `wreq::Client` they were built into, so that
-/// both are replaced at once whenever the proxies of the client are updated.
+/// The headers and the proxies are stored next to the `wreq::Client` they were built
+/// into, so that all of them are replaced at once whenever the client is updated.
 #[derive(Default)]
 struct Inner {
     client: wreq::Client,
+    headers: Option<HeaderMap>,
     proxies: Option<Vec<Proxy>>,
 }
 
@@ -246,6 +247,9 @@ struct Inner {
 pub struct Client {
     inner: Arc<ArcSwap<Inner>>,
     config: Option<Arc<Builder>>,
+    /// Serializes the rebuilds of the client, so that concurrent updates of its headers
+    /// and proxies cannot lose each other.
+    rebuild: Arc<Mutex<()>>,
     cancel: CancellationToken,
     raise_for_status: bool,
 
@@ -254,12 +258,44 @@ pub struct Client {
     cookie_jar: Option<Jar>,
 }
 
+/// The default headers of a `Client`.
+///
+/// This is a snapshot of the headers of the client it was taken from: mutating it
+/// rebuilds that client, so that the change applies to the requests made afterwards.
+#[pyclass(extends = HeaderMap, skip_from_py_object)]
+pub struct ClientHeaders(Client);
+
 /// A blocking client for making HTTP requests.
 #[derive(Default)]
 #[pyclass(name = "Client", subclass, frozen, skip_from_py_object)]
 pub struct BlockingClient(Client);
 
 // ====== Client =====
+
+impl Client {
+    /// Locks the client for a rebuild.
+    #[inline]
+    fn lock(&self) -> MutexGuard<'_, ()> {
+        self.rebuild.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Rebuilds the client with the given headers and proxies, keeping the rest of its
+    /// configuration. The client is left untouched when the rebuild fails.
+    fn store(&self, headers: Option<HeaderMap>, proxies: Option<Vec<Proxy>>) -> PyResult<()> {
+        let client = build_client(
+            self.config.as_deref().cloned(),
+            headers.clone(),
+            proxies.clone(),
+        )?;
+
+        self.inner.store(Arc::new(Inner {
+            client,
+            headers,
+            proxies,
+        }));
+        Ok(())
+    }
+}
 
 #[pymethods]
 impl Client {
@@ -269,6 +305,7 @@ impl Client {
     fn new(py: Python, kwds: Option<Builder>) -> PyResult<Client> {
         let mut config = kwds;
         let mut cookie_jar: Option<Jar> = None;
+        let mut headers: Option<HeaderMap> = None;
         let mut proxies: Option<Vec<Proxy>> = None;
         let mut raise_for_status = false;
 
@@ -283,22 +320,50 @@ impl Client {
             };
             config.cookie_provider = cookie_jar.clone();
 
-            // Network options. The proxies are kept apart from the rest of the
-            // configuration, since they can be replaced after the client is created.
+            // Default headers and network options. Both are kept apart from the rest of
+            // the configuration, since they can be replaced after the client is created.
+            headers = config.headers.take();
             proxies = config.proxies.take().map(|proxies| proxies.0);
 
             raise_for_status = config.raise_for_status.unwrap_or(false);
         }
 
         py.detach(move || {
-            let client = build_client(config.clone(), proxies.clone())?;
+            let client = build_client(config.clone(), headers.clone(), proxies.clone())?;
             Ok(Client {
-                inner: Arc::new(ArcSwap::from_pointee(Inner { client, proxies })),
+                inner: Arc::new(ArcSwap::from_pointee(Inner {
+                    client,
+                    headers,
+                    proxies,
+                })),
                 config: config.map(Arc::new),
+                rebuild: Arc::new(Mutex::new(())),
                 cancel: CancellationToken::new(),
                 raise_for_status,
                 cookie_jar,
             })
+        })
+    }
+
+    /// Get the default headers of the client.
+    #[getter]
+    pub fn headers<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, ClientHeaders>> {
+        let headers = self.inner.load().headers.clone().unwrap_or_default();
+        Bound::new(py, (ClientHeaders(self.clone()), headers))
+    }
+
+    /// Set the default headers of the client.
+    ///
+    /// The client is rebuilt with the given headers, keeping the rest of its
+    /// configuration and its cookie jar, so the previously set headers are dropped while
+    /// the ones coming from the emulation are kept. Requests made afterwards carry the
+    /// new headers, while the ones already in flight keep using the previous ones.
+    #[setter]
+    pub fn set_headers(&self, py: Python, headers: Option<HeaderMap>) -> PyResult<()> {
+        py.detach(|| {
+            let _guard = self.lock();
+            let proxies = self.inner.load().proxies.clone();
+            self.store(headers, proxies)
         })
     }
 
@@ -319,9 +384,9 @@ impl Client {
     pub fn set_proxies(&self, py: Python, proxies: Option<Proxies>) -> PyResult<()> {
         let proxies = proxies.map(|proxies| proxies.0);
         py.detach(|| {
-            let client = build_client(self.config.as_deref().cloned(), proxies.clone())?;
-            self.inner.store(Arc::new(Inner { client, proxies }));
-            Ok(())
+            let _guard = self.lock();
+            let headers = self.inner.load().headers.clone();
+            self.store(headers, proxies)
         })
     }
 
@@ -493,6 +558,25 @@ impl BlockingClient {
     #[getter]
     pub fn cookie_jar(&self) -> Option<Jar> {
         self.0.cookie_jar.clone()
+    }
+
+    /// Get the default headers of the client.
+    #[inline]
+    #[getter]
+    pub fn headers<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, ClientHeaders>> {
+        self.0.headers(py)
+    }
+
+    /// Set the default headers of the client.
+    ///
+    /// The client is rebuilt with the given headers, keeping the rest of its
+    /// configuration and its cookie jar, so the previously set headers are dropped while
+    /// the ones coming from the emulation are kept. Requests made afterwards carry the
+    /// new headers, while the ones already in flight keep using the previous ones.
+    #[inline]
+    #[setter]
+    pub fn set_headers(&self, py: Python, headers: Option<HeaderMap>) -> PyResult<()> {
+        self.0.set_headers(py, headers)
     }
 
     /// Get the proxies of the client.
@@ -667,9 +751,89 @@ impl BlockingClient {
     }
 }
 
-/// Builds the underlying client from the given configuration and proxies.
+// ===== impl ClientHeaders =====
+
+impl ClientHeaders {
+    /// Pushes the headers of the view back onto the client they were taken from.
+    fn apply(slf: PyRefMut<'_, Self>, py: Python) -> PyResult<()> {
+        let client = slf.0.clone();
+        let headers = HeaderMap::clone(&slf.into_super());
+        client.set_headers(py, Some(headers))
+    }
+}
+
+#[pymethods]
+impl ClientHeaders {
+    /// Extend the headers of the client with the given headers.
+    ///
+    /// The value of a key that is already present is replaced, and a key that is missing
+    /// is added.
+    #[pyo3(signature = (headers))]
+    fn update(mut slf: PyRefMut<'_, Self>, py: Python, headers: HeaderMap) -> PyResult<()> {
+        slf.as_super().update(py, headers);
+        Self::apply(slf, py)
+    }
+
+    /// Insert a key-value pair into the headers of the client.
+    #[pyo3(signature = (key, value))]
+    fn insert(
+        mut slf: PyRefMut<'_, Self>,
+        py: Python,
+        key: PyBackedStr,
+        value: PyBackedStr,
+    ) -> PyResult<()> {
+        slf.as_super().insert(py, key, value);
+        Self::apply(slf, py)
+    }
+
+    /// Append a key-value pair to the headers of the client.
+    #[pyo3(signature = (key, value))]
+    fn append(
+        mut slf: PyRefMut<'_, Self>,
+        py: Python,
+        key: PyBackedStr,
+        value: PyBackedStr,
+    ) -> PyResult<()> {
+        slf.as_super().append(py, key, value);
+        Self::apply(slf, py)
+    }
+
+    /// Remove a key-value pair from the headers of the client.
+    #[pyo3(signature = (key))]
+    fn remove(mut slf: PyRefMut<'_, Self>, py: Python, key: PyBackedStr) -> PyResult<()> {
+        slf.as_super().remove(py, key);
+        Self::apply(slf, py)
+    }
+
+    /// Clears the headers of the client, removing all key-value pairs.
+    fn clear(mut slf: PyRefMut<'_, Self>, py: Python) -> PyResult<()> {
+        slf.as_super().clear();
+        Self::apply(slf, py)
+    }
+}
+
+#[pymethods]
+impl ClientHeaders {
+    #[inline]
+    fn __setitem__(
+        slf: PyRefMut<'_, Self>,
+        py: Python,
+        key: PyBackedStr,
+        value: PyBackedStr,
+    ) -> PyResult<()> {
+        Self::insert(slf, py, key, value)
+    }
+
+    #[inline]
+    fn __delitem__(slf: PyRefMut<'_, Self>, py: Python, key: PyBackedStr) -> PyResult<()> {
+        Self::remove(slf, py, key)
+    }
+}
+
+/// Builds the underlying client from the given configuration, headers and proxies.
 fn build_client(
     config: Option<Builder>,
+    mut headers: Option<HeaderMap>,
     mut proxies: Option<Vec<Proxy>>,
 ) -> PyResult<wreq::Client> {
     // Create the client builder.
@@ -692,8 +856,7 @@ fn build_client(
             String::as_str
         );
 
-        // Default headers options.
-        apply_option!(set_if_some_inner, builder, config.headers, default_headers);
+        // Original headers options.
         apply_option!(
             set_if_some_inner,
             builder,
@@ -866,6 +1029,10 @@ fn build_client(
         apply_option!(set_if_some, builder, config.deflate, deflate);
         apply_option!(set_if_some, builder, config.zstd, zstd);
     }
+
+    // Default headers options. Applied apart from the configuration as well, but after
+    // it, so that they keep taking precedence over the headers set by the emulation.
+    apply_option!(set_if_some_inner, builder, headers, default_headers);
 
     builder.build().map_err(Error::Library).map_err(Into::into)
 }
