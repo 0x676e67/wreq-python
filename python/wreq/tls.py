@@ -19,6 +19,7 @@ __all__ = [
     "ExtensionType",
     "TlsOptions",
     "TlsInfo",
+    "chromium_root_store",
     "Params",
     "KeyShare",
 ]
@@ -451,3 +452,14 @@ class TlsInfo:
         Get the DER encoded leaf certificate of the peer.
         """
         ...
+
+
+def chromium_root_store() -> CertStore:
+    """
+    Chrome's root store from chromium-root-certs, for a client's `tls_verify`.
+
+    Chrome 150+ requests specific trust anchors and a server may return a chain anchored to one
+    of them, so the client needs Chrome's roots to verify it. Backed only when wreq was built with
+    the `chromium-pki` feature; without it this function exists but raises RuntimeError.
+    """
+    ...

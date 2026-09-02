@@ -1,7 +1,7 @@
 import pytest
 import wreq
 from wreq.emulation import Emulation
-from wreq.tls import CertStore
+from wreq.tls import CertStore, chromium_root_store
 
 
 @pytest.mark.asyncio
@@ -48,3 +48,14 @@ async def test_alps_new_endpoint():
     async with resp:
         text = await resp.text()
         assert text is not None
+
+
+def test_chromium_root_store():
+    # The binding is always registered; on a build without the chromium-pki feature
+    # it raises rather than being absent, and on a feature build it returns a store.
+    try:
+        store = chromium_root_store()
+    except RuntimeError as exc:
+        assert "chromium-pki" in str(exc)
+    else:
+        assert isinstance(store, CertStore)
