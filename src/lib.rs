@@ -329,6 +329,25 @@ pub async fn websocket(
     Client::default().websocket(cancel, url, kwds).await
 }
 
+/// Chrome's root store from chromium-root-certs, for a client's `tls_verify`.
+/// Chrome 150+ requests specific trust anchors and a server may return a chain
+/// anchored to one of them, so the client needs Chrome's roots to verify it.
+/// Only backed when wreq was built with the `chromium-pki` feature; without it
+/// the function still exists but raises, rather than being silently absent.
+#[pyfunction]
+fn chromium_root_store() -> PyResult<CertStore> {
+    #[cfg(feature = "chromium-pki")]
+    {
+        Ok(CertStore(wreq_util::chromium_root_store()))
+    }
+    #[cfg(not(feature = "chromium-pki"))]
+    {
+        Err(pyo3::exceptions::PyRuntimeError::new_err(
+            "wreq was built without the chromium-pki feature",
+        ))
+    }
+}
+
 #[pymodule(gil_used = false)]
 fn wreq(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     use r#async::{delete, get, head, options, patch, post, put, request, trace, websocket};
@@ -450,6 +469,7 @@ fn tls_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<ExtensionType>()?;
     m.add_class::<TlsOptions>()?;
     m.add_class::<TlsInfo>()?;
+    m.add_function(wrap_pyfunction!(chromium_root_store, m)?)?;
     Ok(())
 }
 

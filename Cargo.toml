@@ -27,6 +27,8 @@ abi3-py311 = ["pyo3/abi3-py311"]
 abi3-py313 = ["pyo3/abi3-py313"]
 abi3-py314 = ["pyo3/abi3-py314"]
 
+chromium-pki = ["wreq-util/emulation-chromium-pki"]
+
 [dependencies]
 tokio = "1.52.2"
 tokio-util = "0.7.18"
