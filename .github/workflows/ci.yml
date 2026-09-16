@@ -15,7 +15,6 @@ on:
       - "bench/**"
       - "*.pyi"
       - "*.md"
-      - ".github/**"
       - "python/**"
       - "README.md"
   workflow_dispatch:
@@ -178,12 +177,17 @@ jobs:
             target: armv7-unknown-linux-musleabihf
             allocator: jemalloc
             custom_env:
+              # Match Zig's musl time64 ABI, including libc versions before 0.2.187.
+              RUSTFLAGS: --cfg=libc_unstable_musl_v1_2_3
+              RUST_LIBC_UNSTABLE_MUSL_V1_2_3: "1"
               CFLAGS_armv7_unknown_linux_musleabihf: -mfpu=vfpv3-d16
               CXXFLAGS_armv7_unknown_linux_musleabihf: -mfpu=vfpv3-d16
           - runner: ubuntu-latest
             target: i686-unknown-linux-musl
             allocator: jemalloc
             custom_env:
+              RUSTFLAGS: --cfg=libc_unstable_musl_v1_2_3
+              RUST_LIBC_UNSTABLE_MUSL_V1_2_3: "1"
               CFLAGS_i686_unknown_linux_musl: -msse2
               CXXFLAGS_i686_unknown_linux_musl: -msse2
     env:
@@ -202,7 +206,7 @@ jobs:
           maturin-version: ${{ env.MATURIN_VERSION }}
           rust-toolchain: stable
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --zig --interpreter python ${{ matrix.build_type.cargo_args }} --features ${{ matrix.platform.allocator }}
+          args: --release --out dist --zig --interpreter ${{ matrix.build_type.python-version }} ${{ matrix.build_type.cargo_args }} --features ${{ matrix.platform.allocator }}
           manylinux: musllinux_1_2
           container: "off"
           sccache: "false"
