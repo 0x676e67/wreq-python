@@ -15,7 +15,6 @@ on:
       - "bench/**"
       - "*.pyi"
       - "*.md"
-      - ".github/**"
       - "python/**"
       - "README.md"
   workflow_dispatch:
@@ -156,38 +155,62 @@ jobs:
     runs-on: ${{ matrix.platform.runner }}
     environment: MuslLinux
     strategy:
+      fail-fast: false
       matrix:
         build_type:
           - name: standard
-            maturin_args: "--find-interpreter"
+            python-version: "3.11"
+            cargo_args: ""
           - name: free-threaded
-            maturin_args: "--interpreter 3.14t"
+            python-version: "3.14t"
+            cargo_args: "--no-default-features"
         platform:
-          - runner: ubuntu-22.04
+          - runner: ubuntu-latest
             target: x86_64-unknown-linux-musl
             allocator: jemalloc
-          - runner: ubuntu-22.04
+            custom_env: {}
+          - runner: ubuntu-latest
             target: aarch64-unknown-linux-musl
             allocator: jemalloc
-          - runner: ubuntu-22.04
+            custom_env: {}
+          - runner: ubuntu-latest
             target: armv7-unknown-linux-musleabihf
             allocator: jemalloc
-          - runner: ubuntu-22.04
+            custom_env:
+              # Match Zig's musl time64 ABI, including libc versions before 0.2.187.
+              RUSTFLAGS: --cfg=libc_unstable_musl_v1_2_3
+              RUST_LIBC_UNSTABLE_MUSL_V1_2_3: "1"
+              CFLAGS_armv7_unknown_linux_musleabihf: -mfpu=vfpv3-d16
+              CXXFLAGS_armv7_unknown_linux_musleabihf: -mfpu=vfpv3-d16
+          - runner: ubuntu-latest
             target: i686-unknown-linux-musl
             allocator: jemalloc
+            custom_env:
+              RUSTFLAGS: --cfg=libc_unstable_musl_v1_2_3
+              RUST_LIBC_UNSTABLE_MUSL_V1_2_3: "1"
+              CFLAGS_i686_unknown_linux_musl: -msse2
+              CXXFLAGS_i686_unknown_linux_musl: -msse2
+    env:
+      # BoringSSL uses Zig's libc++ instead of the old image's libstdc++.
+      BORING_BSSL_RUST_CPPLIB: c++
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.build_type.python-version }}
+      - name: Install BoringSSL build dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake clang libclang-dev llvm-dev make nasm perl pkg-config
       - name: Build wheels
-        env:
-          MATURIN_VERSION: ${{ env.MATURIN_VERSION }}
-          BORING_BSSL_RUST_CPPLIB: static=stdc++
-        run: |
-          export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-L native=/usr/local/musl/${{ matrix.platform.target }}/lib -L native=/usr/local/musl/lib/gcc/${{ matrix.platform.target }}/11.4.0 -C link-arg=-static-libgcc -l static=gcc"
-          if [ "${{ matrix.platform.target }}" = "i686-unknown-linux-musl" ]; then
-            export CFLAGS="${CFLAGS} -msse2"
-            export CXXFLAGS="${CXXFLAGS} -msse2"
-          fi
-          bash .github/musl_build.sh ${{ matrix.platform.target }} "${{ matrix.build_type.maturin_args }}" --features "${{ matrix.platform.allocator }}"
+        uses: PyO3/maturin-action@v1
+        with:
+          maturin-version: ${{ env.MATURIN_VERSION }}
+          rust-toolchain: stable
+          target: ${{ matrix.platform.target }}
+          args: --release --out dist --zig --interpreter ${{ matrix.build_type.python-version }} ${{ matrix.build_type.cargo_args }} --features ${{ matrix.platform.allocator }}
+          manylinux: musllinux_1_2
+          container: "off"
+          sccache: "false"
+        env: ${{ matrix.platform.custom_env }}
       - name: Upload wheels
         uses: actions/upload-artifact@v7
         with:
