@@ -80,10 +80,10 @@ impl Cookie {
             cookie.set_path(path);
         }
 
-        if let Some(max_age) = max_age {
-            if let Ok(max_age) = Duration::try_from(max_age) {
-                cookie.set_max_age(max_age);
-            }
+        if let Some(max_age) = max_age
+            && let Ok(max_age) = Duration::try_from(max_age)
+        {
+            cookie.set_max_age(max_age);
         }
 
         if let Some(expires) = expires {

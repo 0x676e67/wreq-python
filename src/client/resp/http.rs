@@ -107,10 +107,10 @@ impl Response {
 
     /// Consumes the response [`Body`] for streaming without caching.
     fn stream_response(&self) -> Result<wreq::Response, Error> {
-        if let Some(arc) = self.body.swap(None) {
-            if let Ok(Body::Streamable(body)) = Arc::try_unwrap(arc) {
-                return Ok(self.build_response(body));
-            }
+        if let Some(arc) = self.body.swap(None)
+            && let Ok(Body::Streamable(body)) = Arc::try_unwrap(arc)
+        {
+            return Ok(self.build_response(body));
         }
         Err(Error::Memory)
     }
