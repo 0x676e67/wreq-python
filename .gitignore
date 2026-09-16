@@ -76,7 +76,6 @@ AGENTS.md
 .python-version
 venv
 .venv
-Cargo.lock
 uv.lock
 
 # VSCode
