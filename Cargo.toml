@@ -1,6 +1,6 @@
 [package]
 name = "wreq-python"
-version = "0.12.1"
+version = "0.12.2"
 description = "An ergonomic, privacy-aware Python HTTP Client"
 license = "Apache-2.0"
 readme = "README.md"
@@ -71,7 +71,7 @@ wreq = { version = "0.16.1", default-features = false, features = [
 ] }
 wreq-util = { version = "0.2.0", features = ["emulation-compression"] }
 hickory-resolver = "0.25.2"
-cookie = "0.18"
+cookie = "0.18.2"
 mimalloc = { version = "0.1.43", default-features = false, features = [
     "local_dynamic_tls",
 ], optional = true }
