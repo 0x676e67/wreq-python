@@ -66,6 +66,10 @@ class Profile(Enum):
     Chrome147 = auto()
     Chrome148 = auto()
     Chrome149 = auto()
+    Chrome150 = auto()
+    Chrome151 = auto()
+    Chrome152 = auto()
+    Chrome153 = auto()
 
     # Microsoft Edge versions
     Edge101 = auto()
@@ -239,6 +243,10 @@ class Emulation:
     Chrome147: ClassVar[Profile] = Profile.Chrome147
     Chrome148: ClassVar[Profile] = Profile.Chrome148
     Chrome149: ClassVar[Profile] = Profile.Chrome149
+    Chrome150: ClassVar[Profile] = Profile.Chrome150
+    Chrome151: ClassVar[Profile] = Profile.Chrome151
+    Chrome152: ClassVar[Profile] = Profile.Chrome152
+    Chrome153: ClassVar[Profile] = Profile.Chrome153
 
     # Microsoft Edge versions
     Edge101: ClassVar[Profile] = Profile.Edge101

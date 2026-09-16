@@ -7,7 +7,7 @@ readme = "README.md"
 repository = "https://github.com/0x676e67/wreq-python"
 authors = ["0x676e67 <gngppz@gmail.com>"]
 edition = "2024"
-rust-version = "1.85.0"
+rust-version = "1.98"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
@@ -51,7 +51,9 @@ bytes = "1.12.1"
 arc-swap = "1.9.2"
 http = "1.4.2"
 http-body-util = "0.1.4"
-wreq = { version = "6.0.0-rc", features = [
+wreq = { version = "0.16.1", default-features = false, features = [
+    "webpki-roots",
+    "tokio-rt",
     "query",
     "form",
     "json",
@@ -67,7 +69,7 @@ wreq = { version = "6.0.0-rc", features = [
     "ws",
     "parking_lot",
 ] }
-wreq-util = { version = "3.0.0-rc", features = ["emulation-compression"] }
+wreq-util = { version = "0.2.0", features = ["emulation-compression"] }
 hickory-resolver = "0.25.2"
 cookie = "0.18"
 mimalloc = { version = "0.1.43", default-features = false, features = [
@@ -76,6 +78,13 @@ mimalloc = { version = "0.1.43", default-features = false, features = [
 tikv-jemallocator = { version = "0.7.0", default-features = false, features = [
     "disable_initial_exec_tls",
 ], optional = true }
+
+# Keep the Chrome 150–153 profiles and their required TLS support in sync.
+[patch.crates-io]
+wreq-util = { git = "https://github.com/0x676e67/wreq-util", rev = "e3922a2b2d976487cb4cf4e7b0ac290b3ce77f66" }
+wreq = { git = "https://github.com/0x676e67/wreq", rev = "cd76bcdf1307153de289d34e072528bdf0510a3b" }
+btls = { git = "https://github.com/0x676e67/btls", rev = "129887582a538b8f4dcf371d15c953335312ca37" }
+btls-sys = { git = "https://github.com/0x676e67/btls", rev = "129887582a538b8f4dcf371d15c953335312ca37" }
 
 [profile.release]
 codegen-units = 1
