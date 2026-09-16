@@ -35,6 +35,8 @@ esac
 
 echo "Building for $TARGET..."
 docker pull $IMAGE:$TARGET
-docker run --rm "${VOLUME_MAPPING[@]}" "${EXTRA_ENV[@]}" $IMAGE:$TARGET /bin/bash -c "$MATURIN_CMD"
+# The image's bundled Rust may be older than the project's MSRV.
+docker run --rm "${VOLUME_MAPPING[@]}" "${EXTRA_ENV[@]}" $IMAGE:$TARGET /bin/bash -c \
+  "rustup toolchain install 1.98.0 --profile minimal --target $TARGET && rustup run 1.98.0 $MATURIN_CMD"
 
 echo "Build completed for target: $TARGET"
