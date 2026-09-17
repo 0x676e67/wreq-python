@@ -21,7 +21,7 @@ mod redirect;
 mod tls;
 
 use client::{
-    BlockingClient, Client, SocketAddr,
+    BlockingClient, Client, ClientHeaders, SocketAddr,
     body::{
         Streamer,
         multipart::{Multipart, Part},
@@ -341,6 +341,7 @@ fn wreq(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Part>()?;
     m.add_class::<Multipart>()?;
     m.add_class::<Client>()?;
+    m.add_class::<ClientHeaders>()?;
     m.add_class::<Response>()?;
     m.add_class::<WebSocket>()?;
     m.add_class::<Streamer>()?;

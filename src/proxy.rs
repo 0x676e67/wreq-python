@@ -29,6 +29,10 @@ struct Builder {
 #[pyclass(subclass, frozen, str, from_py_object)]
 pub struct Proxy(pub wreq::Proxy);
 
+/// A helper struct to allow parsing either a single proxy or a sequence of proxies.
+#[derive(Clone)]
+pub struct Proxies(pub Vec<Proxy>);
+
 // ===== impl Builder =====
 
 impl FromPyObject<'_, '_> for Builder {
@@ -94,6 +98,20 @@ impl Proxy {
 }
 
 impl_print_str!(Debug, Proxy);
+
+// ===== impl Proxies =====
+
+impl FromPyObject<'_, '_> for Proxies {
+    type Error = PyErr;
+
+    fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
+        if let Ok(proxy) = ob.extract::<Proxy>() {
+            return Ok(Proxies(vec![proxy]));
+        }
+
+        ob.extract::<Vec<Proxy>>().map(Proxies)
+    }
+}
 
 fn create_proxy<'py>(
     py: Python<'py>,

@@ -3,6 +3,7 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use pyo3::{FromPyObject, prelude::*};
 
 /// A generic extractor for various types.
+#[derive(Clone)]
 pub struct Extractor<T>(pub T);
 
 impl FromPyObject<'_, '_> for Extractor<(Option<Ipv4Addr>, Option<Ipv6Addr>)> {

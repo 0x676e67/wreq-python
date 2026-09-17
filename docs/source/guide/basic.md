@@ -3,7 +3,7 @@
 !!! info "On this page"
     - GET/POST requests
     - Form and JSON
-    - Custom headers
+    - Custom headers, and the headers of a client
     - Query parameters & streaming
 
 This page covers the most common request patterns in wreq: sending GET and POST requests, working with form data and JSON, customizing headers, passing query parameters, and reading streaming responses.
@@ -153,6 +153,41 @@ Pass the `HeaderMap` to any request method via the `headers` argument:
 ```python
 response = await wreq.get("https://httpbin.org/headers", headers=headers)
 ```
+ 
+### Headers of a client
+ 
+A client sends its own headers with every request. They are given through the `headers`
+argument of the constructor, and can be changed at any time afterwards through the
+`headers` attribute:
+ 
+```python
+from wreq import Client
+ 
+client = Client(headers={"x-api-key": "secret"})
+ 
+# Add a header, or replace the value of one that is already there
+client.headers.update({"x-request-id": "1"})
+ 
+# Set, or remove, a single header
+client.headers["x-request-id"] = "2"
+del client.headers["x-request-id"]
+ 
+# Replace the headers of the client altogether
+client.headers = {"x-api-key": "another-secret"}
+```
+ 
+Reading the attribute gives back a `HeaderMap` bound to the client, so all of the usual
+lookups work on it too:
+ 
+```python
+print(client.headers["x-api-key"])
+# b'another-secret'
+```
+ 
+Every change rebuilds the client, keeping the rest of its configuration and its cookie
+jar: requests made afterwards carry the new headers, while the ones already in flight
+keep using the previous ones. Only the headers of the client are replaced, so those
+coming from an [emulation](emulation.md) are kept.
  
 ---
  
