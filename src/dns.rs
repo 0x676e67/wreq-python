@@ -83,7 +83,8 @@ pub struct HickoryResolver {
 
 impl HickoryResolver {
     /// Create a new resolver with the default configuration,
-    /// which reads from `/etc/resolve.conf`. The options are
+    /// which reads from `/etc/resolv.conf`. When that cannot be read,
+    /// Cloudflare DNS is used instead. The options are
     /// overriden to look up for both IPv4 and IPv6 addresses
     /// to work with "happy eyeballs" algorithm.
     pub fn new(strategy: LookupIpStrategy) -> HickoryResolver {
@@ -100,9 +101,12 @@ impl HickoryResolver {
                 let mut builder = match TokioResolver::builder_tokio() {
                     Ok(resolver) => resolver,
                     Err(err) => {
-                        eprintln!("error reading DNS system conf: {}, using defaults", err);
+                        eprintln!(
+                            "error reading DNS system conf: {}, using Cloudflare DNS",
+                            err
+                        );
                         TokioResolver::builder_with_config(
-                            ResolverConfig::default(),
+                            ResolverConfig::cloudflare(),
                             TokioConnectionProvider::default(),
                         )
                     }
