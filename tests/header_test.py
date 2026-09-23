@@ -1,5 +1,43 @@
+import json
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
 import pytest
+import wreq
+from wreq import Client
+from wreq.emulation import Emulation
 from wreq.header import OrigHeaderMap, HeaderMap
+
+
+class _EchoHandler(BaseHTTPRequestHandler):
+    r"""Answers every request with the headers it received."""
+
+    protocol_version = "HTTP/1.1"
+
+    def do_GET(self):
+        body = json.dumps(
+            {name.lower(): value for name, value in self.headers.items()}
+        ).encode()
+        self.send_response(200)
+        self.send_header("content-type", "application/json")
+        self.send_header("content-length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format, *args):
+        pass
+
+
+@pytest.fixture
+def echo():
+    r"""An echo server listening on the loopback interface."""
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _EchoHandler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+
+    yield f"http://127.0.0.1:{server.server_address[1]}"
+
+    server.shutdown()
+    server.server_close()
 
 
 @pytest.mark.flaky(reruns=3, reruns_delay=2)
@@ -161,3 +199,135 @@ def test_init_with_dict():
     assert not h.is_empty()
     assert h.contains_key("A")
     assert h.contains_key("B")
+
+
+@pytest.mark.flaky(reruns=3, reruns_delay=2)
+def test_update():
+    h = HeaderMap({"A": "1", "B": "2"})
+    h.update({"B": "22", "C": "3"})
+    assert h["A"] == b"1"
+    assert h["B"] == b"22"
+    assert h["C"] == b"3"
+    assert h.keys_len() == 3
+
+    # The values of a multi-value key replace the ones already stored.
+    other = HeaderMap()
+    other.insert("A", "10")
+    other.append("A", "11")
+    h.update(other)
+    assert list(h.get_all("A")) == [b"10", b"11"]
+
+
+def test_client_headers():
+    client = Client(headers={"x-one": "1"})
+    headers = client.headers
+    assert isinstance(headers, HeaderMap)
+    assert headers["x-one"] == b"1"
+    assert len(headers) == 1
+
+    client.headers = None
+    assert len(client.headers) == 0
+
+
+@pytest.mark.asyncio
+async def test_client_set_headers(echo):
+    client = Client(headers={"x-one": "1", "x-two": "2"})
+
+    resp = await client.get(echo)
+    async with resp:
+        sent = await resp.json()
+        assert sent["x-one"] == "1"
+        assert sent["x-two"] == "2"
+
+    # Assigning replaces the headers of the client rather than merging into them.
+    client.headers = {"x-three": "3"}
+    resp = await client.get(echo)
+    async with resp:
+        sent = await resp.json()
+        assert sent["x-three"] == "3"
+        assert "x-one" not in sent
+        assert "x-two" not in sent
+
+
+@pytest.mark.asyncio
+async def test_client_update_headers(echo):
+    client = Client(headers={"x-one": "1"})
+
+    client.headers.update({"x-one": "11", "x-two": "2"})
+    resp = await client.get(echo)
+    async with resp:
+        sent = await resp.json()
+        assert sent["x-one"] == "11"
+        assert sent["x-two"] == "2"
+
+    client.headers["x-three"] = "3"
+    del client.headers["x-two"]
+    resp = await client.get(echo)
+    async with resp:
+        sent = await resp.json()
+        assert sent["x-three"] == "3"
+        assert "x-two" not in sent
+
+    client.headers.clear()
+    resp = await client.get(echo)
+    async with resp:
+        sent = await resp.json()
+        assert "x-one" not in sent
+        assert "x-three" not in sent
+
+
+@pytest.mark.asyncio
+async def test_client_headers_keep_emulation(echo):
+    client = Client(emulation=Emulation.Chrome133, headers={"x-one": "1"})
+
+    resp = await client.get(echo)
+    async with resp:
+        user_agent = (await resp.json())["user-agent"]
+
+    # Only the headers of the client are replaced, the ones coming from the emulation
+    # are kept.
+    client.headers.update({"x-one": "11"})
+    resp = await client.get(echo)
+    async with resp:
+        sent = await resp.json()
+        assert sent["x-one"] == "11"
+        assert sent["user-agent"] == user_agent
+
+
+@pytest.mark.asyncio
+async def test_client_headers_reused_by_another_client(echo):
+    client = Client(headers={"x-one": "1"})
+    other = Client(headers=client.headers)
+
+    resp = await other.get(echo)
+    async with resp:
+        assert (await resp.json())["x-one"] == "1"
+
+
+def test_client_headers_concurrent_updates():
+    # Every thread updates a header of its own, so an update lost to another thread
+    # shows up as a missing key rather than as an unexpected value.
+    client = Client()
+
+    def worker(index):
+        for _ in range(20):
+            client.headers.update({f"x-{index}": str(index)})
+
+    threads = [threading.Thread(target=worker, args=(index,)) for index in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    headers = client.headers
+    assert [headers[f"x-{index}"] for index in range(4)] == [b"0", b"1", b"2", b"3"]
+
+
+def test_blocking_client_headers(echo):
+    client = wreq.blocking.Client(headers={"x-one": "1"})
+    client.headers.update({"x-two": "2"})
+
+    with client.get(echo) as resp:
+        sent = resp.json()
+        assert sent["x-one"] == "1"
+        assert sent["x-two"] == "2"

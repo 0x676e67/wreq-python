@@ -48,3 +48,17 @@ async def test_alps_new_endpoint():
     async with resp:
         text = await resp.text()
         assert text is not None
+
+
+def test_client_tls_verify_path_read_once(tmp_path):
+    # The certificate file is read once, when the client is created, so updating the
+    # client afterwards neither reads it again nor fails once the file is gone.
+    cert = tmp_path / "ca.pem"
+    cert.write_text("")
+    client = wreq.Client(tls_verify=cert)
+
+    cert.unlink()
+    client.headers.update({"x-one": "1"})
+    client.proxies = None
+
+    assert client.headers["x-one"] == b"1"

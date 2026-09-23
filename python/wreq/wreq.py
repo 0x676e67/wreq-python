@@ -718,7 +718,7 @@ class ClientConfig(TypedDict):
     This also disables the automatic usage of the "system" proxy.
     """
 
-    proxies: NotRequired[Sequence[Proxy]]
+    proxies: NotRequired[Proxy | Sequence[Proxy]]
     """
     The proxies to use for requests.
     """
@@ -1090,6 +1090,15 @@ class WebSocketRequest(TypedDict):
     """
 
 
+class ClientHeaders(HeaderMap):
+    r"""
+    The default headers of a `Client`.
+
+    This is a snapshot of the headers of the client it was taken from: mutating it
+    rebuilds that client, so that the change applies to the requests made afterwards.
+    """
+
+
 class Client:
     r"""
     A client for making HTTP requests.
@@ -1102,6 +1111,54 @@ class Client:
     Returns:
         - The provided `Jar` if the client was constructed with `cookie_provider=...`
         - The auto-created `Jar` if the client was constructed with `cookie_store=True`
+    """
+
+    headers: ClientHeaders | Mapping[str, str] | HeaderMap | None
+    r"""
+    Get or set the default headers sent with every request.
+
+    Reading gives back a `ClientHeaders`, a `HeaderMap` bound to this client: mutating
+    it, with `update()` for instance, applies the change to the requests made
+    afterwards.
+
+    Assigning rebuilds the client with the given headers, keeping the rest of its
+    configuration and its cookie jar, so the previously set headers are dropped while
+    the ones coming from the emulation are kept.
+
+    Examples:
+
+    ```python
+    import wreq
+
+    client = wreq.Client(headers={"x-api-key": "secret"})
+    client.headers.update({"x-request-id": "1"})
+    client.headers = {"x-api-key": "other"}
+    ```
+    """
+
+    proxies: Proxy | Sequence[Proxy] | None
+    r"""
+    Get or set the proxies used by this client.
+
+    A single `Proxy` or a sequence of them can be assigned; reading the attribute
+    always gives back a list, or `None` when the client has no proxies.
+
+    Assigning a new value rebuilds the client with the given proxies, keeping the rest
+    of its configuration and its cookie jar. Requests made afterwards go through the
+    new proxies, while the ones already in flight keep using the previous ones.
+    Assigning `None` restores the default behaviour of using the system proxies.
+
+    Note that a client created with `no_proxy=True` never uses a proxy, exactly like
+    when both options are given to the constructor.
+
+    Examples:
+
+    ```python
+    import wreq
+
+    client = wreq.Client(proxies=[wreq.Proxy.all("http://proxy.example.com:8080")])
+    client.proxies = wreq.Proxy.all("http://other.example.com:8080")
+    ```
     """
 
     def __init__(

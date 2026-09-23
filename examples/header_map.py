@@ -1,3 +1,4 @@
+from wreq import Client
 from wreq.header import HeaderMap
 
 if __name__ == "__main__":
@@ -23,3 +24,12 @@ if __name__ == "__main__":
     # Clear all headers
     headers.clear()
     print("After clear, is_empty:", headers.is_empty())
+
+    # The headers of a client can be changed after it has been created
+    client = Client(headers={"x-api-key": "secret"})
+    # Add a header, or replace the value of one that is already there
+    client.headers.update({"x-request-id": "1"})
+    print("Client headers:", client.headers)
+    # Replace the headers of the client altogether
+    client.headers = {"x-api-key": "another-secret"}
+    print("Client headers:", client.headers)
