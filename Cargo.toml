@@ -70,7 +70,7 @@ wreq = { version = "0.16.1", default-features = false, features = [
     "parking_lot",
 ] }
 wreq-util = { version = "0.2.0", features = ["emulation-compression"] }
-hickory-resolver = "0.25.2"
+hickory-resolver = "0.26.3"
 cookie = "0.18.2"
 mimalloc = { version = "0.1.43", default-features = false, features = [
     "local_dynamic_tls",
