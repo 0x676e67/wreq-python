@@ -6,11 +6,15 @@ use std::{
 };
 
 use hickory_resolver::{
-    TokioResolver, config::ResolverConfig, lookup_ip::LookupIpIntoIter,
-    name_server::TokioConnectionProvider,
+    TokioResolver,
+    config::{CLOUDFLARE, ResolverConfig},
+    lookup_ip::LookupIpIntoIter,
+    net::runtime::TokioRuntimeProvider,
 };
 use pyo3::{prelude::*, pybacked::PyBackedStr};
 use wreq::dns::{Addrs, Name, Resolve, Resolving};
+
+use crate::error::Error;
 
 define_enum!(
     /// The lookup ip strategy.
@@ -82,11 +86,9 @@ pub struct HickoryResolver {
 }
 
 impl HickoryResolver {
-    /// Create a new resolver with the default configuration,
-    /// which reads from `/etc/resolve.conf`. The options are
-    /// overriden to look up for both IPv4 and IPv6 addresses
-    /// to work with "happy eyeballs" algorithm.
-    pub fn new(strategy: LookupIpStrategy) -> HickoryResolver {
+    /// Use the system DNS configuration, falling back to Cloudflare if unreadable.
+    /// Only successfully built resolvers are cached for each IP strategy.
+    pub fn new(strategy: LookupIpStrategy) -> Result<Self, Error> {
         let cell = match strategy {
             LookupIpStrategy::IPV4_ONLY => &RESOLVER_IPV4_ONLY,
             LookupIpStrategy::IPV6_ONLY => &RESOLVER_IPV6_ONLY,
@@ -95,22 +97,27 @@ impl HickoryResolver {
             LookupIpStrategy::IPV4_THEN_IPV6 => &RESOLVER_IPV4_THEN_IPV6,
         };
 
-        HickoryResolver {
-            resolver: cell.get_or_init(move || {
-                let mut builder = match TokioResolver::builder_tokio() {
-                    Ok(resolver) => resolver,
-                    Err(err) => {
-                        eprintln!("error reading DNS system conf: {}, using defaults", err);
-                        TokioResolver::builder_with_config(
-                            ResolverConfig::default(),
-                            TokioConnectionProvider::default(),
-                        )
-                    }
-                };
-                builder.options_mut().ip_strategy = strategy.into_ffi();
-                builder.build()
-            }),
-        }
+        let resolver = if let Some(resolver) = cell.get() {
+            resolver
+        } else {
+            let mut builder = match TokioResolver::builder_tokio() {
+                Ok(resolver) => resolver,
+                Err(err) => {
+                    eprintln!(
+                        "error reading DNS system conf: {}, using Cloudflare DNS",
+                        err
+                    );
+                    TokioResolver::builder_with_config(
+                        ResolverConfig::udp_and_tcp(&CLOUDFLARE),
+                        TokioRuntimeProvider::default(),
+                    )
+                }
+            };
+            builder.options_mut().ip_strategy = strategy.into_ffi();
+            let resolver = builder.build().map_err(Error::Dns)?;
+            cell.get_or_init(|| resolver)
+        };
+        Ok(Self { resolver })
     }
 }
 

@@ -444,11 +444,11 @@ impl Client {
 
                     if !opts.system_dns {
                         builder =
-                            builder.dns_resolver(HickoryResolver::new(opts.lookup_ip_strategy));
+                            builder.dns_resolver(HickoryResolver::new(opts.lookup_ip_strategy)?);
                     }
                 } else {
                     builder =
-                        builder.dns_resolver(HickoryResolver::new(LookupIpStrategy::default()));
+                        builder.dns_resolver(HickoryResolver::new(LookupIpStrategy::default())?);
                 };
 
                 // Compression options.

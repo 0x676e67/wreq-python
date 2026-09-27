@@ -1,0 +1,5 @@
+# Keep in sync with project.optional-dependencies.docs in pyproject.toml.
+zensical
+mkdocs-material>=9.5.0
+mkdocstrings[python]>=1.0.3
+mike>=2.0.0

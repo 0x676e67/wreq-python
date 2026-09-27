@@ -9,29 +9,13 @@ build:
   os: ubuntu-24.04
   tools:
     python: "3.11"
-    rust: "latest"
-  apt_packages:
-    - build-essential
-    - cmake
-    - perl
-    - pkg-config
-    - libclang-dev
-    - musl-tools
-    - git
   jobs:
-    pre_install:
-      - pip install maturin
-      - maturin build --out dist
-      - pip install --find-links=dist wreq
-    # We recommend using a requirements file for reproducible builds.
-    # This is just a quick example to get started.
-    # https://docs.readthedocs.io/page/guides/reproducible-builds.html
     install:
-      - pip install zensical
-      - pip install .[docs]
+      # API documentation reads python/wreq statically; no native build is needed.
+      - python -m pip install -r docs/requirements.txt
     build:
       html:
-        - zensical build -f docs/mkdocs.yml
+        - python -m zensical build -f docs/mkdocs.yml
     post_build:
       - mkdir -p $READTHEDOCS_OUTPUT/html/
       - cp --recursive docs/site/* $READTHEDOCS_OUTPUT/html/
