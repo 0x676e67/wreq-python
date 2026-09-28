@@ -1,3 +1,10 @@
+## [0.12.4](https://github.com/0x676e67/wreq-python/compare/v0.12.3..v0.12.4) - 2026-09-28
+
+### Build
+
+- *(ci)* Add PyPy 3.11 Linux x86_64 wheel support - ([b6af327](https://github.com/0x676e67/wreq-python/commit/b6af32768889cf59bbafd76919ed58408fe1a6cb))
+
+
 ## [0.11.0](https://github.com/0x676e67/wreq-python/compare/v0.10.2..v0.11.0) - 2026-04-13
 
 ### Features
