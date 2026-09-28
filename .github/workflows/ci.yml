@@ -82,6 +82,60 @@ jobs:
           source .venv/bin/activate
           pytest
 
+  pypy311:
+    name: PyPy 3.11 (Linux x86_64)
+    runs-on: ubuntu-latest
+    services:
+      httpbin:
+        image: kennethreitz/httpbin
+        ports:
+          - 8080:80
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: pypy3.11
+          architecture: x64
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          maturin-version: ${{ env.MATURIN_VERSION }}
+          rust-toolchain: stable
+          target: x86_64
+          args: --release --out dist --zig --interpreter python --no-default-features --features jemalloc
+          sccache: "false"
+          manylinux: auto
+          container: "off"
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v7
+      - name: Install wheel and test dependencies
+        run: |
+          uv venv --python python .venv-pypy
+          uv pip install --python .venv-pypy/bin/python dist/*.whl pytest pytest-asyncio pytest-rerunfailures
+      - name: Verify PyPy wheel
+        run: |
+          .venv-pypy/bin/python - <<'PY'
+          import platform
+          import sys
+          import wreq
+
+          assert platform.python_implementation() == "PyPy"
+          assert sys.version_info[:2] == (3, 11)
+          assert wreq.__name__ == "wreq"
+          PY
+          wheel=$(basename dist/*.whl)
+          case "$wheel" in
+            *-pp311-*.whl) ;;
+            *) echo "Expected a pp311 wheel, got: $wheel"; exit 1 ;;
+          esac
+      - name: Run tests
+        run: .venv-pypy/bin/python -m pytest
+      - name: Upload wheel
+        uses: actions/upload-artifact@v7
+        with:
+          name: wheels-linux-x86_64-pypy311
+          path: dist
+
   manylinux:
     runs-on: ${{ matrix.platform.runner }}
     strategy:
@@ -399,7 +453,7 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    needs: [manylinux, musllinux, windows, macos, android, sdist, tests, style]
+    needs: [manylinux, musllinux, windows, macos, android, sdist, tests, pypy311, style]
     permissions:
       # Use to sign the release artifacts
       id-token: write
