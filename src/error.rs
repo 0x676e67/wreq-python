@@ -1,5 +1,11 @@
+use std::{
+    any::Any,
+    fmt,
+    panic::{self, AssertUnwindSafe},
+};
+
 use pyo3::{
-    PyErr, create_exception,
+    PyErr, Python, create_exception,
     exceptions::{PyException, PyRuntimeError, PyStopAsyncIteration, PyStopIteration},
 };
 use wreq::header;
@@ -57,6 +63,9 @@ macro_rules! wrap_error {
     };
 }
 
+const INTERPRETER_UNAVAILABLE_MSG: &str =
+    "The Python interpreter is not available (not initialized or shutting down)";
+
 /// Unified error enum
 #[derive(Debug)]
 pub enum Error {
@@ -74,6 +83,8 @@ pub enum Error {
     Json(serde_json::Error),
     Form(serde_urlencoded::ser::Error),
     Library(wreq::Error),
+    InterpreterUnavailable,
+    Panic(Box<str>),
 }
 
 impl From<Error> for PyErr {
@@ -100,6 +111,8 @@ impl From<Error> for PyErr {
             Error::Dns(err) => BuilderError::new_err(format!("DNS resolver error: {err:?}")),
             Error::Json(err) => PyRuntimeError::new_err(format!("JSON error: {err:?}")),
             Error::Form(err) => PyRuntimeError::new_err(format!("Form error: {err:?}")),
+            Error::InterpreterUnavailable => PyRuntimeError::new_err(INTERPRETER_UNAVAILABLE_MSG),
+            Error::Panic(msg) => RustPanic::new_err(msg.into_string()),
             Error::Library(err) => wrap_error!(err,
                 is_body => BodyError,
                 is_tls => TlsError,
@@ -116,6 +129,41 @@ impl From<Error> for PyErr {
             ),
         }
     }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::InterpreterUnavailable => f.write_str(INTERPRETER_UNAVAILABLE_MSG),
+            Error::Panic(msg) => f.write_str(msg),
+            err => fmt::Debug::fmt(err, f),
+        }
+    }
+}
+
+impl Error {
+    fn panic(payload: Box<dyn Any + Send>) -> Self {
+        let msg = payload
+            .downcast_ref::<&str>()
+            .copied()
+            .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+            .unwrap_or("unknown panic");
+        Error::Panic(format!("Rust panic: {msg}").into_boxed_str())
+    }
+}
+
+/// Attaches to Python from a non-Python thread.
+///
+/// `Python::attach` panics once the interpreter has shut down (see discussions/305), so
+/// this uses `Python::try_attach` and returns [`Error::InterpreterUnavailable`] instead.
+/// Any other panic in `f` is caught as [`Error::Panic`] to keep Tokio threads alive.
+pub fn attach<F, R>(f: F) -> Result<R, Error>
+where
+    F: for<'py> FnOnce(Python<'py>) -> R,
+{
+    panic::catch_unwind(AssertUnwindSafe(|| Python::try_attach(f)))
+        .map_err(Error::panic)?
+        .ok_or(Error::InterpreterUnavailable)
 }
 
 impl From<header::InvalidHeaderName> for Error {
