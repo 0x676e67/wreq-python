@@ -110,7 +110,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
       - name: Install wheel and test dependencies
         run: |
-          uv venv --python python .venv-pypy
+          uv venv --python "$pythonLocation/bin/python" .venv-pypy
           uv pip install --python .venv-pypy/bin/python dist/*.whl pytest pytest-asyncio pytest-rerunfailures
       - name: Verify PyPy wheel
         run: |
