@@ -2464,7 +2464,7 @@ dependencies = [
 
 [[package]]
 name = "wreq-python"
-version = "0.12.4"
+version = "0.12.3"
 dependencies = [
  "arc-swap",
  "bytes",
