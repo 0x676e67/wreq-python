@@ -18,6 +18,7 @@ mod http1;
 mod http2;
 mod proxy;
 mod redirect;
+mod runtime;
 mod tls;
 
 use client::{
@@ -47,6 +48,7 @@ use pyo3::{
     coroutine::CancelHandle, intern, prelude::*, pybacked::PyBackedStr, types::PyDict,
     wrap_pymodule,
 };
+use runtime::Runtime;
 #[cfg(feature = "jemalloc")]
 use tikv_jemallocator as _;
 use tls::{
@@ -339,6 +341,7 @@ fn wreq(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Part>()?;
     m.add_class::<Multipart>()?;
     m.add_class::<Client>()?;
+    m.add_class::<Runtime>()?;
     m.add_class::<Response>()?;
     m.add_class::<WebSocket>()?;
     m.add_class::<Streamer>()?;
@@ -357,6 +360,7 @@ fn wreq(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(websocket, m)?)?;
 
     m.add_wrapped(wrap_pymodule!(proxy_module))?;
+    m.add_wrapped(wrap_pymodule!(runtime_module))?;
     m.add_wrapped(wrap_pymodule!(dns_module))?;
     m.add_wrapped(wrap_pymodule!(http1_module))?;
     m.add_wrapped(wrap_pymodule!(http2_module))?;
@@ -371,6 +375,10 @@ fn wreq(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     let sys = PyModule::import(py, intern!(py, "sys"))?;
     let sys_modules: Bound<'_, PyDict> = sys.getattr(intern!(py, "modules"))?.cast_into()?;
     sys_modules.set_item(intern!(py, "wreq.proxy"), m.getattr(intern!(py, "proxy"))?)?;
+    sys_modules.set_item(
+        intern!(py, "wreq.runtime"),
+        m.getattr(intern!(py, "runtime"))?,
+    )?;
     sys_modules.set_item(intern!(py, "wreq.dns"), m.getattr(intern!(py, "dns"))?)?;
     sys_modules.set_item(intern!(py, "wreq.http1"), m.getattr(intern!(py, "http1"))?)?;
     sys_modules.set_item(intern!(py, "wreq.http2"), m.getattr(intern!(py, "http2"))?)?;
@@ -405,6 +413,12 @@ fn wreq(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
 #[pymodule(gil_used = false, name = "proxy")]
 fn proxy_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Proxy>()?;
+    Ok(())
+}
+
+#[pymodule(gil_used = false, name = "runtime")]
+fn runtime_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<Runtime>()?;
     Ok(())
 }
 

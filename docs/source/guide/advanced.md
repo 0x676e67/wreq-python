@@ -8,6 +8,11 @@
 
 Send data using async generators for streaming uploads:
 
+Async upload generators run on the caller's running event loop with its context variables.
+Their exceptions fail the request. When an upload ends, the generator is closed;
+cancelling or dropping the upload schedules producer cancellation and cleanup on that loop.
+Keep the loop running until generator cleanup has finished. This also applies to async multipart parts.
+
 ```python
 import asyncio
 import wreq
@@ -86,6 +91,60 @@ async def main():
 if __name__ == "__main__":
     asyncio.run(main())
 ```
+
+### Custom runtimes
+
+Clients share a lazily started multi-thread runtime by default. Pass a `Runtime`
+to choose a separate worker pool for an async or blocking client:
+
+```python
+from wreq import Client
+from wreq.runtime import Runtime
+
+runtime = Runtime(
+    workers=1,
+    work_steal=False,
+    thread_name="http-client",
+    max_blocking_threads=8,
+    thread_keep_alive=10.0,
+)
+client = Client(runtime=runtime)
+```
+
+With `work_steal=False`, Pingora uses independent single-thread Tokio runtimes.
+Each client is assigned one worker for its lifetime; requests, response reads,
+streams and WebSocket operations use that worker. With multiple workers, newly
+created clients are assigned round-robin. This is not CPU pinning. Sharing the
+same `Runtime` between clients is supported, and `client.runtime` returns its
+runtime configuration and owner.
+
+`workers=None` uses `TOKIO_WORKER_THREADS` when it contains a positive integer,
+otherwise the available parallelism. `Runtime.default()` returns the shared
+multi-thread instance; its configuration is chosen when first accessed. Both
+default and custom runtimes start their threads on first use.
+
+`thread_keep_alive` is in seconds. `max_blocking_threads` and
+`thread_keep_alive` default to Tokio's settings (512 and 10 seconds). In
+no-steal mode these limits apply to **each worker's** blocking pool, not the pool
+as a whole. Python async upload generators still run on the caller's event loop.
+Standalone multipart file preparation and upload-task cleanup can use the
+shared runtime; a dedicated client runtime does not isolate Python's GIL or
+every process resource. DNS resolvers are owned by individual clients so their
+connections are not shared across runtimes.
+
+Closing a client cancels its requests but does not shut down its runtime.
+Responses and streams retain the runtime independently. For explicit shutdown,
+release all clients (including closed ones), responses, streams and in-flight
+tasks, then call `runtime.shutdown_timeout(1.0)`. This is a blocking call which
+releases the GIL. The timeout is in seconds per worker; already running blocking
+tasks may outlive it. Shutdown raises `RuntimeError` while the runtime is in use
+or if it is the shared default. Repeated shutdown of a custom runtime is harmless,
+and `runtime.closed` reports whether it has been explicitly shut down.
+
+Dropping all owners automatically releases a custom runtime without synchronously
+waiting for its worker threads. Invalid configuration is rejected with Python
+exceptions. Pingora's internal thread-creation failures can still panic; with
+the release build's `panic=abort`, this terminates the process.
 
 ### TLS Key Logging
 

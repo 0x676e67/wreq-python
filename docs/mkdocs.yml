@@ -113,6 +113,7 @@ nav:
       - Modules:
           - wreq: api/wreq.md
           - wreq.blocking: api/blocking.md
+          - wreq.runtime: api/runtime.md
           - wreq.header: api/header.md
           - wreq.cookie: api/cookie.md
           - wreq.exceptions: api/exceptions.md

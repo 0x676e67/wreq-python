@@ -28,27 +28,33 @@ where
 {
     /// Create [`NoGIL`] from a future
     #[inline]
-    pub fn new<Fut>(fut: Fut, cancel: CancelHandle) -> Self
+    pub fn new<Fut>(
+        runtime: &crate::runtime::Executor,
+        fut: Fut,
+        cancel: CancelHandle,
+    ) -> PyResult<Self>
     where
         Fut: Future<Output = PyResult<T>> + Send + 'static,
     {
-        Self {
-            handle: AbortOnDropHandle::new(pyo3_async_runtimes::tokio::get_runtime().spawn(fut)),
+        Ok(Self {
+            handle: AbortOnDropHandle::new(Python::attach(|py| py.detach(|| runtime.spawn(fut)))),
             cancel,
-        }
+        })
     }
 
     /// Create [`NoGIL`] from a future and a cancellation token
     #[inline]
     pub fn new_with_token<Fut>(
+        runtime: &crate::runtime::Executor,
         fut: Fut,
         cancel: CancelHandle,
         cancel_token: CancellationToken,
-    ) -> Self
+    ) -> PyResult<Self>
     where
         Fut: Future<Output = PyResult<T>> + Send + 'static,
     {
         Self::new(
+            runtime,
             async move {
                 tokio::select! {
                     result = fut => result,

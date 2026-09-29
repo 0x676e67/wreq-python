@@ -19,6 +19,7 @@ from . import (
 from .cookie import Cookie, Jar
 from .header import HeaderMap
 from .redirect import History
+from .runtime import Runtime
 from .tls import TlsInfo
 
 
@@ -210,6 +211,9 @@ class Client:
     r"""
     A blocking client for making HTTP requests.
     """
+
+    @property
+    def runtime(self) -> Runtime: ...
 
     cookie_jar: Jar | None
     r"""

@@ -1,3 +1,5 @@
+mod upload;
+
 use std::{
     pin::Pin,
     sync::Arc,
@@ -5,7 +7,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use futures_util::{FutureExt, Stream, StreamExt, stream::BoxStream};
+use futures_util::{FutureExt, Stream};
 use http_body_util::BodyExt;
 use pyo3::{
     coroutine::CancelHandle,
@@ -15,14 +17,16 @@ use pyo3::{
 };
 use tokio::{sync::Mutex, task::JoinHandle};
 
-use crate::{buffer::PyBuffer, client::nogil::NoGIL, error::Error, header::HeaderMap};
+use crate::{
+    buffer::PyBuffer, client::nogil::NoGIL, error::Error, header::HeaderMap, runtime::Executor,
+};
 
 type Pending = Option<JoinHandle<Option<PyResult<PyBytesLike>>>>;
 
 /// Python stream source.
 enum PyStreamSource {
     Sync(Arc<Py<PyAny>>),
-    Async(Arc<Mutex<BoxStream<'static, Py<PyAny>>>>),
+    Async(upload::Upload),
 }
 
 /// A bytes-like object that can be extracted from Python.
@@ -48,7 +52,7 @@ pub struct PyStream {
 /// A bytes stream response.
 #[derive(Clone)]
 #[pyclass(subclass, frozen, skip_from_py_object)]
-pub struct Streamer(Arc<Mutex<Option<wreq::Response>>>);
+pub struct Streamer(Arc<Mutex<Option<wreq::Response>>>, Executor);
 
 // ===== impl PyStream =====
 
@@ -67,8 +71,8 @@ impl From<PyStreamSource> for PyStream {
 impl Streamer {
     /// Create a new [`Streamer`] instance.
     #[inline]
-    pub fn new(resp: wreq::Response) -> Streamer {
-        Streamer(Arc::new(Mutex::new(Some(resp))))
+    pub fn new(resp: wreq::Response, runtime: Executor) -> Streamer {
+        Streamer(Arc::new(Mutex::new(Some(resp))), runtime)
     }
 
     async fn next(self, error: fn() -> Error) -> PyResult<Frame> {
@@ -108,10 +112,7 @@ impl Streamer {
 
     #[inline]
     fn __next__(&self, py: Python) -> PyResult<Frame> {
-        py.detach(|| {
-            pyo3_async_runtimes::tokio::get_runtime()
-                .block_on(self.clone().next(|| Error::StopIteration))
-        })
+        py.detach(|| self.1.block_on(self.clone().next(|| Error::StopIteration)))
     }
 
     #[inline]
@@ -138,12 +139,30 @@ impl Streamer {
         slf
     }
 
+    /// Read the next frame when awaited; returns a coroutine, not a Future.
     #[inline]
     fn __anext__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        pyo3_async_runtimes::tokio::future_into_py(
+        let this = self.clone();
+        let cancel = CancelHandle::new();
+        // PyO3 0.29 cannot wrap an async __anext__ slot; use its macro constructor.
+        // Recheck this internal API when upgrading PyO3.
+        Bound::new(
             py,
-            self.clone().next(|| Error::StopAsyncIteration),
+            pyo3::impl_::coroutine::new_coroutine(
+                intern!(py, "__anext__"),
+                Some("Streamer"),
+                Some(cancel.throw_callback()),
+                async move {
+                    let runtime = this.1.clone();
+                    let frame =
+                        NoGIL::new(&runtime, this.next(|| Error::StopAsyncIteration), cancel)?
+                            .await?;
+                    // PyO3 polls this coroutine while attached, outside the Tokio task.
+                    Python::attach(|py| frame.into_pyobject(py).map(|obj| obj.unbind()))
+                },
+            ),
         )
+        .map(Bound::into_any)
     }
 
     #[inline]
@@ -160,6 +179,7 @@ impl Streamer {
     ) -> PyResult<()> {
         let this = self.0.clone();
         NoGIL::new(
+            &self.1,
             async move {
                 if let Some(resp) = this.lock().await.take() {
                     drop(resp)
@@ -167,7 +187,7 @@ impl Streamer {
                 Ok(())
             },
             CancelHandle::new(),
-        )
+        )?
         .await
     }
 }
@@ -191,10 +211,7 @@ impl FromPyObject<'_, '_> for PyStream {
 
     fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
         if ob.hasattr(intern!(ob.py(), "asend"))? {
-            pyo3_async_runtimes::tokio::into_stream_v2(ob.to_owned())
-                .map(StreamExt::boxed)
-                .map(Mutex::new)
-                .map(Arc::new)
+            upload::Upload::new(ob.to_owned())
                 .map(PyStreamSource::Async)
                 .map(PyStream::from)
         } else {
@@ -212,37 +229,22 @@ impl Stream for PyStream {
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.as_mut().get_mut();
+        let ob = match &mut this.inner {
+            PyStreamSource::Async(stream) => return Pin::new(stream).poll_next(cx),
+            PyStreamSource::Sync(ob) => ob,
+        };
         let mut pending = match this.pending.take() {
             Some(pending) => pending,
             None => {
-                let runtime = pyo3_async_runtimes::tokio::get_runtime();
-
-                // Move GIL acquisition to blocking threads to prevent blocking async runtime.
-                // This is crucial because holding the GIL in async tasks can block the entire
-                // async executor and cause deadlocks or performance degradation.
-                match this.inner {
-                    PyStreamSource::Sync(ref ob) => {
-                        let ob = ob.clone();
-                        runtime.spawn_blocking(move || {
-                            Python::attach(|py| {
-                                ob.call_method0(py, intern!(py, "__next__"))
-                                    .ok()
-                                    .map(|ob| ob.extract(py))
-                            })
-                        })
-                    }
-                    PyStreamSource::Async(ref stream) => {
-                        let stream = stream.clone();
-                        runtime.spawn(async move {
-                            let ob = stream.lock().await.next().await;
-                            tokio::task::spawn_blocking(move || {
-                                Python::attach(|py| ob.map(|ob| ob.extract(py)))
-                            })
-                            .await
-                            .ok()?
-                        })
-                    }
-                }
+                // Acquiring the interpreter must not block a Tokio worker.
+                let ob = ob.clone();
+                tokio::task::spawn_blocking(move || {
+                    Python::attach(|py| {
+                        ob.call_method0(py, intern!(py, "__next__"))
+                            .ok()
+                            .map(|ob| ob.extract(py))
+                    })
+                })
             }
         };
 

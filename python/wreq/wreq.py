@@ -26,6 +26,7 @@ from .http1 import Http1Options
 from .http2 import Http2Options
 from .proxy import *
 from .redirect import History
+from .runtime import Runtime
 from .tls import *
 
 
@@ -160,6 +161,8 @@ class Part:
     ) -> None:
         r"""
         Creates a new part.
+
+        Async generators run on the caller's running event loop and are closed after use.
 
         # Arguments
         - `name` - The name of the part.
@@ -308,7 +311,7 @@ class Streamer:
     def __next__(self) -> bytes | HeaderMap: ...
     def __enter__(self) -> Any: ...
     def __exit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None: ...
-    async def __aiter__(self) -> "Streamer": ...
+    def __aiter__(self) -> "Streamer": ...
     async def __anext__(self) -> bytes | HeaderMap: ...
     async def __aenter__(self) -> Any: ...
     async def __aexit__(
@@ -508,6 +511,9 @@ class WebSocket:
 
 
 class ClientConfig(TypedDict):
+    runtime: NotRequired[Runtime | None]
+    """Runtime for this client and its responses; None uses the shared default."""
+
     emulation: NotRequired[emulation.Emulation | emulation.Profile]
     """Emulation config."""
 
@@ -941,6 +947,8 @@ class Request(TypedDict):
     ]
     """
     The body to use for the request.
+    Async generators run on the caller's running event loop. Upload errors fail
+    the request; cancellation schedules generator cleanup on that loop.
     """
 
     multipart: NotRequired[Multipart]
@@ -1094,6 +1102,9 @@ class Client:
     r"""
     A client for making HTTP requests.
     """
+
+    @property
+    def runtime(self) -> Runtime: ...
 
     cookie_jar: Jar | None
     r"""
