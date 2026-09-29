@@ -1,4 +1,6 @@
 <svg width="170" height="47" viewBox="0 0 170 47" fill="none" xmlns="http://www.w3.org/2000/svg">
+<defs><clipPath id="sponsor-rounded"><rect width="170" height="47" rx="5.704698"/></clipPath></defs>
+<g clip-path="url(#sponsor-rounded)">
     <rect width="170" height="47" fill="#ffffff" />
     <g transform="translate(10, 10)">
         <g clip-path="url(#clip0_18_7566)">
@@ -50,4 +52,5 @@
             <rect width="150" height="28" fill="white" transform="translate(0 0.380127)" />
         </clipPath>
     </defs>
+</g>
 </svg>
