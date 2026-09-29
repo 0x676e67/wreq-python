@@ -1,7 +1,8 @@
 use std::{
     future::Future,
     pin::Pin,
-    task::{Context, Poll},
+    sync::Arc,
+    task::{Context, Poll, Wake, Waker},
 };
 
 use pin_project_lite::pin_project;
@@ -21,6 +22,10 @@ pin_project! {
         cancel: CancelHandle,
     }
 }
+
+struct GuardedWaker(Waker);
+
+// ===== impl NoGIL =====
 
 impl<T> NoGIL<T>
 where
@@ -85,11 +90,33 @@ where
 
         let waker = cx.waker();
         Python::attach(|py| {
-            py.detach(|| match this.handle.poll(&mut Context::from_waker(waker)) {
-                Poll::Ready(Ok(result)) => Poll::Ready(result),
-                Poll::Ready(Err(e)) => Poll::Ready(Err(PyRuntimeError::new_err(e.to_string()))),
-                Poll::Pending => Poll::Pending,
-            })
+            py.detach(
+                || match poll_with_guard(this.handle, &mut Context::from_waker(waker)) {
+                    Poll::Ready(Ok(result)) => Poll::Ready(result),
+                    Poll::Ready(Err(e)) => Poll::Ready(Err(PyRuntimeError::new_err(e.to_string()))),
+                    Poll::Pending => Poll::Pending,
+                },
+            )
         })
+    }
+}
+
+/// Protect Python wakers retained by futures that can be woken from Rust threads.
+pub fn poll_with_guard<F: Future>(future: Pin<&mut F>, cx: &mut Context<'_>) -> Poll<F::Output> {
+    let waker = Waker::from(Arc::new(GuardedWaker(cx.waker().clone())));
+    future.poll(&mut Context::from_waker(&waker))
+}
+
+// ===== impl GuardedWaker =====
+
+impl Wake for GuardedWaker {
+    fn wake(self: Arc<Self>) {
+        self.wake_by_ref();
+    }
+
+    fn wake_by_ref(self: &Arc<Self>) {
+        // PyO3's nested attach reuses this attachment. If Python is unavailable,
+        // skip the wake instead of invoking its infallible attachment path.
+        Python::try_attach(|_| self.0.wake_by_ref());
     }
 }

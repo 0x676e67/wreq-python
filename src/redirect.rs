@@ -103,12 +103,15 @@ impl Policy {
             attempt.pending(|attempt| async move {
                 let args = Attempt::from(&attempt);
                 let kind = tokio::task::spawn_blocking(move || {
-                    Python::attach(|py| {
+                    Python::try_attach(|py| {
                         callback
                             .call1(py, (args,))
                             .and_then(|result| result.extract::<Action>(py).map_err(PyErr::from))
                             .map(|action| action.kind)
                             .unwrap_or_else(|err| ActionKind::Error(err.to_string()))
+                    })
+                    .unwrap_or_else(|| {
+                        ActionKind::Error("The Python interpreter is not available".into())
                     })
                 })
                 .await;

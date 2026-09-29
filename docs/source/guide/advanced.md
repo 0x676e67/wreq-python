@@ -144,8 +144,7 @@ and `runtime.closed` reports whether it has been explicitly shut down.
 
 Dropping all owners automatically releases a custom runtime without synchronously
 waiting for its worker threads. Invalid configuration is rejected with Python
-exceptions. Internal thread-creation failures can still panic; with
-the release build's `panic=abort`, this terminates the process.
+exceptions.
 
 ### TLS Key Logging
 

@@ -239,11 +239,14 @@ impl Stream for PyStream {
                 // Acquiring the interpreter must not block a Tokio worker.
                 let ob = ob.clone();
                 tokio::task::spawn_blocking(move || {
-                    Python::attach(|py| {
+                    Python::try_attach(|py| {
                         ob.call_method0(py, intern!(py, "__next__"))
                             .ok()
                             .map(|ob| ob.extract(py))
                     })
+                    // Once Python is unavailable, stop reading without creating
+                    // a PyErr that could require another attachment to format.
+                    .flatten()
                 })
             }
         };

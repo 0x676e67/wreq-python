@@ -8,6 +8,7 @@ use pyo3::{coroutine::CancelHandle, intern, prelude::*, sync::PyOnceLock};
 use tokio::sync::mpsc;
 
 use super::PyBytesLike;
+use crate::client::nogil::poll_with_guard;
 
 /// Owns the upload task; dropping the body cancels it on its Python event loop.
 pub struct Upload {
@@ -120,12 +121,13 @@ impl Sender {
         };
         let tx = self.0.clone();
         // Channel readiness is runtime-independent; keep this on the Python loop.
+        let mut send = std::pin::pin!(tx.send(item));
         tokio::select! {
             biased;
             exception = poll_fn(|cx| cancel.poll_cancelled(cx)) => {
                 Err(Python::attach(|py| PyErr::from_value(exception.into_bound(py))))
             }
-            result = tx.send(item) => Ok(result.is_ok()),
+            result = poll_fn(|cx| poll_with_guard(send.as_mut(), cx)) => Ok(result.is_ok()),
         }
     }
 }
