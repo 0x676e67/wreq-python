@@ -15,7 +15,12 @@ use pyo3::{
 };
 use tokio::{sync::Mutex, task::JoinHandle};
 
-use crate::{buffer::PyBuffer, client::nogil::NoGIL, error::Error, header::HeaderMap};
+use crate::{
+    buffer::PyBuffer,
+    client::nogil::NoGIL,
+    error::{self, Error},
+    header::HeaderMap,
+};
 
 type Pending = Option<JoinHandle<Option<PyResult<PyBytesLike>>>>;
 
@@ -224,11 +229,12 @@ impl Stream for PyStream {
                     PyStreamSource::Sync(ref ob) => {
                         let ob = ob.clone();
                         runtime.spawn_blocking(move || {
-                            Python::attach(|py| {
+                            error::attach(|py| {
                                 ob.call_method0(py, intern!(py, "__next__"))
                                     .ok()
                                     .map(|ob| ob.extract(py))
                             })
+                            .unwrap_or_else(|err| Some(Err(err.into())))
                         })
                     }
                     PyStreamSource::Async(ref stream) => {
@@ -236,7 +242,8 @@ impl Stream for PyStream {
                         runtime.spawn(async move {
                             let ob = stream.lock().await.next().await;
                             tokio::task::spawn_blocking(move || {
-                                Python::attach(|py| ob.map(|ob| ob.extract(py)))
+                                error::attach(|py| ob.map(|ob| ob.extract(py)))
+                                    .unwrap_or_else(|err| Some(Err(err.into())))
                             })
                             .await
                             .ok()?
