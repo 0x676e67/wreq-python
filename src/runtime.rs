@@ -130,13 +130,6 @@ impl Runtime {
         })))
     }
 
-    /// Return the lazy, shared multi-thread runtime.
-    #[staticmethod]
-    #[pyo3(name = "default")]
-    fn shared() -> Self {
-        Self::global()
-    }
-
     #[getter]
     fn workers(&self) -> usize {
         self.0.workers

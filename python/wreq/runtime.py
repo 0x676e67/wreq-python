@@ -24,11 +24,6 @@ class Runtime:
         """
         ...
 
-    @staticmethod
-    def default() -> "Runtime":
-        """Return the shared, lazy multi-thread runtime, which cannot be shut down."""
-        ...
-
     @property
     def workers(self) -> int: ...
     @property

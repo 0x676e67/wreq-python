@@ -58,10 +58,15 @@ def test_runtime_configuration_and_shutdown():
     for timeout in (-1, float("inf"), float("nan")):
         with pytest.raises(ValueError):
             runtime.shutdown_timeout(timeout)
-    default = wreq.Runtime.default()
-    assert default.work_steal and default.workers > 0
-    with pytest.raises(RuntimeError, match="default"):
-        default.shutdown_timeout(0)
+    assert not hasattr(Runtime, "default")
+    for factory in (wreq.Client, wreq.blocking.Client):
+        for kwargs in ({}, {"runtime": None}):
+            client = factory(**kwargs)
+            default = client.runtime
+            assert default.work_steal and default.workers > 0
+            with pytest.raises(RuntimeError, match="default"):
+                default.shutdown_timeout(0)
+            client.close()
     assert "Runtime" in wreq.__all__
 
 

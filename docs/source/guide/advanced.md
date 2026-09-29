@@ -94,8 +94,9 @@ if __name__ == "__main__":
 
 ### Custom runtimes
 
-Clients share a lazily started multi-thread runtime by default. Pass a `Runtime`
-to choose a separate worker pool for an async or blocking client:
+Clients share a lazily started global multi-thread runtime when `runtime` is
+omitted or `None`. Pass a `Runtime` to choose a separate worker pool for an
+async or blocking client:
 
 ```python
 from wreq import Client
@@ -119,9 +120,9 @@ same `Runtime` between clients is supported, and `client.runtime` returns its
 runtime configuration and owner.
 
 `workers=None` uses `TOKIO_WORKER_THREADS` when it contains a positive integer,
-otherwise the available parallelism. `Runtime.default()` returns the shared
-multi-thread instance; its configuration is chosen when first accessed. Both
-default and custom runtimes start their threads on first use.
+otherwise the available parallelism. The global runtime's configuration is
+chosen when first accessed. Both default and custom runtimes start their
+threads on first use.
 
 `thread_keep_alive` is in seconds. `max_blocking_threads` and
 `thread_keep_alive` default to Tokio's settings (512 and 10 seconds). In
