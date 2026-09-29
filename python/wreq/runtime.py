@@ -26,14 +26,19 @@ class Runtime:
 
     @property
     def workers(self) -> int: ...
+
     @property
     def work_steal(self) -> bool: ...
+
     @property
     def thread_name(self) -> str: ...
+
     @property
     def max_blocking_threads(self) -> int | None: ...
+
     @property
     def thread_keep_alive(self) -> float | None: ...
+
     @property
     def closed(self) -> bool: ...
 

@@ -134,22 +134,27 @@ impl Runtime {
     fn workers(&self) -> usize {
         self.0.workers
     }
+
     #[getter]
     fn work_steal(&self) -> bool {
         self.0.work_steal
     }
+
     #[getter]
     fn thread_name(&self) -> &str {
         &self.0.thread_name
     }
+
     #[getter]
     fn max_blocking_threads(&self) -> Option<usize> {
         self.0.max_blocking_threads
     }
+
     #[getter]
     fn thread_keep_alive(&self) -> Option<f64> {
         self.0.thread_keep_alive.map(|d| d.as_secs_f64())
     }
+
     #[getter]
     fn closed(&self) -> bool {
         self.0.lock().closed
