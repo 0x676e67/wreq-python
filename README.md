@@ -123,8 +123,20 @@ Unless you explicitly state otherwise, any contribution intentionally submitted 
 
 ## Sponsors
 
+<a href="https://byteful.com/?utm_source=github_python&utm_medium=github-sponsor&utm_campaign=wreq_github_sponsorship" target="_blank"><img src="./.github/assets/byteful-logo.svg" width="149" height="47" alt="Byteful"></a>
+
+**35M+ residential IPs with 99.9% success rates**
+
+UK-based **[Byteful](https://byteful.com/?utm_source=github_python&utm_medium=github-sponsor&utm_campaign=wreq_github_sponsorship)** provides ethically sourced residential, mobile, static residential (ISP), and datacenter proxies. Its API-first scraping, data collection, and AI automation tools handle tens of billions of monthly requests.
+
+With free geo-targeting and ~0.5s response times, Byteful helps you collect data at scale. Use code **`WREQ10`** for **10% off residential proxies**.
+
+**[Dashboard](https://dashboard.byteful.com/)** | **[Docs](https://documentation.byteful.com/)** | **[Discord](https://discord.com/invite/ping-proxies-584021352940568578)**
+
+---
+
 <a href="https://go.nodemaven.com/wreqpythonGHaugust" target="_blank">
-  <img src="https://raw.githubusercontent.com/0x676e67/wreq-python/main/.github/assets/nodemaven.svg" width="165" height="47" alt="NodeMaven">
+  <img src="./.github/assets/nodemaven.svg" width="165" height="47" alt="NodeMaven">
 </a>
 
 **[NodeMaven](https://go.nodemaven.com/wreqpythonGHaugust)** is the most efficient proxy provider for web scraping and automation, with the highest-quality IPs on the market.
@@ -142,7 +154,7 @@ Unique free tools include the **Proxy Bandwidth Checker**, **Meta Tag Checker**,
 ---
 
 <a href="https://scrape.do/?utm_source=github&utm_medium=rnet" target="_blank">
-  <img src="https://raw.githubusercontent.com/0x676e67/wreq-python/main/.github/assets/scrapedo.svg" width="149" height="47">
+  <img src="./.github/assets/scrapedo.svg" width="149" height="47" alt="Scrape.do">
 </a>
 
 **[Scrape.do](https://scrape.do/?utm_source=github&utm_medium=rnet)** is the ultimate toolkit for collecting public data at scale. Unmatched speed, unbeatable prices, unblocked access.
@@ -156,7 +168,7 @@ One line of code. Instant data access
 ---
 
 <a href="https://www.ez-captcha.com" target="_blank">
-  <img src="https://www.ez-captcha.com/siteLogo.png" height="47" width="47">
+  <img src="./.github/assets/ezcaptcha.svg" height="47" width="47" alt="EzCaptcha">
 </a>
 
 Captcha solving can be slow and unreliable, but **[EzCaptcha](https://www.ez-captcha.com/?r=github-rnet)** delivers fast, reliable solving through a simple API — supporting a wide range of captcha types with no complex integration required.  
@@ -166,15 +178,3 @@ Captcha solving can be slow and unreliable, but **[EzCaptcha](https://www.ez-cap
 Designed for developers, it offers high accuracy, low price, low latency, and easy integration, helping you automate verification while keeping traffic secure and user flows smooth.
 
 **[Dashboard](https://www.ez-captcha.com/?r=github-rnet)** | **[Docs](https://ezcaptcha.atlassian.net/wiki/spaces/IS/pages/7045121/EzCaptcha+API+Docs+English)** | **[Telegram](https://t.me/+NrVmPhlb9ZFkZGY5)**
-
----
-
-<a href="https://hypersolutions.co/?utm_source=github&utm_medium=readme&utm_campaign=rnet" target="_blank"><img src="https://raw.githubusercontent.com/0x676e67/wreq-python/main/.github/assets/hypersolutions.jpg" height="47" width="149"></a>
-
-TLS fingerprinting alone isn't enough for modern bot protection. **[Hyper Solutions](https://hypersolutions.co?utm_source=github&utm_medium=readme&utm_campaign=rnet)** provides the missing piece - API endpoints that generate valid antibot tokens for:
-
-**Akamai** • **DataDome** • **Kasada** • **Incapsula**
-
-No browser automation. Just simple API calls that return the exact cookies and headers these systems require.
-
-**[Dashboard](https://hypersolutions.co?utm_source=github&utm_medium=readme&utm_campaign=rnet)** | **[Docs](https://docs.justhyped.dev)** | **[Discord](https://discord.gg/akamai)**
