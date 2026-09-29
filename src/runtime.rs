@@ -1,6 +1,5 @@
 use std::{
-    future::Future,
-    sync::{Arc, Mutex, MutexGuard, OnceLock},
+    sync::{Arc, OnceLock},
     time::Duration,
 };
 
@@ -9,79 +8,28 @@ use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
 };
-use tokio::{runtime::Handle, task::JoinHandle};
-use tokio_util::task::AbortOnDropHandle;
+use tokio::runtime::Handle;
 
-/// Tokio workers shared explicitly or through the process-wide default instance.
+/// Shared Tokio runtime, released after its clients and active work are dropped.
 #[derive(Clone)]
-#[pyclass(frozen, skip_from_py_object, module = "wreq.runtime")]
-pub struct Runtime(Arc<Inner>);
-
-struct Inner {
-    workers: usize,
-    work_steal: bool,
-    thread_name: String,
-    max_blocking_threads: Option<usize>,
-    thread_keep_alive: Option<Duration>,
-    global: bool,
-    state: Mutex<State>,
-}
-
-#[derive(Default)]
-struct State {
-    runtime: Option<PingoraRuntime>,
-    closed: bool,
-    users: usize,
-    next_worker: usize,
-}
-
-/// A fixed worker selection shared by a client, its responses and active tasks.
-#[derive(Clone)]
-pub struct Executor(Arc<Lease>);
-
-struct Lease {
-    runtime: Runtime,
-    worker: usize,
-    handle: OnceLock<Handle>,
-}
-
-// ===== impl Runtime =====
+#[pyclass(frozen, skip_from_py_object)]
+pub struct Runtime(Option<Arc<PingoraRuntime>>);
 
 impl Runtime {
-    fn global() -> Self {
-        static RUNTIME: OnceLock<Runtime> = OnceLock::new();
-        RUNTIME
-            .get_or_init(|| {
-                Self(Arc::new(Inner {
-                    workers: automatic_workers(),
-                    work_steal: true,
-                    thread_name: "wreq".into(),
-                    max_blocking_threads: None,
-                    thread_keep_alive: None,
-                    global: true,
-                    state: Mutex::default(),
-                }))
-            })
-            .clone()
+    /// Borrow a Tokio handle; in no-steal mode, select once per client and retain it.
+    pub fn handle(&self) -> PyResult<&Handle> {
+        self.0
+            .as_deref()
+            .map(PingoraRuntime::get_handle)
+            .ok_or_else(|| PyRuntimeError::new_err("Runtime is unavailable"))
     }
+}
 
-    pub fn bind(&self) -> PyResult<Executor> {
-        let mut state = self.0.lock();
-        if state.closed {
-            return Err(PyRuntimeError::new_err("Runtime is closed"));
-        }
-        Ok(self.lease(&mut state))
-    }
-
-    fn lease(&self, state: &mut State) -> Executor {
-        let worker = state.next_worker;
-        state.next_worker = (worker + 1) % self.0.workers;
-        state.users += 1;
-        Executor(Arc::new(Lease {
-            runtime: self.clone(),
-            worker,
-            handle: OnceLock::new(),
-        }))
+impl From<PingoraRuntime> for Runtime {
+    fn from(runtime: PingoraRuntime) -> Self {
+        // No-steal workers are lazy upstream. Start them before sharing the runtime.
+        runtime.get_handle();
+        Self(Some(Arc::new(runtime)))
     }
 }
 
@@ -95,18 +43,29 @@ impl FromPyObject<'_, '_> for Runtime {
 
 #[pymethods]
 impl Runtime {
-    /// Configure workers; OS threads start lazily when first used.
+    /// Create and start the runtime's workers.
     /// Without work stealing, each client stays on one worker (not CPU-pinned).
+    /// Workers default to CPU parallelism and names to the package name.
+    /// Thread counts must be positive; thread_keep_alive is a nonnegative timedelta.
     #[new]
-    #[pyo3(signature = (*, workers=None, work_steal=true, thread_name="wreq", max_blocking_threads=None, thread_keep_alive=None))]
+    #[pyo3(signature = (
+        *,
+        workers = None,
+        work_steal = true,
+        thread_name = None,
+        max_blocking_threads = None,
+        thread_keep_alive = None,
+    ))]
     fn new(
+        py: Python<'_>,
         workers: Option<usize>,
         work_steal: bool,
-        thread_name: &str,
+        thread_name: Option<&str>,
         max_blocking_threads: Option<usize>,
-        thread_keep_alive: Option<f64>,
+        thread_keep_alive: Option<Duration>,
     ) -> PyResult<Self> {
-        let workers = workers.unwrap_or_else(automatic_workers);
+        let workers =
+            workers.unwrap_or_else(|| std::thread::available_parallelism().map_or(1, usize::from));
         if workers == 0
             || max_blocking_threads == Some(0)
             || workers
@@ -115,209 +74,55 @@ impl Runtime {
         {
             return Err(PyValueError::new_err("Invalid runtime thread counts"));
         }
+
+        let thread_name = thread_name.unwrap_or(env!("CARGO_PKG_NAME"));
         if thread_name.contains('\0') {
             return Err(PyValueError::new_err("thread_name must not contain NUL"));
         }
-        let thread_keep_alive = thread_keep_alive.map(duration).transpose()?;
-        Ok(Self(Arc::new(Inner {
-            workers,
-            work_steal,
-            thread_name: thread_name.into(),
-            max_blocking_threads,
-            thread_keep_alive,
-            global: false,
-            state: Mutex::default(),
-        })))
-    }
 
-    #[getter]
-    fn workers(&self) -> usize {
-        self.0.workers
-    }
-
-    #[getter]
-    fn work_steal(&self) -> bool {
-        self.0.work_steal
-    }
-
-    #[getter]
-    fn thread_name(&self) -> &str {
-        &self.0.thread_name
-    }
-
-    #[getter]
-    fn max_blocking_threads(&self) -> Option<usize> {
-        self.0.max_blocking_threads
-    }
-
-    #[getter]
-    fn thread_keep_alive(&self) -> Option<f64> {
-        self.0.thread_keep_alive.map(|d| d.as_secs_f64())
-    }
-
-    #[getter]
-    fn closed(&self) -> bool {
-        self.0.lock().closed
-    }
-
-    /// Shut down an unused custom runtime. Release all clients and responses first.
-    /// Timeout is seconds per worker; already running blocking work may outlive it.
-    fn shutdown_timeout(&self, py: Python<'_>, timeout: f64) -> PyResult<()> {
-        let timeout = duration(timeout)?;
-        py.detach(|| {
-            let runtime = {
-                let mut state = self.0.lock();
-                if self.0.global {
-                    return Err(PyRuntimeError::new_err(
-                        "The default Runtime cannot be shut down",
-                    ));
-                }
-                if state.users != 0 {
-                    return Err(PyRuntimeError::new_err(
-                        "Runtime is in use; release its clients, responses and tasks first",
-                    ));
-                }
-                state.closed = true;
-                state.runtime.take()
-            };
-            if let Some(runtime) = runtime {
-                runtime.shutdown_timeout(timeout);
-            }
-            Ok(())
-        })
+        Ok(py.detach(|| {
+            RuntimeBuilder::new(workers, thread_name)
+                .work_steal(work_steal)
+                .blocking_pool_opts(BlockingPoolOpts {
+                    max_threads: max_blocking_threads,
+                    thread_keep_alive,
+                })
+                .build()
+                .into()
+        }))
     }
 }
 
-// ===== impl Inner =====
-
-impl Inner {
-    fn lock(&self) -> MutexGuard<'_, State> {
-        self.state
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-    }
-}
-
-impl Drop for Inner {
+impl Drop for Runtime {
     fn drop(&mut self) {
-        if let Some(runtime) = self
-            .state
-            .get_mut()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .runtime
-            .take()
-        {
-            // Never synchronously wait on our own worker or while holding Python's GIL.
+        // The final owner may be released on a worker or while holding the GIL.
+        if let Some(runtime) = self.0.take().and_then(Arc::into_inner) {
             match runtime {
                 PingoraRuntime::Steal { runtime, .. } => runtime.shutdown_background(),
-                // Dropping the controls wakes Pingora's dedicated driver threads.
                 PingoraRuntime::NoSteal(runtime) => drop(runtime),
             }
         }
     }
 }
 
-// ===== impl Executor =====
+/// Create the shared runtime on first use and retain it for the process lifetime.
+pub fn get() -> &'static (Runtime, Handle) {
+    static RUNTIME: OnceLock<(Runtime, Handle)> = OnceLock::new();
 
-impl Default for Executor {
-    fn default() -> Self {
-        let runtime = Runtime::global();
-        let mut state = runtime.0.lock();
-        runtime.lease(&mut state)
-    }
-}
-
-impl Executor {
-    pub fn runtime(&self) -> Runtime {
-        self.0.runtime.clone()
+    fn create() -> (Runtime, Handle) {
+        let workers = std::thread::available_parallelism().map_or(1, usize::from);
+        let runtime = RuntimeBuilder::new(workers, env!("CARGO_PKG_NAME")).build();
+        let handle = runtime.get_handle().clone();
+        (runtime.into(), handle)
     }
 
-    pub fn handle(&self) -> Handle {
-        self.0
-            .handle
-            .get_or_init(|| {
-                let inner = &self.0.runtime.0;
-                let mut state = inner.lock();
-                let runtime = state.runtime.get_or_insert_with(|| {
-                    RuntimeBuilder::new(inner.workers, &inner.thread_name)
-                        .work_steal(inner.work_steal)
-                        .blocking_pool_opts(BlockingPoolOpts {
-                            max_threads: inner.max_blocking_threads,
-                            thread_keep_alive: inner.thread_keep_alive,
-                        })
-                        .build()
-                });
-                // Serialize lazy initialization and keep the selected no-steal worker stable.
-                match runtime {
-                    PingoraRuntime::NoSteal(runtime) => {
-                        runtime.get_runtime_at(self.0.worker).clone()
-                    }
-                    runtime => runtime.get_handle().clone(),
-                }
-            })
-            .clone()
+    if let Some(runtime) = RUNTIME.get() {
+        return runtime;
     }
 
-    pub fn spawn<F>(&self, future: F) -> JoinHandle<F::Output>
-    where
-        F: Future + Send + 'static,
-        F::Output: Send + 'static,
-    {
-        let owner = self.clone();
-        self.handle().spawn(async move {
-            let _owner = owner;
-            future.await
-        })
-    }
-
-    pub fn spawn_blocking<F, T>(&self, function: F) -> JoinHandle<T>
-    where
-        F: FnOnce() -> T + Send + 'static,
-        T: Send + 'static,
-    {
-        let owner = self.clone();
-        self.handle().spawn_blocking(move || {
-            let _owner = owner;
-            function()
-        })
-    }
-
-    /// Only the join is polled on the caller; network work stays on our worker.
-    pub fn block_on<F, T>(&self, future: F) -> PyResult<T>
-    where
-        F: Future<Output = PyResult<T>> + Send + 'static,
-        T: Send + 'static,
-    {
-        self.handle()
-            .block_on(AbortOnDropHandle::new(self.spawn(future)))
-            .map_err(|err| PyRuntimeError::new_err(err.to_string()))?
-    }
-}
-
-// ===== impl Lease =====
-
-impl Drop for Lease {
-    fn drop(&mut self) {
-        self.runtime.0.lock().users -= 1;
-    }
-}
-
-pub fn get() -> PyResult<Executor> {
-    Runtime::global().bind()
-}
-
-fn automatic_workers() -> usize {
-    std::env::var("TOKIO_WORKER_THREADS")
-        .ok()
-        .and_then(|value| value.parse::<usize>().ok())
-        .filter(|n| *n > 0)
-        .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, usize::from))
-}
-
-fn duration(seconds: f64) -> PyResult<Duration> {
-    Duration::try_from_secs_f64(seconds).map_err(|_| {
-        PyValueError::new_err("Duration must be finite, nonnegative and representable")
-    })
+    // Never wait for another initializer while holding the interpreter.
+    Python::try_attach(|py| py.detach(|| RUNTIME.get_or_init(create)))
+        .unwrap_or_else(|| RUNTIME.get_or_init(create))
 }
 
 #[cfg(test)]
@@ -325,60 +130,77 @@ mod tests {
     use super::*;
 
     #[test]
-    fn fixed_workers_and_lifetime() {
-        let runtime = Runtime::new(Some(2), false, "wreq-affinity", Some(2), None).unwrap();
-        let first = runtime.bind().unwrap();
-        let second = runtime.bind().unwrap();
-        assert!(runtime.0.lock().runtime.is_none());
+    fn fixed_worker() {
+        let runtime = Runtime::from(
+            RuntimeBuilder::new(2, "wreq-affinity")
+                .work_steal(false)
+                .build(),
+        );
+        let first = runtime.handle().unwrap();
+        let second = runtime.handle().unwrap();
         let caller = std::thread::current().id();
         let mut ids = Vec::new();
-        for executor in [&first, &second, &first, &second] {
-            let id = executor
-                .block_on(async {
-                    let thread = std::thread::current().id();
-                    for _ in 0..8 {
-                        tokio::task::yield_now().await;
-                        assert_eq!(thread, std::thread::current().id());
-                    }
-                    let child = tokio::spawn(async { std::thread::current().id() })
-                        .await
-                        .unwrap();
-                    assert_eq!(thread, child);
-                    Ok(thread)
-                })
-                .unwrap();
+        for handle in [first, second, first, second] {
+            let id = crate::client::nogil::block_on(&runtime, handle, async {
+                let thread = std::thread::current().id();
+                for _ in 0..8 {
+                    tokio::task::yield_now().await;
+                    assert_eq!(thread, std::thread::current().id());
+                }
+                let child = tokio::spawn(async { std::thread::current().id() })
+                    .await
+                    .unwrap();
+                assert_eq!(thread, child);
+                Ok(thread)
+            })
+            .unwrap();
             assert_ne!(id, caller);
             ids.push(id);
         }
         assert_eq!(ids[0], ids[2]);
         assert_eq!(ids[1], ids[3]);
-        assert_ne!(ids[0], ids[1]);
-        assert_eq!(runtime.0.lock().users, 2);
-        drop((first, second));
-        assert_eq!(runtime.0.lock().users, 0);
+        // Different clients may select the same worker; each selection stays fixed.
     }
 
     #[test]
     fn last_owner_can_be_released_on_a_worker() {
+        struct NotifyOnDrop(std::sync::mpsc::Sender<()>);
+
+        impl Drop for NotifyOnDrop {
+            fn drop(&mut self) {
+                let _ = self.0.send(());
+            }
+        }
+
         for steal in [false, true] {
-            let runtime = Runtime::new(Some(1), steal, "wreq-drop", None, None).unwrap();
-            let weak = Arc::downgrade(&runtime.0);
-            let executor = runtime.bind().unwrap();
+            let runtime = Runtime::from(
+                RuntimeBuilder::new(1, "wreq-drop")
+                    .work_steal(steal)
+                    .build(),
+            );
+            let weak = Arc::downgrade(runtime.0.as_ref().unwrap());
+            let handle = runtime.handle().unwrap().clone();
+            let (dropped, released) = std::sync::mpsc::channel();
+            let guard = NotifyOnDrop(dropped);
+            let background = handle.spawn(async move {
+                let _guard = guard;
+                std::future::pending::<()>().await;
+            });
             let (tx, rx) = tokio::sync::oneshot::channel();
             let (done, wait) = std::sync::mpsc::channel();
-            let task = executor.spawn(async move {
+            let owner = runtime.clone();
+            let task = handle.spawn(async move {
+                let _owner = owner;
                 let _ = rx.await;
                 done.send(()).unwrap();
             });
-            drop((runtime, executor));
+            drop(runtime);
             tx.send(()).unwrap();
             wait.recv_timeout(Duration::from_secs(5)).unwrap();
-            let deadline = std::time::Instant::now() + Duration::from_secs(5);
-            while weak.upgrade().is_some() && std::time::Instant::now() < deadline {
-                std::thread::yield_now();
-            }
+            released.recv_timeout(Duration::from_secs(5)).unwrap();
             assert!(weak.upgrade().is_none());
-            drop(task);
+            handle.block_on(task).unwrap();
+            drop(background);
         }
     }
 }

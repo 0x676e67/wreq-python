@@ -80,9 +80,9 @@ impl Stream for Upload {
 impl Drop for Upload {
     fn drop(&mut self) {
         self.rx.close();
-        if let (Some((task, event_loop)), Ok(runtime)) = (self.task.take(), crate::runtime::get()) {
+        if let Some((task, event_loop)) = self.task.take() {
             // Body drop can run on Tokio: acquire the interpreter on a blocking thread.
-            runtime.spawn_blocking(move || {
+            crate::runtime::get().1.spawn_blocking(move || {
                 Python::try_attach(|py| {
                     if let Ok(cancel) = task.bind(py).getattr(intern!(py, "cancel")) {
                         let _ = event_loop.call_method1(

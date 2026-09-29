@@ -17,7 +17,7 @@ use crate::{
     error::Error,
     header::HeaderMap,
     http::{StatusCode, Version},
-    runtime::Executor,
+    runtime::Runtime,
 };
 
 /// A WebSocket response.
@@ -44,7 +44,8 @@ pub struct WebSocket {
     headers: HeaderMap,
     protocol: Option<HeaderValue>,
     cmd: mpsc::UnboundedSender<cmd::Command>,
-    runtime: Executor,
+    runtime: Runtime,
+    handle: tokio::runtime::Handle,
 }
 
 /// A blocking WebSocket response.
@@ -55,7 +56,11 @@ pub struct BlockingWebSocket(WebSocket);
 
 impl WebSocket {
     /// Creates a new [`WebSocket`] instance.
-    pub async fn new(response: WebSocketResponse, runtime: Executor) -> wreq::Result<WebSocket> {
+    pub async fn new(
+        response: WebSocketResponse,
+        runtime: Runtime,
+        handle: tokio::runtime::Handle,
+    ) -> wreq::Result<WebSocket> {
         let (version, status, remote_addr, local_addr, headers) = (
             Version::from_ffi(response.version()),
             StatusCode(response.status()),
@@ -70,6 +75,7 @@ impl WebSocket {
 
         Ok(WebSocket {
             runtime,
+            handle,
             version,
             status,
             remote_addr,
@@ -108,7 +114,7 @@ impl WebSocket {
         timeout: Option<Duration>,
     ) -> PyResult<Option<Message>> {
         let tx = self.cmd.clone();
-        NoGIL::new(&self.runtime, cmd::recv(tx, timeout), cancel)?.await
+        NoGIL::new(&self.runtime, &self.handle, cmd::recv(tx, timeout), cancel).await
     }
 
     /// Send a message to the WebSocket.
@@ -119,7 +125,7 @@ impl WebSocket {
         message: Message,
     ) -> PyResult<()> {
         let tx = self.cmd.clone();
-        NoGIL::new(&self.runtime, cmd::send(tx, message), cancel)?.await
+        NoGIL::new(&self.runtime, &self.handle, cmd::send(tx, message), cancel).await
     }
 
     /// Send multiple messages to the WebSocket.
@@ -130,7 +136,13 @@ impl WebSocket {
         messages: Vec<Message>,
     ) -> PyResult<()> {
         let tx = self.cmd.clone();
-        NoGIL::new(&self.runtime, cmd::send_all(tx, messages), cancel)?.await
+        NoGIL::new(
+            &self.runtime,
+            &self.handle,
+            cmd::send_all(tx, messages),
+            cancel,
+        )
+        .await
     }
 
     /// Close the WebSocket connection.
@@ -142,7 +154,13 @@ impl WebSocket {
         reason: Option<PyBackedStr>,
     ) -> PyResult<()> {
         let tx = self.cmd.clone();
-        NoGIL::new(&self.runtime, cmd::close(tx, code, reason), cancel)?.await
+        NoGIL::new(
+            &self.runtime,
+            &self.handle,
+            cmd::close(tx, code, reason),
+            cancel,
+        )
+        .await
     }
 }
 
@@ -163,9 +181,10 @@ impl WebSocket {
         let tx = self.cmd.clone();
         NoGIL::new(
             &self.runtime,
+            &self.handle,
             cmd::close(tx, None, None),
             CancelHandle::new(),
-        )?
+        )
         .await
     }
 }
@@ -226,9 +245,11 @@ impl BlockingWebSocket {
     #[pyo3(signature = (timeout=None))]
     pub fn recv(&self, py: Python, timeout: Option<Duration>) -> PyResult<Option<Message>> {
         py.detach(|| {
-            self.0
-                .runtime
-                .block_on(cmd::recv(self.0.cmd.clone(), timeout))
+            crate::client::nogil::block_on(
+                &self.0.runtime,
+                &self.0.handle,
+                cmd::recv(self.0.cmd.clone(), timeout),
+            )
         })
     }
 
@@ -236,9 +257,11 @@ impl BlockingWebSocket {
     #[pyo3(signature = (message))]
     pub fn send(&self, py: Python, message: Message) -> PyResult<()> {
         py.detach(|| {
-            self.0
-                .runtime
-                .block_on(cmd::send(self.0.cmd.clone(), message))
+            crate::client::nogil::block_on(
+                &self.0.runtime,
+                &self.0.handle,
+                cmd::send(self.0.cmd.clone(), message),
+            )
         })
     }
 
@@ -246,9 +269,11 @@ impl BlockingWebSocket {
     #[pyo3(signature = (messages))]
     pub fn send_all(&self, py: Python, messages: Vec<Message>) -> PyResult<()> {
         py.detach(|| {
-            self.0
-                .runtime
-                .block_on(cmd::send_all(self.0.cmd.clone(), messages))
+            crate::client::nogil::block_on(
+                &self.0.runtime,
+                &self.0.handle,
+                cmd::send_all(self.0.cmd.clone(), messages),
+            )
         })
     }
 
@@ -261,9 +286,11 @@ impl BlockingWebSocket {
         reason: Option<PyBackedStr>,
     ) -> PyResult<()> {
         py.detach(|| {
-            self.0
-                .runtime
-                .block_on(cmd::close(self.0.cmd.clone(), code, reason))
+            crate::client::nogil::block_on(
+                &self.0.runtime,
+                &self.0.handle,
+                cmd::close(self.0.cmd.clone(), code, reason),
+            )
         })
     }
 }

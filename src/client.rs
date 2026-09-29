@@ -13,6 +13,7 @@ use std::{
 
 use pyo3::{IntoPyObjectExt, coroutine::CancelHandle, prelude::*, pybacked::PyBackedStr};
 use req::{Request, WebSocketRequest};
+use tokio::runtime::Handle;
 use tokio_util::sync::CancellationToken;
 use wreq::tls::trust::CertStore;
 
@@ -231,11 +232,12 @@ impl FromPyObject<'_, '_> for Builder {
 }
 
 /// A client for making HTTP requests.
-#[derive(Default, Clone)]
+#[derive(Clone)]
 #[pyclass(subclass, frozen, skip_from_py_object)]
 pub struct Client {
     inner: wreq::Client,
-    runtime: runtime::Executor,
+    runtime: runtime::Runtime,
+    handle: Handle,
     cancel: CancellationToken,
     raise_for_status: bool,
 
@@ -251,6 +253,20 @@ pub struct BlockingClient(Client);
 
 // ====== Client =====
 
+impl Default for Client {
+    fn default() -> Self {
+        let (runtime, handle) = runtime::get();
+        Self {
+            inner: wreq::Client::default(),
+            runtime: runtime.clone(),
+            handle: handle.clone(),
+            cancel: CancellationToken::new(),
+            raise_for_status: false,
+            cookie_jar: None,
+        }
+    }
+}
+
 #[pymethods]
 impl Client {
     /// Creates a new Client instance.
@@ -258,12 +274,10 @@ impl Client {
     #[pyo3(signature = (**kwds))]
     fn new(py: Python, kwds: Option<Builder>) -> PyResult<Client> {
         py.detach(|| {
-            let runtime = kwds
-                .as_ref()
-                .and_then(|config| config.runtime.as_ref())
-                .map(runtime::Runtime::bind)
-                .transpose()?
-                .unwrap_or_default();
+            let (runtime, handle) = match kwds.as_ref().and_then(|config| config.runtime.as_ref()) {
+                Some(runtime) => (runtime.clone(), runtime.handle()?.clone()),
+                None => runtime::get().clone(),
+            };
             // Create the client builder.
             let mut builder = wreq::Client::builder();
             let mut cookie_jar: Option<Jar> = None;
@@ -474,6 +488,7 @@ impl Client {
                 .map(|inner| Client {
                     inner,
                     runtime,
+                    handle,
                     cancel: CancellationToken::new(),
                     cookie_jar,
                     raise_for_status,
@@ -492,7 +507,7 @@ impl Client {
     /// The runtime used by this client and its responses.
     #[getter]
     pub fn runtime(&self) -> runtime::Runtime {
-        self.runtime.runtime()
+        self.runtime.clone()
     }
 
     /// Make a GET request to the given URL.
@@ -603,10 +618,11 @@ impl Client {
     ) -> PyResult<Response> {
         NoGIL::new_with_token(
             &self.runtime,
+            &self.handle,
             execute_request(self.clone(), method, url, kwds),
             cancel,
             self.cancel.clone(),
-        )?
+        )
         .await
     }
 
@@ -621,10 +637,11 @@ impl Client {
     ) -> PyResult<WebSocket> {
         NoGIL::new_with_token(
             &self.runtime,
+            &self.handle,
             execute_websocket_request(self.clone(), url, kwds),
             cancel,
             self.cancel.clone(),
-        )?
+        )
         .await
     }
 }
@@ -777,10 +794,12 @@ impl BlockingClient {
         kwds: Option<Request>,
     ) -> PyResult<BlockingResponse> {
         py.detach(|| {
-            self.0
-                .runtime
-                .block_on(execute_request(self.0.clone(), method, url, kwds))
-                .map(Into::into)
+            nogil::block_on(
+                &self.0.runtime,
+                &self.0.handle,
+                execute_request(self.0.clone(), method, url, kwds),
+            )
+            .map(Into::into)
         })
     }
 
@@ -793,10 +812,12 @@ impl BlockingClient {
         kwds: Option<WebSocketRequest>,
     ) -> PyResult<BlockingWebSocket> {
         py.detach(|| {
-            self.0
-                .runtime
-                .block_on(execute_websocket_request(self.0.clone(), url, kwds))
-                .map(Into::into)
+            nogil::block_on(
+                &self.0.runtime,
+                &self.0.handle,
+                execute_websocket_request(self.0.clone(), url, kwds),
+            )
+            .map(Into::into)
         })
     }
 }

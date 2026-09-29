@@ -11,7 +11,10 @@ use pyo3::{
     exceptions::{PyRuntimeError, asyncio::CancelledError},
     prelude::*,
 };
+use tokio::runtime::Handle;
 use tokio_util::{sync::CancellationToken, task::AbortOnDropHandle};
+
+use crate::runtime::Runtime;
 
 pin_project! {
     /// A future that allows Python threads to run while it is being polled or executed.
@@ -31,35 +34,41 @@ impl<T> NoGIL<T>
 where
     T: Send + 'static,
 {
-    /// Create [`NoGIL`] from a future
+    /// Spawn on the selected handle, keeping the runtime alive until the task ends.
     #[inline]
-    pub fn new<Fut>(
-        runtime: &crate::runtime::Executor,
-        fut: Fut,
-        cancel: CancelHandle,
-    ) -> PyResult<Self>
+    pub fn new<Fut>(runtime: &Runtime, handle: &Handle, fut: Fut, cancel: CancelHandle) -> Self
     where
         Fut: Future<Output = PyResult<T>> + Send + 'static,
     {
-        Ok(Self {
-            handle: AbortOnDropHandle::new(Python::attach(|py| py.detach(|| runtime.spawn(fut)))),
+        let owner = runtime.clone();
+        Self {
+            handle: AbortOnDropHandle::new(Python::attach(|py| {
+                py.detach(|| {
+                    handle.spawn(async move {
+                        let _owner = owner;
+                        fut.await
+                    })
+                })
+            })),
             cancel,
-        })
+        }
     }
 
-    /// Create [`NoGIL`] from a future and a cancellation token
+    /// Also cancel the task when its client is closed.
     #[inline]
     pub fn new_with_token<Fut>(
-        runtime: &crate::runtime::Executor,
+        runtime: &Runtime,
+        handle: &Handle,
         fut: Fut,
         cancel: CancelHandle,
         cancel_token: CancellationToken,
-    ) -> PyResult<Self>
+    ) -> Self
     where
         Fut: Future<Output = PyResult<T>> + Send + 'static,
     {
         Self::new(
             runtime,
+            handle,
             async move {
                 tokio::select! {
                     result = fut => result,
@@ -99,6 +108,23 @@ where
             )
         })
     }
+}
+
+/// Run network work on its selected worker; only wait for completion on the caller.
+/// The caller must be detached from Python and outside an async Tokio context.
+pub fn block_on<F, T>(runtime: &Runtime, handle: &Handle, future: F) -> PyResult<T>
+where
+    F: Future<Output = PyResult<T>> + Send + 'static,
+    T: Send + 'static,
+{
+    let owner = runtime.clone();
+    let task = handle.spawn(async move {
+        let _owner = owner;
+        future.await
+    });
+    handle
+        .block_on(AbortOnDropHandle::new(task))
+        .map_err(|err| PyRuntimeError::new_err(err.to_string()))?
 }
 
 /// Protect Python wakers retained by futures that can be woken from Rust threads.

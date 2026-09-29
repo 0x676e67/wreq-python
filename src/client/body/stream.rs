@@ -15,10 +15,14 @@ use pyo3::{
     prelude::*,
     pybacked::{PyBackedBytes, PyBackedStr},
 };
-use tokio::{sync::Mutex, task::JoinHandle};
+use tokio::{runtime::Handle, sync::Mutex, task::JoinHandle};
 
 use crate::{
-    buffer::PyBuffer, client::nogil::NoGIL, error::Error, header::HeaderMap, runtime::Executor,
+    buffer::PyBuffer,
+    client::nogil::{self, NoGIL},
+    error::Error,
+    header::HeaderMap,
+    runtime::Runtime,
 };
 
 type Pending = Option<JoinHandle<Option<PyResult<PyBytesLike>>>>;
@@ -52,7 +56,7 @@ pub struct PyStream {
 /// A bytes stream response.
 #[derive(Clone)]
 #[pyclass(subclass, frozen, skip_from_py_object)]
-pub struct Streamer(Arc<Mutex<Option<wreq::Response>>>, Executor);
+pub struct Streamer(Arc<Mutex<Option<wreq::Response>>>, Runtime, Handle);
 
 // ===== impl PyStream =====
 
@@ -71,8 +75,8 @@ impl From<PyStreamSource> for PyStream {
 impl Streamer {
     /// Create a new [`Streamer`] instance.
     #[inline]
-    pub fn new(resp: wreq::Response, runtime: Executor) -> Streamer {
-        Streamer(Arc::new(Mutex::new(Some(resp))), runtime)
+    pub fn new(resp: wreq::Response, runtime: Runtime, handle: Handle) -> Streamer {
+        Streamer(Arc::new(Mutex::new(Some(resp))), runtime, handle)
     }
 
     async fn next(self, error: fn() -> Error) -> PyResult<Frame> {
@@ -112,7 +116,7 @@ impl Streamer {
 
     #[inline]
     fn __next__(&self, py: Python) -> PyResult<Frame> {
-        py.detach(|| self.1.block_on(self.clone().next(|| Error::StopIteration)))
+        py.detach(|| nogil::block_on(&self.1, &self.2, self.clone().next(|| Error::StopIteration)))
     }
 
     #[inline]
@@ -154,9 +158,14 @@ impl Streamer {
                 Some(cancel.throw_callback()),
                 async move {
                     let runtime = this.1.clone();
-                    let frame =
-                        NoGIL::new(&runtime, this.next(|| Error::StopAsyncIteration), cancel)?
-                            .await?;
+                    let handle = this.2.clone();
+                    let frame = NoGIL::new(
+                        &runtime,
+                        &handle,
+                        this.next(|| Error::StopAsyncIteration),
+                        cancel,
+                    )
+                    .await?;
                     // PyO3 polls this coroutine while attached, outside the Tokio task.
                     Python::attach(|py| frame.into_pyobject(py).map(|obj| obj.unbind()))
                 },
@@ -180,6 +189,7 @@ impl Streamer {
         let this = self.0.clone();
         NoGIL::new(
             &self.1,
+            &self.2,
             async move {
                 if let Some(resp) = this.lock().await.take() {
                     drop(resp)
@@ -187,7 +197,7 @@ impl Streamer {
                 Ok(())
             },
             CancelHandle::new(),
-        )?
+        )
         .await
     }
 }

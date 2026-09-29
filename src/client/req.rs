@@ -419,7 +419,7 @@ where
                 Ok(r)
             }
         })
-        .map(|response| Response::new(response, client.runtime.clone()))
+        .map(|response| Response::new(response, client.runtime.clone(), client.handle.clone()))
         .map_err(Error::Library)
         .map_err(Into::into)
 }
@@ -547,7 +547,9 @@ where
     // Send the WebSocket request.
     builder
         .send()
-        .and_then(|response| WebSocket::new(response, client.runtime.clone()))
+        .and_then(|response| {
+            WebSocket::new(response, client.runtime.clone(), client.handle.clone())
+        })
         .await
         .map_err(Error::Library)
         .map_err(Into::into)
