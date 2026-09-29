@@ -112,7 +112,7 @@ runtime = Runtime(
 client = Client(runtime=runtime)
 ```
 
-With `work_steal=False`, Pingora uses independent single-thread Tokio runtimes.
+With `work_steal=False`, workers use independent single-thread Tokio runtimes.
 Each client is assigned one worker for its lifetime; requests, response reads,
 streams and WebSocket operations use that worker. With multiple workers, newly
 created clients are assigned round-robin. This is not CPU pinning. Sharing the
@@ -144,7 +144,7 @@ and `runtime.closed` reports whether it has been explicitly shut down.
 
 Dropping all owners automatically releases a custom runtime without synchronously
 waiting for its worker threads. Invalid configuration is rejected with Python
-exceptions. Pingora's internal thread-creation failures can still panic; with
+exceptions. Internal thread-creation failures can still panic; with
 the release build's `panic=abort`, this terminates the process.
 
 ### TLS Key Logging

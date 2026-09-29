@@ -5,7 +5,7 @@ __all__ = ["Runtime"]
 
 @final
 class Runtime:
-    """Lazy Pingora/Tokio runtime. No-steal clients keep a fixed worker, without CPU pinning."""
+    """Lazy Tokio runtime wrapper. No-steal clients keep a fixed worker, without CPU pinning."""
 
     def __init__(
         self,
