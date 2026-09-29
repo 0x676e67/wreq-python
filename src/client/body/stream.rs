@@ -1,5 +1,3 @@
-mod upload;
-
 use std::{
     pin::Pin,
     sync::Arc,
@@ -7,15 +5,20 @@ use std::{
 };
 
 use bytes::Bytes;
-use futures_util::{FutureExt, Stream};
+use futures_util::{FutureExt, Stream, future::poll_fn};
 use http_body_util::BodyExt;
 use pyo3::{
     coroutine::CancelHandle,
     intern,
     prelude::*,
     pybacked::{PyBackedBytes, PyBackedStr},
+    sync::PyOnceLock,
 };
-use tokio::{runtime::Handle, sync::Mutex, task::JoinHandle};
+use tokio::{
+    runtime::Handle,
+    sync::{Mutex, mpsc},
+    task::JoinHandle,
+};
 
 use crate::{
     buffer::PyBuffer,
@@ -30,7 +33,7 @@ type Pending = Option<JoinHandle<Option<PyResult<PyBytesLike>>>>;
 /// Python stream source.
 enum PyStreamSource {
     Sync(Arc<Py<PyAny>>),
-    Async(upload::Upload),
+    Async(PyAsyncStream),
 }
 
 /// A bytes-like object that can be extracted from Python.
@@ -53,22 +56,20 @@ pub struct PyStream {
     pending: Pending,
 }
 
+/// Adapts a Python async generator into a byte stream with bounded buffering.
+/// Dropping the stream cancels its producer on the Python event loop.
+struct PyAsyncStream {
+    rx: mpsc::Receiver<PyResult<PyBytesLike>>,
+    task: Option<(Py<PyAny>, Py<PyAny>)>,
+}
+
+#[pyclass(frozen)]
+struct Sender(mpsc::Sender<PyResult<PyBytesLike>>);
+
 /// A bytes stream response.
 #[derive(Clone)]
 #[pyclass(subclass, frozen, skip_from_py_object)]
 pub struct Streamer(Arc<Mutex<Option<wreq::Response>>>, Runtime, Handle);
-
-// ===== impl PyStream =====
-
-impl From<PyStreamSource> for PyStream {
-    #[inline]
-    fn from(inner: PyStreamSource) -> Self {
-        PyStream {
-            inner,
-            pending: None,
-        }
-    }
-}
 
 // ===== impl Streamer =====
 
@@ -202,7 +203,7 @@ impl Streamer {
     }
 }
 
-// ===== PyBytesLike =====
+// ===== impl PyBytesLike =====
 
 impl From<PyBytesLike> for Bytes {
     #[inline]
@@ -216,12 +217,22 @@ impl From<PyBytesLike> for Bytes {
 
 // ===== impl PyStream =====
 
+impl From<PyStreamSource> for PyStream {
+    #[inline]
+    fn from(inner: PyStreamSource) -> Self {
+        PyStream {
+            inner,
+            pending: None,
+        }
+    }
+}
+
 impl FromPyObject<'_, '_> for PyStream {
     type Error = PyErr;
 
     fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
         if ob.hasattr(intern!(ob.py(), "asend"))? {
-            upload::Upload::new(ob.to_owned())
+            PyAsyncStream::new(ob.to_owned())
                 .map(PyStreamSource::Async)
                 .map(PyStream::from)
         } else {
@@ -268,6 +279,119 @@ impl Stream for PyStream {
                 this.pending.replace(pending);
                 Poll::Pending
             }
+        }
+    }
+}
+
+// ===== impl PyAsyncStream =====
+
+impl PyAsyncStream {
+    fn new(generator: Bound<'_, PyAny>) -> PyResult<Self> {
+        static FORWARD: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        let py = generator.py();
+        let event_loop = py.import("asyncio")?.call_method0("get_running_loop")?;
+        let forward = FORWARD.get_or_try_init(py, || {
+            PyModule::from_code(
+                py,
+                c"import asyncio
+
+async def forward(gen, sender):
+    try:
+        try:
+            async for item in gen:
+                if not await sender.send(item, False):
+                    return
+        finally:
+            close = getattr(gen, 'aclose', None)
+            if close is not None:
+                await close()
+    except BaseException as error:
+        await sender.send(error, True)
+        if isinstance(error, asyncio.CancelledError):
+            raise
+",
+                c"wreq/_async_stream.py",
+                c"wreq._async_stream",
+            )?
+            .getattr("forward")
+            .map(Bound::unbind)
+        })?;
+        let (tx, rx) = mpsc::channel(1);
+        let coroutine = forward.bind(py).call1((generator, Sender(tx)))?;
+        // create_task captures the caller's contextvars on the running loop.
+        let task = match event_loop.call_method1("create_task", (&coroutine,)) {
+            Ok(task) => task,
+            Err(err) => {
+                let _ = coroutine.call_method0("close");
+                return Err(err);
+            }
+        };
+        Ok(Self {
+            rx,
+            task: Some((task.unbind(), event_loop.unbind())),
+        })
+    }
+}
+
+impl Stream for PyAsyncStream {
+    type Item = PyResult<PyBytesLike>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.get_mut().rx.poll_recv(cx)
+    }
+}
+
+impl Drop for PyAsyncStream {
+    fn drop(&mut self) {
+        self.rx.close();
+        if let Some((task, event_loop)) = self.task.take() {
+            // Body drop can run on Tokio: acquire the interpreter on a blocking thread.
+            crate::runtime::get().1.spawn_blocking(move || {
+                Python::try_attach(|py| {
+                    if let Ok(cancel) = task.bind(py).getattr(intern!(py, "cancel")) {
+                        let _ = event_loop.call_method1(
+                            py,
+                            intern!(py, "call_soon_threadsafe"),
+                            (cancel,),
+                        );
+                    }
+                });
+            });
+        }
+    }
+}
+
+// ===== impl Sender =====
+
+#[pymethods]
+impl Sender {
+    async fn send(
+        &self,
+        item: Py<PyAny>,
+        error: bool,
+        #[pyo3(cancel_handle)] mut cancel: CancelHandle,
+    ) -> PyResult<bool> {
+        let item = Python::attach(|py| {
+            if error {
+                Ok(Err(PyErr::from_value(item.into_bound(py))))
+            } else {
+                item.extract(py).map(Ok)
+            }
+        })?;
+        let item = match self.0.try_send(item) {
+            Ok(()) => return Ok(true),
+            Err(mpsc::error::TrySendError::Closed(_)) => return Ok(false),
+            Err(mpsc::error::TrySendError::Full(item)) => item,
+        };
+        let tx = self.0.clone();
+        // Channel readiness is runtime-independent; keep this on the Python loop.
+        let mut send = std::pin::pin!(tx.send(item));
+        tokio::select! {
+            biased;
+            exception = poll_fn(|cx| cancel.poll_cancelled(cx)) => {
+                Err(Python::attach(|py| PyErr::from_value(exception.into_bound(py))))
+            }
+            result = poll_fn(|cx| nogil::poll_with_guard(send.as_mut(), cx)) => Ok(result.is_ok()),
         }
     }
 }
