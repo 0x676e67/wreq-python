@@ -212,8 +212,7 @@ class Client:
     A blocking client for making HTTP requests.
     """
 
-    @property
-    def runtime(self) -> Runtime: ...
+    runtime: Runtime
 
     cookie_jar: Jar | None
     r"""
