@@ -1,7 +1,8 @@
 use std::{
     future::Future,
     pin::Pin,
-    task::{Context, Poll},
+    sync::{Arc, Once},
+    task::{Context, Poll, Wake, Waker},
 };
 
 use pin_project_lite::pin_project;
@@ -11,6 +12,8 @@ use pyo3::{
     prelude::*,
 };
 use tokio_util::{sync::CancellationToken, task::AbortOnDropHandle};
+
+use crate::error;
 
 pin_project! {
     /// A future that allows Python threads to run while it is being polled or executed.
@@ -77,13 +80,36 @@ where
             })));
         }
 
-        let waker = cx.waker();
+        let waker = Waker::from(Arc::new(GuardedWaker(cx.waker().clone())));
         Python::attach(|py| {
-            py.detach(|| match this.handle.poll(&mut Context::from_waker(waker)) {
-                Poll::Ready(Ok(result)) => Poll::Ready(result),
-                Poll::Ready(Err(e)) => Poll::Ready(Err(PyRuntimeError::new_err(e.to_string()))),
-                Poll::Pending => Poll::Pending,
+            py.detach(|| {
+                let mut cx = Context::from_waker(&waker);
+                match this.handle.poll(&mut cx) {
+                    Poll::Ready(Ok(result)) => Poll::Ready(result),
+                    Poll::Ready(Err(e)) => Poll::Ready(Err(PyRuntimeError::new_err(e.to_string()))),
+                    Poll::Pending => Poll::Pending,
+                }
             })
         })
+    }
+}
+
+/// Wakes the Python coroutine from Tokio threads.
+///
+/// PyO3's coroutine waker calls `Python::attach`, which panics once the interpreter has
+/// shut down. Waking inside [`error::attach`] lets it reuse that attachment instead; when
+/// Python is gone the wake is dropped and reported once, as no coroutine is left to resume.
+struct GuardedWaker(Waker);
+
+impl Wake for GuardedWaker {
+    fn wake(self: Arc<Self>) {
+        self.wake_by_ref();
+    }
+
+    fn wake_by_ref(self: &Arc<Self>) {
+        if let Err(err) = error::attach(|_| self.0.wake_by_ref()) {
+            static REPORTED: Once = Once::new();
+            REPORTED.call_once(|| eprintln!("wreq: failed to wake a Python coroutine: {err}"));
+        }
     }
 }
