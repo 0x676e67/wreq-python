@@ -81,12 +81,33 @@ data = await response.json()
 print(data)
 ```
 
+### Binary data
+
+`response.bytes()` returns a read-only `memoryview`, not a `bytes` object. The view shares Rust-owned data without a copy into Python bytes. Reading a complete response can still allocate memory to combine body chunks.
+
+```python
+view = await response.bytes()
+await response.close()
+print(view.readonly)  # True; closing the response does not invalidate the view
+
+data = bytes(view)  # Copies into a Python bytes object
+view.release()
+```
+
+The blocking API returns the same type, without `await`. Stream data frames, WebSocket binary fields, header names and values, and peer certificates also return read-only memoryviews. Each view retains its backing data even after the source object is closed or deleted.
+
+This changes the binary return type. `memoryview` supports the buffer protocol, but has no `.decode()` method or byte-string concatenation. Use `bytes(view)` or `view.tobytes()` when an API requires `bytes`; both copy the data. `view.release()` releases that view, not other views or slices sharing the data. Input types are unchanged.
+
+When passing a view back to wreq's binary inputs (`body`, `Part`, `Message` constructors, or `CertStore`), convert it with `bytes(view)`. These inputs do not treat a memoryview as binary data.
+
 ### Response headers
 
 Response headers are available as a [HeaderMap](../api/header/?h=HeaerMap#wreq.header.HeaderMap) object:
 
 ```python
-print(response.headers.get("content-type"))
+content_type = response.headers.get("content-type")
+if content_type is not None:
+    print(bytes(content_type).decode("ascii"))
 # application/json
 ```
 

@@ -37,7 +37,7 @@ pub enum PyBytesLike {
     String(PyBackedStr),
 }
 
-/// A bytes-like object that can be into Python.
+/// A response frame exposed as a read-only memoryview or a header map.
 #[derive(IntoPyObject)]
 pub enum Frame {
     Bytes(PyBuffer),
@@ -50,7 +50,7 @@ pub struct PyStream {
     pending: Pending,
 }
 
-/// A bytes stream response.
+/// A response stream yielding read-only memoryviews and any trailing headers.
 #[derive(Clone)]
 #[pyclass(subclass, frozen, skip_from_py_object)]
 pub struct Streamer(Arc<Mutex<Option<wreq::Response>>>);

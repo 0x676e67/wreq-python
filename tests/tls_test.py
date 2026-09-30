@@ -27,10 +27,11 @@ async def test_badssl_invalid_cert():
         peer_der_cert = tls_info.peer_certificate()
         assert peer_der_cert is not None
 
-        assert isinstance(peer_der_cert, bytes)
+        assert type(peer_der_cert) is memoryview
+        assert peer_der_cert.readonly
         assert len(peer_der_cert) > 0
 
-        cert_store = CertStore(der_certs=[peer_der_cert])
+        cert_store = CertStore(der_certs=[bytes(peer_der_cert)])
         assert cert_store is not None
 
         client = wreq.Client(tls_verify=cert_store)

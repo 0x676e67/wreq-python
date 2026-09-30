@@ -117,4 +117,6 @@ async def test_peer_certificate():
     resp = await client.get("https://www.google.com/anything")
     async with resp:
         assert resp.tls_info is not None
-        assert resp.tls_info.peer_certificate() is not None
+        certificate = resp.tls_info.peer_certificate()
+        assert type(certificate) is memoryview
+        assert certificate.readonly

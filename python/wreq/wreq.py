@@ -175,11 +175,13 @@ class Part:
 class Message:
     r"""
     A WebSocket message.
+
+    Binary fields return read-only memoryviews that retain their backing data.
     """
 
-    data: bytes | None
+    data: memoryview | None
     r"""
-    Returns the data of the message as bytes.
+    Returns the data of the message as a read-only memoryview.
     """
 
     text: str | None
@@ -187,17 +189,17 @@ class Message:
     Returns the text content of the message if it is a text message.
     """
 
-    binary: bytes | None
+    binary: memoryview | None
     r"""
     Returns the binary data of the message if it is a binary message.
     """
 
-    ping: bytes | None
+    ping: memoryview | None
     r"""
     Returns the ping data of the message if it is a ping message.
     """
 
-    pong: bytes | None
+    pong: memoryview | None
     r"""
     Returns the pong data of the message if it is a pong message.
     """
@@ -274,13 +276,14 @@ class Message:
 class Streamer:
     r"""
     A stream response.
-    An asynchronous iterator yielding data chunks (bytes) or HTTP trailers (HeaderMap) from the response stream.
+    An asynchronous iterator yielding read-only memoryviews or HTTP trailers (HeaderMap) from the response stream.
     Used to stream response content and receive HTTP trailers if present.
     Implemented in the `stream` method of the `Response` class.
     Can be used in an asynchronous for loop in Python.
 
-    When streaming a response, each iteration yields either a bytes object (for body data) or a HeaderMap (for HTTP trailers, if the server sends them).
+    When streaming a response, each iteration yields either a memoryview (for body data) or a HeaderMap (for HTTP trailers, if the server sends them).
     This allows you to access HTTP/1.1 or HTTP/2 trailers in addition to the main body.
+    Data views retain their backing data after the stream is closed.
 
     # Examples
 
@@ -293,8 +296,8 @@ class Streamer:
         resp = await wreq.get("https://example.com/stream-with-trailers")
         async with resp.stream() as streamer:
             async for chunk in streamer:
-                if isinstance(chunk, bytes):
-                    print("Chunk: ", chunk)
+                if isinstance(chunk, memoryview):
+                    print("Chunk: ", bytes(chunk))
                 elif isinstance(chunk, HeaderMap):
                     print("Trailers: ", chunk)
                 await asyncio.sleep(0.1)
@@ -305,11 +308,11 @@ class Streamer:
     """
 
     def __iter__(self) -> "Streamer": ...
-    def __next__(self) -> bytes | HeaderMap: ...
+    def __next__(self) -> memoryview | HeaderMap: ...
     def __enter__(self) -> Any: ...
     def __exit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None: ...
-    async def __aiter__(self) -> "Streamer": ...
-    async def __anext__(self) -> bytes | HeaderMap: ...
+    def __aiter__(self) -> "Streamer": ...
+    async def __anext__(self) -> memoryview | HeaderMap: ...
     async def __aenter__(self) -> Any: ...
     async def __aexit__(
         self, _exc_type: Any, _exc_value: Any, _traceback: Any
@@ -401,7 +404,7 @@ class Response:
 
     def stream(self) -> Streamer:
         r"""
-        Get the response into a `Streamer` of `bytes` from the body.
+        Stream the body as read-only memoryviews, with HeaderMap frames for trailers.
         """
         ...
 
@@ -416,9 +419,11 @@ class Response:
         Get the JSON content of the response.
         """
 
-    async def bytes(self) -> bytes:
+    async def bytes(self) -> memoryview:
         r"""
-        Get the bytes content of the response.
+        Read the body as a read-only memoryview without copying it into Python bytes.
+        The view remains valid after the response is closed or deleted.
+        Use bytes(view) or view.tobytes() for a copy; view.release() releases this view.
         """
         ...
 

@@ -39,7 +39,7 @@ pub struct Message(pub message::Message);
 
 #[pymethods]
 impl Message {
-    /// Returns the data of the message as bytes.
+    /// Returns the message data as a read-only memoryview.
     #[getter]
     pub fn data(&self) -> Option<PyBuffer> {
         let bytes = match &self.0 {
@@ -62,7 +62,7 @@ impl Message {
         }
     }
 
-    /// Returns the binary data of the message if it is a binary message.
+    /// Returns a read-only memoryview if this is a binary message.
     #[getter]
     pub fn binary(&self) -> Option<PyBuffer> {
         if let message::Message::Binary(data) = &self.0 {
@@ -72,7 +72,7 @@ impl Message {
         }
     }
 
-    /// Returns the ping data of the message if it is a ping message.
+    /// Returns a read-only memoryview if this is a ping message.
     #[getter]
     pub fn ping(&self) -> Option<PyBuffer> {
         if let message::Message::Ping(data) = &self.0 {
@@ -82,7 +82,7 @@ impl Message {
         }
     }
 
-    /// Returns the pong data of the message if it is a pong message.
+    /// Returns a read-only memoryview if this is a pong message.
     #[getter]
     pub fn pong(&self) -> Option<PyBuffer> {
         if let message::Message::Pong(data) = &self.0 {

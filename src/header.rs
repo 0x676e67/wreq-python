@@ -8,12 +8,12 @@ use wreq::header::{self, HeaderName, HeaderValue};
 
 use crate::{buffer::PyBuffer, error::Error};
 
-/// A HTTP header map.
+/// An HTTP header map whose names and values are exposed as read-only memoryviews.
 #[derive(Clone)]
 #[pyclass(subclass, str, skip_from_py_object)]
 pub struct HeaderMap(pub header::HeaderMap);
 
-/// A HTTP original header map.
+/// An HTTP original header map whose iterator exposes read-only memoryviews.
 #[derive(Clone)]
 #[pyclass(subclass, str, skip_from_py_object)]
 pub struct OrigHeaderMap(pub header::OrigHeaderMap);
@@ -58,7 +58,7 @@ impl HeaderMap {
         HeaderMap(headers)
     }
 
-    /// Returns a reference to the value associated with the key.
+    /// Returns a read-only memoryview of the value associated with the key.
     ///
     /// If there are multiple values associated with the key, then the first one
     /// is returned. Use `get_all` to get all values associated with a given
@@ -84,7 +84,7 @@ impl HeaderMap {
         .map(PyBuffer::from)
     }
 
-    /// Returns a view of all values associated with a key.
+    /// Returns a list of read-only memoryviews for the values associated with a key.
     #[pyo3(signature = (key))]
     fn get_all<'py>(&self, py: Python<'py>, key: PyBackedStr) -> Vec<PyBuffer> {
         py.detach(|| {
@@ -137,7 +137,7 @@ impl HeaderMap {
         py.detach(|| self.0.contains_key::<&str>(key.as_ref()))
     }
 
-    /// An iterator visiting all keys.
+    /// Returns a list of read-only memoryviews for all keys.
     #[inline]
     fn keys<'py>(&self, py: Python<'py>) -> Vec<PyBuffer> {
         py.detach(|| {
@@ -149,7 +149,7 @@ impl HeaderMap {
         })
     }
 
-    ///  An iterator visiting all values.
+    /// Returns a list of read-only memoryviews for all values.
     #[inline]
     fn values<'py>(&self, py: Python<'py>) -> Vec<PyBuffer> {
         py.detach(|| {

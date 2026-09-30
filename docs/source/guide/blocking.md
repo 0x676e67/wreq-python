@@ -175,9 +175,14 @@ def main():
     with resp:
         with resp.stream() as streamer:
             for chunk in streamer:
-                print(chunk)
+                if isinstance(chunk, memoryview):
+                    print(bytes(chunk))
+                else:
+                    print("Trailers:", chunk)
 
 
 if __name__ == "__main__":
     main()
 ```
+
+Data chunks are read-only `memoryview` objects that stay valid after the stream is closed. `resp.bytes()` returns the same type; use `bytes(view)` or `view.tobytes()` to make a copy when needed.
