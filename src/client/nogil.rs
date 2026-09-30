@@ -11,7 +11,6 @@ use pyo3::{
     exceptions::{PyRuntimeError, asyncio::CancelledError},
     prelude::*,
 };
-use tokio::runtime::Handle;
 use tokio_util::{sync::CancellationToken, task::AbortOnDropHandle};
 
 use crate::runtime::Runtime;
@@ -36,7 +35,7 @@ where
 {
     /// Spawn on the selected handle, keeping the runtime alive until the task ends.
     #[inline]
-    pub fn new<Fut>(runtime: &Runtime, handle: &Handle, fut: Fut, cancel: CancelHandle) -> Self
+    pub fn new<Fut>(runtime: &Runtime, fut: Fut, cancel: CancelHandle) -> Self
     where
         Fut: Future<Output = PyResult<T>> + Send + 'static,
     {
@@ -44,7 +43,7 @@ where
         Self {
             handle: AbortOnDropHandle::new(Python::attach(|py| {
                 py.detach(|| {
-                    handle.spawn(async move {
+                    runtime.handle().spawn(async move {
                         let _owner = owner;
                         fut.await
                     })
@@ -58,7 +57,6 @@ where
     #[inline]
     pub fn new_with_token<Fut>(
         runtime: &Runtime,
-        handle: &Handle,
         fut: Fut,
         cancel: CancelHandle,
         cancel_token: CancellationToken,
@@ -68,7 +66,6 @@ where
     {
         Self::new(
             runtime,
-            handle,
             async move {
                 tokio::select! {
                     result = fut => result,
@@ -112,17 +109,18 @@ where
 
 /// Run network work on its selected worker; only wait for completion on the caller.
 /// The caller must be detached from Python and outside an async Tokio context.
-pub fn block_on<F, T>(runtime: &Runtime, handle: &Handle, future: F) -> PyResult<T>
+pub fn block_on<F, T>(runtime: &Runtime, future: F) -> PyResult<T>
 where
     F: Future<Output = PyResult<T>> + Send + 'static,
     T: Send + 'static,
 {
     let owner = runtime.clone();
-    let task = handle.spawn(async move {
+    let task = runtime.handle().spawn(async move {
         let _owner = owner;
         future.await
     });
-    handle
+    runtime
+        .handle()
         .block_on(AbortOnDropHandle::new(task))
         .map_err(|err| PyRuntimeError::new_err(err.to_string()))?
 }

@@ -13,23 +13,38 @@ use tokio::runtime::Handle;
 /// Shared Tokio runtime, released after its clients and active work are dropped.
 #[derive(Clone)]
 #[pyclass(frozen, skip_from_py_object)]
-pub struct Runtime(Option<Arc<PingoraRuntime>>);
+pub struct Runtime {
+    inner: Option<Arc<PingoraRuntime>>,
+    handle: Handle,
+}
 
 impl Runtime {
-    /// Borrow a Tokio handle; in no-steal mode, select once per client and retain it.
-    pub fn handle(&self) -> PyResult<&Handle> {
-        self.0
-            .as_deref()
-            .map(PingoraRuntime::get_handle)
-            .ok_or_else(|| PyRuntimeError::new_err("Runtime is unavailable"))
+    /// Borrow the selected worker's handle without changing the selection.
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    /// Share the runtime and select a worker for a new client.
+    pub fn select(&self) -> PyResult<Self> {
+        let inner = self
+            .inner
+            .as_ref()
+            .ok_or_else(|| PyRuntimeError::new_err("Runtime is unavailable"))?;
+        Ok(Self {
+            inner: Some(inner.clone()),
+            handle: inner.get_handle().clone(),
+        })
     }
 }
 
 impl From<PingoraRuntime> for Runtime {
     fn from(runtime: PingoraRuntime) -> Self {
         // No-steal workers are lazy upstream. Start them before sharing the runtime.
-        runtime.get_handle();
-        Self(Some(Arc::new(runtime)))
+        let handle = runtime.get_handle().clone();
+        Self {
+            inner: Some(Arc::new(runtime)),
+            handle,
+        }
     }
 }
 
@@ -96,7 +111,7 @@ impl Runtime {
 impl Drop for Runtime {
     fn drop(&mut self) {
         // The final owner may be released on a worker or while holding the GIL.
-        if let Some(runtime) = self.0.take().and_then(Arc::into_inner) {
+        if let Some(runtime) = self.inner.take().and_then(Arc::into_inner) {
             match runtime {
                 PingoraRuntime::Steal { runtime, .. } => runtime.shutdown_background(),
                 PingoraRuntime::NoSteal(runtime) => drop(runtime),
@@ -106,14 +121,13 @@ impl Drop for Runtime {
 }
 
 /// Create the shared runtime on first use and retain it for the process lifetime.
-pub fn get() -> &'static (Runtime, Handle) {
-    static RUNTIME: OnceLock<(Runtime, Handle)> = OnceLock::new();
+pub fn get() -> &'static Runtime {
+    static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 
-    fn create() -> (Runtime, Handle) {
+    fn create() -> Runtime {
         let workers = std::thread::available_parallelism().map_or(1, usize::from);
         let runtime = RuntimeBuilder::new(workers, env!("CARGO_PKG_NAME")).build();
-        let handle = runtime.get_handle().clone();
-        (runtime.into(), handle)
+        runtime.into()
     }
 
     if let Some(runtime) = RUNTIME.get() {
@@ -136,12 +150,12 @@ mod tests {
                 .work_steal(false)
                 .build(),
         );
-        let first = runtime.handle().unwrap();
-        let second = runtime.handle().unwrap();
+        let first = runtime.select().unwrap();
+        let second = runtime.select().unwrap();
         let caller = std::thread::current().id();
         let mut ids = Vec::new();
-        for handle in [first, second, first, second] {
-            let id = crate::client::nogil::block_on(&runtime, handle, async {
+        for worker in [&first, &second, &first.clone(), &second.clone()] {
+            let id = crate::client::nogil::block_on(worker, async {
                 let thread = std::thread::current().id();
                 for _ in 0..8 {
                     tokio::task::yield_now().await;
@@ -178,8 +192,8 @@ mod tests {
                     .work_steal(steal)
                     .build(),
             );
-            let weak = Arc::downgrade(runtime.0.as_ref().unwrap());
-            let handle = runtime.handle().unwrap().clone();
+            let weak = Arc::downgrade(runtime.inner.as_ref().unwrap());
+            let handle = runtime.handle().clone();
             let (dropped, released) = std::sync::mpsc::channel();
             let guard = NotifyOnDrop(dropped);
             let background = handle.spawn(async move {

@@ -13,7 +13,6 @@ use std::{
 
 use pyo3::{IntoPyObjectExt, coroutine::CancelHandle, prelude::*, pybacked::PyBackedStr};
 use req::{Request, WebSocketRequest};
-use tokio::runtime::Handle;
 use tokio_util::sync::CancellationToken;
 use wreq::tls::trust::CertStore;
 
@@ -237,7 +236,6 @@ impl FromPyObject<'_, '_> for Builder {
 pub struct Client {
     inner: wreq::Client,
     runtime: runtime::Runtime,
-    handle: Handle,
     cancel: CancellationToken,
     raise_for_status: bool,
 
@@ -255,11 +253,10 @@ pub struct BlockingClient(Client);
 
 impl Default for Client {
     fn default() -> Self {
-        let (runtime, handle) = runtime::get();
+        let runtime = runtime::get();
         Self {
             inner: wreq::Client::default(),
             runtime: runtime.clone(),
-            handle: handle.clone(),
             cancel: CancellationToken::new(),
             raise_for_status: false,
             cookie_jar: None,
@@ -274,8 +271,8 @@ impl Client {
     #[pyo3(signature = (**kwds))]
     fn new(py: Python, kwds: Option<Builder>) -> PyResult<Client> {
         py.detach(|| {
-            let (runtime, handle) = match kwds.as_ref().and_then(|config| config.runtime.as_ref()) {
-                Some(runtime) => (runtime.clone(), runtime.handle()?.clone()),
+            let runtime = match kwds.as_ref().and_then(|config| config.runtime.as_ref()) {
+                Some(runtime) => runtime.select()?,
                 None => runtime::get().clone(),
             };
             // Create the client builder.
@@ -488,7 +485,6 @@ impl Client {
                 .map(|inner| Client {
                     inner,
                     runtime,
-                    handle,
                     cancel: CancellationToken::new(),
                     cookie_jar,
                     raise_for_status,
@@ -618,7 +614,6 @@ impl Client {
     ) -> PyResult<Response> {
         NoGIL::new_with_token(
             &self.runtime,
-            &self.handle,
             execute_request(self.clone(), method, url, kwds),
             cancel,
             self.cancel.clone(),
@@ -637,7 +632,6 @@ impl Client {
     ) -> PyResult<WebSocket> {
         NoGIL::new_with_token(
             &self.runtime,
-            &self.handle,
             execute_websocket_request(self.clone(), url, kwds),
             cancel,
             self.cancel.clone(),
@@ -796,7 +790,6 @@ impl BlockingClient {
         py.detach(|| {
             nogil::block_on(
                 &self.0.runtime,
-                &self.0.handle,
                 execute_request(self.0.clone(), method, url, kwds),
             )
             .map(Into::into)
@@ -814,7 +807,6 @@ impl BlockingClient {
         py.detach(|| {
             nogil::block_on(
                 &self.0.runtime,
-                &self.0.handle,
                 execute_websocket_request(self.0.clone(), url, kwds),
             )
             .map(Into::into)

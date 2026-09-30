@@ -15,7 +15,6 @@ use pyo3::{
     sync::PyOnceLock,
 };
 use tokio::{
-    runtime::Handle,
     sync::{Mutex, mpsc},
     task::JoinHandle,
 };
@@ -69,15 +68,15 @@ struct Sender(mpsc::Sender<PyResult<PyBytesLike>>);
 /// A bytes stream response.
 #[derive(Clone)]
 #[pyclass(subclass, frozen, skip_from_py_object)]
-pub struct Streamer(Arc<Mutex<Option<wreq::Response>>>, Runtime, Handle);
+pub struct Streamer(Arc<Mutex<Option<wreq::Response>>>, Runtime);
 
 // ===== impl Streamer =====
 
 impl Streamer {
     /// Create a new [`Streamer`] instance.
     #[inline]
-    pub fn new(resp: wreq::Response, runtime: Runtime, handle: Handle) -> Streamer {
-        Streamer(Arc::new(Mutex::new(Some(resp))), runtime, handle)
+    pub fn new(resp: wreq::Response, runtime: Runtime) -> Streamer {
+        Streamer(Arc::new(Mutex::new(Some(resp))), runtime)
     }
 
     async fn next(self, error: fn() -> Error) -> PyResult<Frame> {
@@ -117,7 +116,7 @@ impl Streamer {
 
     #[inline]
     fn __next__(&self, py: Python) -> PyResult<Frame> {
-        py.detach(|| nogil::block_on(&self.1, &self.2, self.clone().next(|| Error::StopIteration)))
+        py.detach(|| nogil::block_on(&self.1, self.clone().next(|| Error::StopIteration)))
     }
 
     #[inline]
@@ -159,14 +158,9 @@ impl Streamer {
                 Some(cancel.throw_callback()),
                 async move {
                     let runtime = this.1.clone();
-                    let handle = this.2.clone();
-                    let frame = NoGIL::new(
-                        &runtime,
-                        &handle,
-                        this.next(|| Error::StopAsyncIteration),
-                        cancel,
-                    )
-                    .await?;
+                    let frame =
+                        NoGIL::new(&runtime, this.next(|| Error::StopAsyncIteration), cancel)
+                            .await?;
                     // PyO3 polls this coroutine while attached, outside the Tokio task.
                     Python::attach(|py| frame.into_pyobject(py).map(|obj| obj.unbind()))
                 },
@@ -190,7 +184,6 @@ impl Streamer {
         let this = self.0.clone();
         NoGIL::new(
             &self.1,
-            &self.2,
             async move {
                 if let Some(resp) = this.lock().await.take() {
                     drop(resp)
@@ -346,7 +339,7 @@ impl Drop for PyAsyncStream {
         self.rx.close();
         if let Some((task, event_loop)) = self.task.take() {
             // Body drop can run on Tokio: acquire the interpreter on a blocking thread.
-            crate::runtime::get().1.spawn_blocking(move || {
+            crate::runtime::get().handle().spawn_blocking(move || {
                 Python::try_attach(|py| {
                     if let Ok(cancel) = task.bind(py).getattr(intern!(py, "cancel")) {
                         let _ = event_loop.call_method1(
