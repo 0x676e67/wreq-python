@@ -158,9 +158,12 @@ impl Streamer {
                 Some(cancel.throw_callback()),
                 async move {
                     let runtime = this.1.clone();
-                    let frame =
-                        NoGIL::new(&runtime, this.next(|| Error::StopAsyncIteration), cancel)
-                            .await?;
+                    let frame = NoGIL::with_cancel(
+                        &runtime,
+                        this.next(|| Error::StopAsyncIteration),
+                        cancel,
+                    )
+                    .await?;
                     // PyO3 polls this coroutine while attached, outside the Tokio task.
                     Python::attach(|py| frame.into_pyobject(py).map(|obj| obj.unbind()))
                 },
@@ -182,16 +185,12 @@ impl Streamer {
         _traceback: Py<PyAny>,
     ) -> PyResult<()> {
         let this = self.0.clone();
-        NoGIL::new(
-            &self.1,
-            async move {
-                if let Some(resp) = this.lock().await.take() {
-                    drop(resp)
-                }
-                Ok(())
-            },
-            CancelHandle::new(),
-        )
+        NoGIL::new(&self.1, async move {
+            if let Some(resp) = this.lock().await.take() {
+                drop(resp)
+            }
+            Ok(())
+        })
         .await
     }
 }
@@ -298,10 +297,13 @@ async def forward(gen, sender):
             close = getattr(gen, 'aclose', None)
             if close is not None:
                 await close()
+    except asyncio.CancelledError as error:
+        # Task cancellation must not wait for space in a retained body.
+        if not asyncio.current_task().cancelling():
+            await sender.send(error, True)
+        raise
     except BaseException as error:
         await sender.send(error, True)
-        if isinstance(error, asyncio.CancelledError):
-            raise
 ",
                 c"wreq/_async_stream.py",
                 c"wreq._async_stream",

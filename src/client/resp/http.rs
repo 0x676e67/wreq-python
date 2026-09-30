@@ -234,7 +234,7 @@ impl Response {
             .cache_response()
             .and_then(|resp| ResponseExt::text(resp, encoding))
             .map_err(Into::into);
-        NoGIL::new(&self.runtime, fut, cancel).await
+        NoGIL::with_cancel(&self.runtime, fut, cancel).await
     }
 
     /// Get the JSON content of the response.
@@ -243,7 +243,7 @@ impl Response {
             .cache_response()
             .and_then(ResponseExt::json::<Json>)
             .map_err(Into::into);
-        NoGIL::new(&self.runtime, fut, cancel).await
+        NoGIL::with_cancel(&self.runtime, fut, cancel).await
     }
 
     /// Get the bytes content of the response.
@@ -253,7 +253,7 @@ impl Response {
             .and_then(ResponseExt::bytes)
             .map_ok(PyBuffer::from)
             .map_err(Into::into);
-        NoGIL::new(&self.runtime, fut, cancel).await
+        NoGIL::with_cancel(&self.runtime, fut, cancel).await
     }
 
     /// Close the response.

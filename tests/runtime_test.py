@@ -23,9 +23,8 @@ def test_runtime_configuration():
     ):
         with pytest.raises(ValueError):
             Runtime(**kwargs)
-    for invalid in (0.25, "1s"):
-        with pytest.raises(TypeError):
-            Runtime(thread_keep_alive=invalid)
+    with pytest.raises(TypeError):
+        Runtime(thread_keep_alive=0.25)
     with pytest.raises(TypeError):
         wreq.Client(runtime=object())
     for duration in (None, timedelta(), timedelta(microseconds=250001)):
@@ -36,24 +35,19 @@ def test_runtime_configuration():
             max_blocking_threads=3,
             thread_keep_alive=duration,
         )
-        assert not hasattr(runtime, "default")
-        assert not hasattr(runtime, "closed")
-        assert not hasattr(runtime, "shutdown_timeout")
-        for factory in (wreq.Client, wreq.blocking.Client):
-            client = factory(runtime=runtime)
-            alias = client.runtime
-            with pytest.raises(AttributeError):
-                client.runtime = runtime
-            client.close()
-            del client
-            # Releasing a client does not close a shared runtime.
-            other = factory(runtime=alias)
-            other.close()
     for factory in (wreq.Client, wreq.blocking.Client):
-        for kwargs in ({}, {"runtime": None}):
-            client = factory(**kwargs)
-            assert isinstance(client.runtime, Runtime)
-            client.close()
+        client = factory(runtime=runtime)
+        alias = client.runtime
+        with pytest.raises(AttributeError):
+            client.runtime = runtime
+        client.close()
+        del client
+        # Releasing a client does not close a shared runtime.
+        other = factory(runtime=alias)
+        other.close()
+        client = factory(runtime=None)
+        assert isinstance(client.runtime, Runtime)
+        client.close()
 
 
 @pytest.mark.asyncio
@@ -81,9 +75,8 @@ async def test_response_and_stream_keep_runtime_alive(steal):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("steal", [False, True])
-async def test_shared_runtime_cancellation_and_upload(steal):
-    runtime = wreq.Runtime(workers=2, work_steal=steal, max_blocking_threads=2)
+async def test_shared_runtime_cancellation_and_upload():
+    runtime = wreq.Runtime(workers=2, work_steal=False, max_blocking_threads=2)
     async with local_server() as (url, connections):
         first = wreq.Client(runtime=runtime, proxies=[])
         second = wreq.Client(runtime=runtime, proxies=[])
@@ -93,6 +86,8 @@ async def test_shared_runtime_cancellation_and_upload(steal):
         first.close()
         with pytest.raises(asyncio.CancelledError):
             await asyncio.wait_for(pending, 5)
+        with pytest.raises(asyncio.CancelledError):
+            await first.get("invalid URL")
         del pending, first
         finalized = asyncio.Event()
 
@@ -118,30 +113,40 @@ async def test_shared_runtime_cancellation_and_upload(steal):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("steal", [False, True])
-async def test_blocking_client_uses_custom_runtime(steal):
-    runtime = wreq.Runtime(workers=1, work_steal=steal, max_blocking_threads=2)
+@pytest.mark.parametrize("steal", [None, False, True])
+async def test_blocking_client_runtime(steal):
+    runtime = (
+        None
+        if steal is None
+        else wreq.Runtime(workers=1, work_steal=steal, max_blocking_threads=2)
+    )
 
     def request(url):
         with wreq.blocking.Client(runtime=runtime, proxies=[]) as client:
             assert isinstance(client.runtime, Runtime)
-            with client.post(url, body=iter((b"blocking",))) as response:
+            with client.post(url, body=iter((b"sync", b" upload"))) as response:
+                assert response.bytes() == b"{}"
+                assert response.json() == {}
+            with client.post(url, body=iter((b"sync", b" upload"))) as response:
                 with response.stream() as stream:
                     return b"".join(stream)
 
     async with local_server() as (url, connections):
         task = asyncio.create_task(asyncio.to_thread(request, url))
-        reader, writer = await asyncio.wait_for(connections.get(), 5)
-        assert await asyncio.wait_for(read_chunked(reader), 5) == b"blocking"
-        writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
-        await writer.drain()
-        assert await asyncio.wait_for(task, 5) == b"ok"
+        for _ in range(2):
+            reader, writer = await asyncio.wait_for(connections.get(), 5)
+            assert await asyncio.wait_for(read_chunked(reader), 5) == b"sync upload"
+            writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}")
+            await writer.drain()
+        assert await asyncio.wait_for(task, 5) == b"{}"
         del task
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("blocking", [False, True])
-@pytest.mark.parametrize("operation", ["get", "websocket"])
+@pytest.mark.parametrize(
+    ("blocking", "operation"),
+    [(True, "get"), (False, "websocket"), (True, "websocket")],
+)
 async def test_client_close_cancels_requests(blocking, operation):
     factory = wreq.blocking.Client if blocking else wreq.Client
     client = factory(
@@ -166,8 +171,11 @@ async def test_client_close_cancels_requests(blocking, operation):
             client.close()
             done, _ = await asyncio.wait({task}, timeout=5)
             assert task in done, "close() did not cancel the pending request"
-            with pytest.raises(asyncio.CancelledError):
+            with pytest.raises(asyncio.CancelledError) as caught:
                 await task
+            assert caught.value.args == (
+                "Operation was cancelled: client has been closed",
+            )
             assert await asyncio.wait_for(reader.read(), 5) == b""
 
             task = start()

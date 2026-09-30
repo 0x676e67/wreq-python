@@ -77,51 +77,6 @@ async def test_upload_errors(failure):
 
 
 @pytest.mark.asyncio
-async def test_unconsumed_upload_backpressure():
-    produced = []
-    full = asyncio.Event()
-    closed = asyncio.Event()
-
-    async def chunks():
-        try:
-            for index in range(100):
-                produced.append(index)
-                if index == 1:
-                    full.set()
-                yield b"chunk"
-        finally:
-            closed.set()
-
-    # A multipart part retains the body without polling its Rust stream.
-    part = wreq.Part(name="file", value=chunks())
-    await asyncio.wait_for(full.wait(), 5)
-    await asyncio.sleep(0.05)
-    assert produced == [0, 1]
-    del part
-    await asyncio.wait_for(closed.wait(), 5)
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("read", ["bytes", "json", "stream"])
-async def test_blocking_runtime(read):
-    def request(url):
-        with wreq.blocking.Client(proxies=[]) as client:
-            with client.post(url, body=iter((b"sync", b" upload"))) as response:
-                if read == "stream":
-                    with response.stream() as stream:
-                        return b"".join(stream)
-                return getattr(response, read)()
-
-    async with local_server() as (url, connections):
-        task = asyncio.create_task(asyncio.to_thread(request, url))
-        reader, writer = await asyncio.wait_for(connections.get(), 5)
-        assert await asyncio.wait_for(read_chunked(reader), 5) == b"sync upload"
-        writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}")
-        await writer.drain()
-        assert await asyncio.wait_for(task, 5) == ({} if read == "json" else b"{}")
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize("action", ["cancel", "close_client"])
 async def test_upload_cancellation(action):
     started = asyncio.Event()

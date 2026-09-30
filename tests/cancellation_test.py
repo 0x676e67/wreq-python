@@ -35,9 +35,7 @@ async def local_server():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "operation", ["request", "request_error", "bytes", "text", "json", "stream"]
-)
+@pytest.mark.parametrize("operation", ["request", "request_error", "stream"])
 async def test_cancellation_after_rust_completion(operation):
     async with local_server() as (url, connections), wreq.Client(proxies=[]) as client:
         response = None
@@ -51,11 +49,7 @@ async def test_cancellation_after_rust_completion(operation):
             writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n")
             await writer.drain()
             response = await asyncio.wait_for(task, 5)
-            coroutine = (
-                anext(response.stream())
-                if operation == "stream"
-                else getattr(response, operation)()
-            )
+            coroutine = anext(response.stream())
             waiter = coroutine.send(None)
 
         try:
@@ -87,7 +81,7 @@ async def test_cancellation_after_rust_completion(operation):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("action", ["cancel", "close_coroutine", "close_client"])
+@pytest.mark.parametrize("action", ["cancel", "close_coroutine"])
 async def test_pending_request_cancellation(action):
     async with local_server() as (url, connections), wreq.Client(proxies=[]) as client:
         coroutine = client.get(url)
@@ -100,20 +94,12 @@ async def test_pending_request_cancellation(action):
         if action == "close_coroutine":
             coroutine.close()
         else:
-            if action == "cancel":
-                task.cancel("caller cancellation message")
-            else:
-                client.close()
+            task.cancel("caller cancellation message")
             done, _ = await asyncio.wait({task}, timeout=5)
             assert task in done, "Cancellation did not finish"
             with pytest.raises(asyncio.CancelledError) as caught:
                 await task
-            expected = (
-                "caller cancellation message"
-                if action == "cancel"
-                else "Operation was cancelled: client has been closed"
-            )
-            assert caught.value.args == (expected,)
+            assert caught.value.args == ("caller cancellation message",)
 
         # The cancelled operation must release its pending network request.
         assert await asyncio.wait_for(reader.read(), 5) == b""

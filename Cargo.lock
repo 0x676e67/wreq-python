@@ -2465,7 +2465,6 @@ dependencies = [
  "http-body-util",
  "indexmap",
  "mimalloc",
- "pin-project-lite",
  "pingora-runtime",
  "pyo3",
  "serde",

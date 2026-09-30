@@ -89,3 +89,51 @@ def test_shutdown_wake_without_panic(operation):
     assert "teardown: wait complete" in proc.stderr
     assert "panicked" not in proc.stderr
     assert "Exception ignored" not in proc.stderr
+
+
+def test_unconsumed_upload_cleanup():
+    script = """
+import asyncio
+import wreq
+
+async def main(retain):
+    produced = []
+    full = asyncio.Event()
+    closed = asyncio.Event()
+
+    async def chunks():
+        try:
+            for index in range(100):
+                produced.append(index)
+                if index == 1:
+                    full.set()
+                yield b"chunk"
+        finally:
+            closed.set()
+            print("generator closed", flush=True)
+
+    # A part retains the body without polling its Rust stream.
+    part = wreq.Part(name="file", value=chunks())
+    try:
+        await asyncio.wait_for(full.wait(), 5)
+        await asyncio.sleep(0.05)
+        assert produced == [0, 1]
+        if retain:
+            return part
+    finally:
+        if not retain:
+            del part
+            await asyncio.wait_for(closed.wait(), 5)
+
+for retain in (False, True):
+    part = asyncio.run(main(retain))
+    print("runner closed", flush=True)
+"""
+    proc = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.splitlines() == ["generator closed", "runner closed"] * 2

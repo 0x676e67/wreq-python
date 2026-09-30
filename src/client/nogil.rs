@@ -5,24 +5,16 @@ use std::{
     task::{Context, Poll, Wake, Waker},
 };
 
-use pin_project_lite::pin_project;
-use pyo3::{
-    coroutine::CancelHandle,
-    exceptions::{PyRuntimeError, asyncio::CancelledError},
-    prelude::*,
-};
-use tokio_util::{sync::CancellationToken, task::AbortOnDropHandle};
+use pyo3::{coroutine::CancelHandle, exceptions::PyRuntimeError, prelude::*};
+use tokio_util::task::AbortOnDropHandle;
 
 use crate::runtime::Runtime;
 
-pin_project! {
-    /// A future that allows Python threads to run while it is being polled or executed.
-    /// It also handles cancellation and spawns the task in tokio runtime.
-    pub struct NoGIL<T> {
-        #[pin]
-        handle: AbortOnDropHandle<PyResult<T>>,
-        cancel: CancelHandle,
-    }
+/// A future that allows Python threads to run while it is being polled or executed.
+/// It also handles cancellation and spawns the task in tokio runtime.
+pub struct NoGIL<T> {
+    handle: AbortOnDropHandle<PyResult<T>>,
+    cancel: CancelHandle,
 }
 
 struct GuardedWaker(Waker);
@@ -33,9 +25,18 @@ impl<T> NoGIL<T>
 where
     T: Send + 'static,
 {
-    /// Spawn on the selected handle, keeping the runtime alive until the task ends.
+    /// Spawn internal work without a Python cancellation source.
     #[inline]
-    pub fn new<Fut>(runtime: &Runtime, fut: Fut, cancel: CancelHandle) -> Self
+    pub fn new<Fut>(runtime: &Runtime, fut: Fut) -> Self
+    where
+        Fut: Future<Output = PyResult<T>> + Send + 'static,
+    {
+        Self::with_cancel(runtime, fut, CancelHandle::new())
+    }
+
+    /// Spawn with Python cancellation, keeping the runtime alive until the task ends.
+    #[inline]
+    pub fn with_cancel<Fut>(runtime: &Runtime, fut: Fut, cancel: CancelHandle) -> Self
     where
         Fut: Future<Output = PyResult<T>> + Send + 'static,
     {
@@ -52,20 +53,6 @@ where
             cancel,
         }
     }
-
-    /// Also cancel the task when its client is closed.
-    #[inline]
-    pub fn new_with_token<Fut>(
-        runtime: &Runtime,
-        fut: Fut,
-        cancel: CancelHandle,
-        cancel_token: CancellationToken,
-    ) -> Self
-    where
-        Fut: Future<Output = PyResult<T>> + Send + 'static,
-    {
-        Self::new(runtime, cancel_on_close(fut, cancel_token), cancel)
-    }
 }
 
 impl<T> Future for NoGIL<T>
@@ -76,7 +63,7 @@ where
 
     #[inline]
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.project();
+        let this = self.get_mut();
         // A Python throw must win even when the Tokio task has already finished.
         if let Poll::Ready(exc) = this.cancel.poll_cancelled(cx) {
             this.handle.abort();
@@ -87,44 +74,29 @@ where
 
         let waker = cx.waker();
         Python::attach(|py| {
-            py.detach(
-                || match poll_with_guard(this.handle, &mut Context::from_waker(waker)) {
+            py.detach(|| {
+                match poll_with_guard(Pin::new(&mut this.handle), &mut Context::from_waker(waker)) {
                     Poll::Ready(Ok(result)) => Poll::Ready(result),
                     Poll::Ready(Err(e)) => Poll::Ready(Err(PyRuntimeError::new_err(e.to_string()))),
                     Poll::Pending => Poll::Pending,
-                },
-            )
+                }
+            })
         })
-    }
-}
-
-/// Cancel pending requests and reject new work after their client is closed.
-pub async fn cancel_on_close<F, T>(future: F, cancel: CancellationToken) -> PyResult<T>
-where
-    F: Future<Output = PyResult<T>>,
-{
-    tokio::select! {
-        biased;
-        _ = cancel.cancelled() => Err(CancelledError::new_err("Operation was cancelled: client has been closed")),
-        result = future => result,
     }
 }
 
 /// Run network work on its selected worker; only wait for completion on the caller.
 /// The caller must be detached from Python and outside an async Tokio context.
+/// Its runtime borrow keeps the workers alive until the join completes.
 pub fn block_on<F, T>(runtime: &Runtime, future: F) -> PyResult<T>
 where
     F: Future<Output = PyResult<T>> + Send + 'static,
     T: Send + 'static,
 {
-    let owner = runtime.clone();
-    let task = runtime.handle().spawn(async move {
-        let _owner = owner;
-        future.await
-    });
+    let task = runtime.handle().spawn(future);
     runtime
         .handle()
-        .block_on(AbortOnDropHandle::new(task))
+        .block_on(task)
         .map_err(|err| PyRuntimeError::new_err(err.to_string()))?
 }
 

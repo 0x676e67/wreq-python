@@ -108,7 +108,7 @@ impl WebSocket {
         timeout: Option<Duration>,
     ) -> PyResult<Option<Message>> {
         let tx = self.cmd.clone();
-        NoGIL::new(&self.runtime, cmd::recv(tx, timeout), cancel).await
+        NoGIL::with_cancel(&self.runtime, cmd::recv(tx, timeout), cancel).await
     }
 
     /// Send a message to the WebSocket.
@@ -119,7 +119,7 @@ impl WebSocket {
         message: Message,
     ) -> PyResult<()> {
         let tx = self.cmd.clone();
-        NoGIL::new(&self.runtime, cmd::send(tx, message), cancel).await
+        NoGIL::with_cancel(&self.runtime, cmd::send(tx, message), cancel).await
     }
 
     /// Send multiple messages to the WebSocket.
@@ -130,7 +130,7 @@ impl WebSocket {
         messages: Vec<Message>,
     ) -> PyResult<()> {
         let tx = self.cmd.clone();
-        NoGIL::new(&self.runtime, cmd::send_all(tx, messages), cancel).await
+        NoGIL::with_cancel(&self.runtime, cmd::send_all(tx, messages), cancel).await
     }
 
     /// Close the WebSocket connection.
@@ -142,7 +142,7 @@ impl WebSocket {
         reason: Option<PyBackedStr>,
     ) -> PyResult<()> {
         let tx = self.cmd.clone();
-        NoGIL::new(&self.runtime, cmd::close(tx, code, reason), cancel).await
+        NoGIL::with_cancel(&self.runtime, cmd::close(tx, code, reason), cancel).await
     }
 }
 
@@ -161,12 +161,7 @@ impl WebSocket {
         _traceback: Py<PyAny>,
     ) -> PyResult<()> {
         let tx = self.cmd.clone();
-        NoGIL::new(
-            &self.runtime,
-            cmd::close(tx, None, None),
-            CancelHandle::new(),
-        )
-        .await
+        NoGIL::new(&self.runtime, cmd::close(tx, None, None)).await
     }
 }
 

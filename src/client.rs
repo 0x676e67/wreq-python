@@ -613,11 +613,10 @@ impl Client {
         url: PyBackedStr,
         kwds: Option<Request>,
     ) -> PyResult<Response> {
-        NoGIL::new_with_token(
+        NoGIL::with_cancel(
             &self.runtime,
             execute_request(self.clone(), method, url, kwds),
             cancel,
-            self.cancel.clone(),
         )
         .await
     }
@@ -631,11 +630,10 @@ impl Client {
         url: PyBackedStr,
         kwds: Option<WebSocketRequest>,
     ) -> PyResult<WebSocket> {
-        NoGIL::new_with_token(
+        NoGIL::with_cancel(
             &self.runtime,
             execute_websocket_request(self.clone(), url, kwds),
             cancel,
-            self.cancel.clone(),
         )
         .await
     }
@@ -794,10 +792,7 @@ impl BlockingClient {
         py.detach(|| {
             nogil::block_on(
                 &self.0.runtime,
-                nogil::cancel_on_close(
-                    execute_request(self.0.clone(), method, url, kwds),
-                    self.0.cancel.clone(),
-                ),
+                execute_request(self.0.clone(), method, url, kwds),
             )
             .map(Into::into)
         })
@@ -814,10 +809,7 @@ impl BlockingClient {
         py.detach(|| {
             nogil::block_on(
                 &self.0.runtime,
-                nogil::cancel_on_close(
-                    execute_websocket_request(self.0.clone(), url, kwds),
-                    self.0.cancel.clone(),
-                ),
+                execute_websocket_request(self.0.clone(), url, kwds),
             )
             .map(Into::into)
         })
