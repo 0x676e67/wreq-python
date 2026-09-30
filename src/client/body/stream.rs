@@ -332,6 +332,11 @@ impl Stream for PyAsyncStream {
         let this = self.get_mut();
         match this.rx.poll_recv(cx) {
             Poll::Ready(Some(Some(item))) => Poll::Ready(Some(item)),
+            Poll::Ready(Some(None)) => {
+                this.rx.close();
+                this.task.take();
+                Poll::Ready(None)
+            }
             Poll::Ready(_) => {
                 this.rx.close();
                 Poll::Ready(None)
