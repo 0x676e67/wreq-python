@@ -12,13 +12,15 @@ async def main():
     print("Cookies: ", resp.cookies)
     print("Content-Length: ", resp.content_length)
     print("Remote Address: ", resp.remote_addr)
-    print("Headers set-cookie: ", resp.headers["set-cookie"])
+    set_cookie = resp.headers["set-cookie"]
+    if set_cookie is not None:
+        print("Headers set-cookie: ", str(set_cookie, "latin-1"))
 
-    for key in resp.headers:
-        print(key)
+    for key in resp.headers.keys():
+        print(str(key, "ascii"))
 
     for key, value in resp.headers:
-        print(f"{key}: {value}")
+        print(f"{str(key, 'ascii')}: {str(value, 'latin-1')}")
 
     for cookie in resp.cookies:
         print(cookie)

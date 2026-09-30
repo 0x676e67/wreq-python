@@ -7,13 +7,7 @@ use std::{
 use bytes::Bytes;
 use futures_util::{FutureExt, Stream, future::poll_fn};
 use http_body_util::BodyExt;
-use pyo3::{
-    coroutine::CancelHandle,
-    intern,
-    prelude::*,
-    pybacked::{PyBackedBytes, PyBackedStr},
-    sync::PyOnceLock,
-};
+use pyo3::{coroutine::CancelHandle, intern, prelude::*, sync::PyOnceLock};
 use tokio::{
     sync::{Mutex, mpsc},
     task::JoinHandle,
@@ -23,6 +17,7 @@ use crate::{
     buffer::PyBuffer,
     client::nogil::{self, NoGIL},
     error::Error,
+    extractor::{BytesInput, StrInput},
     header::HeaderMap,
     runtime::Runtime,
 };
@@ -38,11 +33,11 @@ enum PyStreamSource {
 /// A bytes-like object that can be extracted from Python.
 #[derive(FromPyObject)]
 pub enum PyBytesLike {
-    Bytes(PyBackedBytes),
-    String(PyBackedStr),
+    Bytes(BytesInput),
+    String(StrInput),
 }
 
-/// A bytes-like object that can be into Python.
+/// A response frame exposed as a read-only memoryview or a header map.
 #[derive(IntoPyObject)]
 pub enum Frame {
     Bytes(PyBuffer),
@@ -58,14 +53,14 @@ pub struct PyStream {
 /// Adapts a Python async generator into a byte stream with bounded buffering.
 /// Dropping the stream cancels its producer on the Python event loop.
 struct PyAsyncStream {
-    rx: mpsc::Receiver<PyResult<PyBytesLike>>,
+    rx: mpsc::Receiver<Option<PyResult<PyBytesLike>>>,
     task: Option<(Py<PyAny>, Py<PyAny>)>,
 }
 
 #[pyclass(frozen)]
-struct Sender(mpsc::Sender<PyResult<PyBytesLike>>);
+struct Sender(mpsc::Sender<Option<PyResult<PyBytesLike>>>);
 
-/// A bytes stream response.
+/// A response stream yielding read-only memoryviews and any trailing headers.
 #[derive(Clone)]
 #[pyclass(subclass, frozen, skip_from_py_object)]
 pub struct Streamer(Arc<Mutex<Option<wreq::Response>>>, Runtime);
@@ -201,8 +196,8 @@ impl From<PyBytesLike> for Bytes {
     #[inline]
     fn from(value: PyBytesLike) -> Self {
         match value {
-            PyBytesLike::Bytes(b) => Bytes::from_owner(b),
-            PyBytesLike::String(s) => Bytes::from_owner(s),
+            PyBytesLike::Bytes(b) => b.0,
+            PyBytesLike::String(s) => s.0,
         }
     }
 }
@@ -304,6 +299,8 @@ async def forward(gen, sender):
         raise
     except BaseException as error:
         await sender.send(error, True)
+    else:
+        await sender.finish()
 ",
                 c"wreq/_async_stream.py",
                 c"wreq._async_stream",
@@ -332,7 +329,15 @@ impl Stream for PyAsyncStream {
     type Item = PyResult<PyBytesLike>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.get_mut().rx.poll_recv(cx)
+        let this = self.get_mut();
+        match this.rx.poll_recv(cx) {
+            Poll::Ready(Some(Some(item))) => Poll::Ready(Some(item)),
+            Poll::Ready(_) => {
+                this.rx.close();
+                Poll::Ready(None)
+            }
+            Poll::Pending => Poll::Pending,
+        }
     }
 }
 
@@ -364,7 +369,7 @@ impl Sender {
         &self,
         item: Py<PyAny>,
         error: bool,
-        #[pyo3(cancel_handle)] mut cancel: CancelHandle,
+        #[pyo3(cancel_handle)] cancel: CancelHandle,
     ) -> PyResult<bool> {
         let item = Python::attach(|py| {
             if error {
@@ -373,6 +378,21 @@ impl Sender {
                 item.extract(py).map(Ok)
             }
         })?;
+        self.send_item(Some(item), cancel).await
+    }
+
+    async fn finish(&self, #[pyo3(cancel_handle)] cancel: CancelHandle) -> PyResult<bool> {
+        // Python may retain the sender after completion, especially on PyPy.
+        self.send_item(None, cancel).await
+    }
+}
+
+impl Sender {
+    async fn send_item(
+        &self,
+        item: Option<PyResult<PyBytesLike>>,
+        mut cancel: CancelHandle,
+    ) -> PyResult<bool> {
         let item = match self.0.try_send(item) {
             Ok(()) => return Ok(true),
             Err(mpsc::error::TrySendError::Closed(_)) => return Ok(false),

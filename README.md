@@ -178,3 +178,15 @@ Captcha solving can be slow and unreliable, but **[EzCaptcha](https://www.ez-cap
 Designed for developers, it offers high accuracy, low price, low latency, and easy integration, helping you automate verification while keeping traffic secure and user flows smooth.
 
 **[Dashboard](https://www.ez-captcha.com/?r=github-rnet)** | **[Docs](https://ezcaptcha.atlassian.net/wiki/spaces/IS/pages/7045121/EzCaptcha+API+Docs+English)** | **[Telegram](https://t.me/+NrVmPhlb9ZFkZGY5)**
+
+---
+
+<a href="https://hypersolutions.co/?utm_source=github&utm_medium=readme&utm_campaign=rnet" target="_blank"><img src="https://raw.githubusercontent.com/0x676e67/wreq-python/main/.github/assets/hypersolutions.jpg" height="47" width="149"></a>
+
+TLS fingerprinting alone isn't enough for modern bot protection. **[Hyper Solutions](https://hypersolutions.co?utm_source=github&utm_medium=readme&utm_campaign=rnet)** provides the missing piece - API endpoints that generate valid antibot tokens for:
+
+**Akamai** • **DataDome** • **Kasada** • **Incapsula**
+
+No browser automation. Just simple API calls that return the exact cookies and headers these systems require.
+
+**[Dashboard](https://hypersolutions.co?utm_source=github&utm_medium=readme&utm_campaign=rnet)** | **[Docs](https://docs.justhyped.dev)** | **[Discord](https://discord.gg/akamai)**

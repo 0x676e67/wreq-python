@@ -1,5 +1,6 @@
 import asyncio
 import gc
+import sys
 import weakref
 from contextlib import asynccontextmanager
 
@@ -10,6 +11,116 @@ import wreq
 
 class Cancellation(asyncio.CancelledError):
     pass
+
+
+@pytest.mark.skipif(
+    sys.implementation.name != "pypy", reason="PyPy legacy throw protocol"
+)
+def test_legacy_coroutine_throw():
+    from wreq._compat import _install
+
+    try:
+        raise RuntimeError("traceback origin")
+    except RuntimeError as error:
+        origin = error.__traceback__
+
+    def contains(traceback):
+        while traceback is not None:
+            if traceback is origin:
+                return True
+            traceback = traceback.tb_next
+        return False
+
+    def invoke(*args, **kwargs):
+        coroutine = wreq.get("")
+        try:
+            coroutine.throw(*args, **kwargs)
+        except BaseException as error:
+            return error
+        finally:
+            coroutine.close()
+        pytest.fail("throw did not raise")
+
+    class ExceptionValue(ValueError):
+        def with_traceback(self, *_):
+            raise AssertionError("overridden method must not run")
+
+    for instance_first in (False, True):
+        for traceback in (None, origin):
+            error = ExceptionValue("identity")
+            BaseException.with_traceback(error, origin)
+            args = (
+                (error, None, traceback)
+                if instance_first
+                else (ExceptionValue, error, traceback)
+            )
+            caught = invoke(*args)
+            assert caught is error
+            assert caught.args == ("identity",)
+            assert contains(caught.__traceback__) is (
+                instance_first or traceback is not None
+            )
+
+    assert invoke(ValueError, ("tuple", 7)).args == ("tuple", 7)
+    error = ValueError("keyword")
+    assert invoke(exc=error) is error
+
+    class PretendException:
+        @property
+        def __class__(self):
+            return ValueError
+
+    value = PretendException()
+    assert invoke(ValueError, value).args == (value,)
+
+    class ExceptionMeta(type):
+        def __subclasscheck__(cls, subclass):
+            return True
+
+    class CustomException(Exception, metaclass=ExceptionMeta):
+        pass
+
+    assert type(invoke(CustomException, value)) is CustomException
+    assert invoke(CustomException, value).args == (value,)
+
+    class HiddenTraceback(RuntimeError):
+        def __getattribute__(self, name):
+            if name == "__traceback__":
+                return None
+            return super().__getattribute__(name)
+
+    class BadConstructor(Exception):
+        def __new__(cls):
+            raise HiddenTraceback("constructor failure")
+
+    class NotAnException(Exception):
+        def __new__(cls):
+            return PretendException()
+
+    caught = invoke(BadConstructor, None, origin)
+    assert type(caught) is HiddenTraceback
+    assert caught.args == ("constructor failure",)
+    assert not contains(BaseException.__traceback__.__get__(caught))
+    assert type(invoke(NotAnException)) is TypeError
+
+    coroutine = wreq.get("")
+    try:
+        installed = vars(type(coroutine))["throw"]
+        _install(type(coroutine))
+        assert vars(type(coroutine))["throw"] is installed
+        for args in (
+            (object(),),
+            (ValueError, None, object()),
+            (error, "value"),
+            (ValueError,) * 4,
+        ):
+            with pytest.raises(TypeError):
+                coroutine.throw(*args)
+        with pytest.raises(ValueError) as caught:
+            coroutine.throw(error)
+        assert caught.value is error
+    finally:
+        coroutine.close()
 
 
 @asynccontextmanager

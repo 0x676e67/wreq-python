@@ -9,9 +9,11 @@ if __name__ == "__main__":
     # Add Accept header (second value)
     headers.insert("Accept", "text/html")
     # Get all values for 'Accept' header
-    print("All Accept:", list(headers.get_all("Accept")))
+    print("All Accept:", [str(value, "ascii") for value in headers.get_all("Accept")])
     # Get the value for 'Content-Type' header
-    print("Content-Type:", headers.get("Content-Type"))
+    content_type = headers.get("Content-Type")
+    if content_type is not None:
+        print("Content-Type:", str(content_type, "ascii"))
     # Print total number of values in the map
     print("len (all values):", headers.len())
     # Print number of unique keys in the map

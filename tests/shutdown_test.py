@@ -94,6 +94,7 @@ def test_shutdown_wake_without_panic(operation):
 def test_unconsumed_upload_cleanup():
     script = """
 import asyncio
+import gc
 import wreq
 
 async def main(retain):
@@ -123,6 +124,9 @@ async def main(retain):
     finally:
         if not retain:
             del part
+            # PyPy does not destroy native objects immediately after del.
+            for _ in range(3):
+                gc.collect()
             await asyncio.wait_for(closed.wait(), 5)
 
 for retain in (False, True):

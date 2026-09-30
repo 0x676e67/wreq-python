@@ -1,11 +1,23 @@
 import asyncio
 import contextvars
+import gc
 import threading
 
 import pytest
 import wreq
 
 from cancellation_test import local_server
+
+
+@pytest.fixture
+def no_automatic_gc():
+    enabled = gc.isenabled()
+    gc.disable()
+    try:
+        yield
+    finally:
+        if enabled:
+            gc.enable()
 
 
 async def read_chunked(reader):
@@ -21,7 +33,7 @@ async def read_chunked(reader):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("multipart", [False, True])
-async def test_async_upload(multipart):
+async def test_async_upload(multipart, no_automatic_gc):
     context = contextvars.ContextVar("upload_context", default="missing")
     context.set("caller")
     thread = threading.get_ident()

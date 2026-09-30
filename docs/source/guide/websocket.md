@@ -4,6 +4,8 @@
     - HTTP/1.1 WebSocket
     - HTTP/2 WebSocket
 
+`Message.data`, `.binary`, `.ping`, and `.pong` return read-only `memoryview` objects when present. The views remain valid after the message is deleted or the connection is closed. Use `bytes(view)` when a consumer requires a `bytes` object; `Message.text` still returns a string.
+
 ### HTTP/1.1 WebSocket Connection
 
 ```python

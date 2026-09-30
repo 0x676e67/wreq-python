@@ -187,6 +187,8 @@ if __name__ == "__main__":
 ### Streaming Response
 
 ```python
+import sys
+
 from wreq.blocking import Client
 
 
@@ -196,9 +198,14 @@ def main():
     with resp:
         with resp.stream() as streamer:
             for chunk in streamer:
-                print(chunk)
+                if isinstance(chunk, memoryview):
+                    sys.stdout.buffer.write(chunk)
+                else:
+                    print("Trailers:", chunk)
 
 
 if __name__ == "__main__":
     main()
 ```
+
+Data chunks are read-only `memoryview` objects that stay valid after the stream is closed. `resp.bytes()` returns the same type. Pass views directly to APIs that accept the buffer protocol; use `bytes(view)` or `view.tobytes()` only when you need a copy.

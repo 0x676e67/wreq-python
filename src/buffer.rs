@@ -18,29 +18,26 @@
 use std::os::raw::c_int;
 
 use bytes::Bytes;
-use pyo3::{ffi, prelude::*};
+use pyo3::{exceptions::PyOverflowError, ffi, prelude::*, types::PyMemoryView};
 use wreq::header::{HeaderCaseName, HeaderName, HeaderValue};
 
-/// [`PyBuffer`] enables zero-copy conversion of Rust [`Bytes`] to Python bytes.
+/// Exposes owned Rust bytes as a read-only Python memoryview without copying.
 pub struct PyBuffer(BufferView);
 
 #[pyclass(frozen, skip_from_py_object)]
 struct BufferView(Bytes);
 
-// ===== PyBuffer =====
+// ===== impl PyBuffer =====
 
 impl<'a> IntoPyObject<'a> for PyBuffer {
-    type Target = PyAny;
+    type Target = PyMemoryView;
     type Output = Bound<'a, Self::Target>;
     type Error = PyErr;
 
     #[inline(always)]
     fn into_pyobject(self, py: Python<'a>) -> Result<Self::Output, Self::Error> {
         let buffer = self.0.into_pyobject(py)?;
-        #[allow(unsafe_code)]
-        unsafe {
-            Bound::from_owned_ptr_or_err(py, ffi::PyBytes_FromObject(buffer.as_ptr()))
-        }
+        PyMemoryView::from(buffer.as_any())
     }
 }
 
@@ -85,10 +82,12 @@ impl From<HeaderValue> for PyBuffer {
     }
 }
 
-// ===== BufferView =====
+// ===== impl BufferView =====
 
 #[pymethods]
 impl BufferView {
+    /// # Safety
+    /// `view` must be a writable `Py_buffer` supplied by the Python buffer protocol.
     #[allow(unsafe_code)]
     unsafe fn __getbuffer__(
         slf: PyRef<Self>,
@@ -96,13 +95,16 @@ impl BufferView {
         flags: c_int,
     ) -> PyResult<()> {
         let bytes = &slf.0;
+        let len = ffi::Py_ssize_t::try_from(bytes.len())
+            .map_err(|_| PyOverflowError::new_err("buffer length exceeds Python's maximum size"))?;
+        // SAFETY: PyO3 supplies a valid output buffer. FillInfo retains the exporter,
+        // which owns immutable Bytes for the lifetime of this read-only buffer.
         let ret = unsafe {
-            // Fill the Py_buffer struct with information about the buffer
             ffi::PyBuffer_FillInfo(
                 view,
                 slf.as_ptr() as *mut _,
                 bytes.as_ptr() as *mut _,
-                bytes.len() as _,
+                len,
                 1,
                 flags,
             )
@@ -111,5 +113,45 @@ impl BufferView {
             return Err(PyErr::fetch(slf.py()));
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pyo3::{
+        buffer::PyBuffer as PythonBuffer,
+        types::{PyBytes, PyString},
+    };
+
+    use super::*;
+    use crate::extractor::{BytesInput, StrInput};
+
+    #[test]
+    fn memoryview_shares_owned_bytes() {
+        Python::initialize();
+        Python::attach(|py| {
+            let bytes = Bytes::from(vec![0, 1, 255]);
+            let ptr = bytes.as_ptr();
+            let view = PyBuffer::from(bytes).into_pyobject(py).unwrap();
+            let buffer = PythonBuffer::<u8>::get(view.as_any()).unwrap();
+
+            assert_eq!(buffer.buf_ptr().cast_const().cast::<u8>(), ptr);
+            assert!(buffer.readonly());
+            assert_eq!(buffer.to_vec(py).unwrap(), [0, 1, 255]);
+
+            let binary = PyBytes::new(py, b"builtin bytes");
+            let input = binary.extract::<BytesInput>().unwrap();
+            assert_eq!(input.0.as_ptr(), binary.as_bytes().as_ptr());
+            let view = PyBuffer::from(input.0).into_pyobject(py).unwrap();
+            let buffer = PythonBuffer::<u8>::get(view.as_any()).unwrap();
+            assert_eq!(
+                buffer.buf_ptr().cast_const().cast::<u8>(),
+                binary.as_bytes().as_ptr()
+            );
+
+            let text = PyString::new(py, "builtin text");
+            let input = text.extract::<StrInput>().unwrap();
+            assert_eq!(input.0.as_ptr(), text.to_str().unwrap().as_ptr());
+        });
     }
 }

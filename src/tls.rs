@@ -426,7 +426,7 @@ pub struct TlsInfo(pub wreq::tls::TlsInfo);
 
 #[pymethods]
 impl TlsInfo {
-    /// Get the DER encoded leaf certificate of the peer.
+    /// Get a read-only memoryview of the peer's DER-encoded leaf certificate.
     #[inline]
     pub fn peer_certificate(&self) -> Option<PyBuffer> {
         self.0

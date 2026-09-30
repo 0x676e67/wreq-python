@@ -5,24 +5,20 @@ mod json;
 pub mod multipart;
 mod stream;
 
-use bytes::Bytes;
-use pyo3::{
-    FromPyObject, PyResult,
-    prelude::*,
-    pybacked::{PyBackedBytes, PyBackedStr},
-};
+use pyo3::{FromPyObject, PyResult, prelude::*};
 
 pub use self::{
     form::Form,
     json::Json,
     stream::{PyStream, Streamer},
 };
+use crate::extractor::{BytesInput, StrInput};
 
 /// Represents the body of an HTTP request.
 #[derive(FromPyObject)]
 pub enum Body {
-    Text(PyBackedStr),
-    Bytes(PyBackedBytes),
+    Text(StrInput),
+    Bytes(BytesInput),
     Form(Form),
     Json(Json),
     Stream(PyStream),
@@ -41,8 +37,8 @@ impl TryFrom<Body> for wreq::Body {
                 .map_err(crate::Error::Json)
                 .map(wreq::Body::from)
                 .map_err(Into::into),
-            Body::Text(s) => Ok(wreq::Body::from(Bytes::from_owner(s))),
-            Body::Bytes(bytes) => Ok(wreq::Body::from(Bytes::from_owner(bytes))),
+            Body::Text(s) => Ok(wreq::Body::from(s.0)),
+            Body::Bytes(bytes) => Ok(wreq::Body::from(bytes.0)),
             Body::Stream(stream) => Ok(wreq::Body::wrap_stream(stream)),
         }
     }
