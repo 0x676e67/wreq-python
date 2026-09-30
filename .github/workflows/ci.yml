@@ -129,8 +129,10 @@ jobs:
             *) echo "Expected a pp311 wheel, got: $wheel"; exit 1 ;;
           esac
       - name: Run tests
-        run: .venv-pypy/bin/python -m pytest
+        timeout-minutes: 15
+        run: .venv-pypy/bin/python -u -m pytest -vv -x -o faulthandler_timeout=60
       - name: Upload wheel
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: wheels-linux-x86_64-pypy311
