@@ -7,7 +7,9 @@ use std::{
 use bytes::Bytes;
 use futures_util::{FutureExt, Stream, future::poll_fn};
 use http_body_util::BodyExt;
-use pyo3::{coroutine::CancelHandle, intern, prelude::*, sync::PyOnceLock};
+use pyo3::{
+    coroutine::CancelHandle, exceptions::PyStopIteration, intern, prelude::*, sync::PyOnceLock,
+};
 use tokio::{
     sync::{Mutex, mpsc},
     task::JoinHandle,
@@ -247,10 +249,10 @@ impl Stream for PyStream {
                 // Acquiring the interpreter must not block a Tokio worker.
                 let ob = ob.clone();
                 tokio::task::spawn_blocking(move || {
-                    Python::try_attach(|py| {
-                        ob.call_method0(py, intern!(py, "__next__"))
-                            .ok()
-                            .map(|ob| ob.extract(py))
+                    Python::try_attach(|py| match ob.call_method0(py, intern!(py, "__next__")) {
+                        Ok(ob) => Some(ob.extract(py)),
+                        Err(err) if err.is_instance_of::<PyStopIteration>(py) => None,
+                        Err(err) => Some(Err(err)),
                     })
                     // Once Python is unavailable, stop reading without creating
                     // a PyErr that could require another attachment to format.
