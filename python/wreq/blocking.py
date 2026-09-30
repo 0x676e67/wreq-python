@@ -89,7 +89,7 @@ class Response:
 
     def stream(self) -> Streamer:
         r"""
-        Get the response into a `Streamer` of `bytes` from the body.
+        Stream the body as read-only memoryviews, with HeaderMap frames for trailers.
         """
         ...
 
@@ -104,9 +104,11 @@ class Response:
         Get the JSON content of the response.
         """
 
-    def bytes(self) -> bytes:
+    def bytes(self) -> memoryview:
         r"""
-        Get the bytes content of the response.
+        Read the body as a read-only memoryview without copying it into Python bytes.
+        The view remains valid after the response is closed or deleted.
+        Use bytes(view) or view.tobytes() for a copy; view.release() releases this view.
         """
         ...
 

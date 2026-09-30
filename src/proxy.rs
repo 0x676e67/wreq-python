@@ -1,8 +1,7 @@
-use bytes::Bytes;
 use pyo3::{prelude::*, pybacked::PyBackedStr};
 use wreq::header::HeaderValue;
 
-use crate::{error::Error, header::HeaderMap};
+use crate::{error::Error, extractor::StrInput, header::HeaderMap};
 
 /// A builder for `Proxy`.
 #[derive(Default)]
@@ -14,7 +13,7 @@ struct Builder {
     password: Option<PyBackedStr>,
 
     // Optional custom HTTP authentication header.
-    custom_http_auth: Option<PyBackedStr>,
+    custom_http_auth: Option<StrInput>,
 
     /// Optional custom HTTP headers for the proxy.
     custom_http_headers: Option<HeaderMap>,
@@ -114,7 +113,7 @@ fn create_proxy<'py>(
             // Convert the custom HTTP auth string to a header value.
             if let Some(Ok(custom_http_auth)) = builder
                 .custom_http_auth
-                .map(Bytes::from_owner)
+                .map(|value| value.0)
                 .map(HeaderValue::from_maybe_shared)
             {
                 proxy = proxy.custom_http_auth(custom_http_auth);

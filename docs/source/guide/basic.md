@@ -140,13 +140,17 @@ headers.append("Accept", "application/json")
 headers.append("Accept", "text/html")
  
 # Retrieve a single value
-print(headers.get("Content-Type"))
+content_type = headers.get("Content-Type")
+if content_type is not None:
+    print(str(content_type, "ascii"))
 # application/json
  
 # Retrieve all values for a multi-value header
-print(list(headers.get_all("Accept")))
+print([str(value, "ascii") for value in headers.get_all("Accept")])
 # ['application/json', 'text/html']
 ```
+
+Header names and values are read-only `memoryview` objects. Decode text with `str(view, encoding)` without first copying it into `bytes`.
  
 Pass the `HeaderMap` to any request method via the `headers` argument:
  
@@ -161,16 +165,21 @@ response = await wreq.get("https://httpbin.org/headers", headers=headers)
 For large responses, you can read the body incrementally instead of loading it all into memory at once. Use `resp.stream()` as an async iterator:
  
 ```python
-from wreq import Client
+import sys
+
+from wreq import Client, HeaderMap
  
 async def main():
     client = Client()
     response = await client.get("https://httpbin.org/stream/10")
  
     async for chunk in response.stream():
-        print(chunk.decode("utf-8"))
+        if isinstance(chunk, memoryview):
+            sys.stdout.buffer.write(chunk)
+        elif isinstance(chunk, HeaderMap):
+            print("Trailers:", chunk)
 ```
  
-Each `chunk` is a `bytes` object. Decode it to a string only if you know the response body is text.
+Data chunks are read-only `memoryview` objects; trailer frames are `HeaderMap` objects. The example writes data directly through the buffer protocol. Each view stays valid after the stream is closed. See [Binary data](../getting-started/quickstart.md#binary-data) for copying and releasing views.
  
 ---

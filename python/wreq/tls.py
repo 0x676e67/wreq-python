@@ -446,8 +446,8 @@ class TlsInfo:
     Information about the established TLS connection.
     """
 
-    def peer_certificate(self) -> bytes | None:
+    def peer_certificate(self) -> memoryview | None:
         """
-        Get the DER encoded leaf certificate of the peer.
+        Get a read-only memoryview of the peer's DER-encoded leaf certificate.
         """
         ...

@@ -1,19 +1,22 @@
-use bytes::Bytes;
 use pyo3::{
     prelude::*,
-    pybacked::{PyBackedBytes, PyBackedStr},
+    pybacked::PyBackedStr,
     types::{PyDict, PyIterator, PyList},
 };
 use wreq::header::{self, HeaderName, HeaderValue};
 
-use crate::{buffer::PyBuffer, error::Error};
+use crate::{
+    buffer::PyBuffer,
+    error::Error,
+    extractor::{BytesInput, StrInput},
+};
 
-/// A HTTP header map.
+/// An HTTP header map whose names and values are exposed as read-only memoryviews.
 #[derive(Clone)]
 #[pyclass(subclass, str, skip_from_py_object)]
 pub struct HeaderMap(pub header::HeaderMap);
 
-/// A HTTP original header map.
+/// An HTTP original header map whose iterator exposes read-only memoryviews.
 #[derive(Clone)]
 #[pyclass(subclass, str, skip_from_py_object)]
 pub struct OrigHeaderMap(pub header::OrigHeaderMap);
@@ -43,8 +46,8 @@ impl HeaderMap {
                 };
 
                 let value = match value
-                    .extract::<PyBackedStr>()
-                    .map(Bytes::from_owner)
+                    .extract::<StrInput>()
+                    .map(|value| value.0)
                     .map(HeaderValue::from_maybe_shared)
                 {
                     Ok(Ok(v)) => v,
@@ -58,7 +61,7 @@ impl HeaderMap {
         HeaderMap(headers)
     }
 
-    /// Returns a reference to the value associated with the key.
+    /// Returns a read-only memoryview of the value associated with the key.
     ///
     /// If there are multiple values associated with the key, then the first one
     /// is returned. Use `get_all` to get all values associated with a given
@@ -68,12 +71,12 @@ impl HeaderMap {
         &self,
         py: Python<'py>,
         key: PyBackedStr,
-        default: Option<PyBackedBytes>,
+        default: Option<BytesInput>,
     ) -> Option<PyBuffer> {
         py.detach(|| {
             self.0.get::<&str>(key.as_ref()).cloned().or_else(|| {
                 match default
-                    .map(Bytes::from_owner)
+                    .map(|value| value.0)
                     .map(HeaderValue::from_maybe_shared)
                 {
                     Some(Ok(v)) => Some(v),
@@ -84,7 +87,7 @@ impl HeaderMap {
         .map(PyBuffer::from)
     }
 
-    /// Returns a view of all values associated with a key.
+    /// Returns a list of read-only memoryviews for the values associated with a key.
     #[pyo3(signature = (key))]
     fn get_all<'py>(&self, py: Python<'py>, key: PyBackedStr) -> Vec<PyBuffer> {
         py.detach(|| {
@@ -99,11 +102,11 @@ impl HeaderMap {
 
     /// Insert a key-value pair into the header map.
     #[pyo3(signature = (key, value))]
-    fn insert(&mut self, py: Python, key: PyBackedStr, value: PyBackedStr) {
+    fn insert(&mut self, py: Python, key: PyBackedStr, value: StrInput) {
         py.detach(|| {
             if let (Ok(name), Ok(value)) = (
                 HeaderName::from_bytes(key.as_bytes()),
-                HeaderValue::from_maybe_shared(Bytes::from_owner(value)),
+                HeaderValue::from_maybe_shared(value.0),
             ) {
                 self.0.insert(name, value);
             }
@@ -112,11 +115,11 @@ impl HeaderMap {
 
     /// Append a key-value pair to the header map.
     #[pyo3(signature = (key, value))]
-    fn append(&mut self, py: Python, key: PyBackedStr, value: PyBackedStr) {
+    fn append(&mut self, py: Python, key: PyBackedStr, value: StrInput) {
         py.detach(|| {
             if let (Ok(name), Ok(value)) = (
                 HeaderName::from_bytes(key.as_bytes()),
-                HeaderValue::from_maybe_shared(Bytes::from_owner(value)),
+                HeaderValue::from_maybe_shared(value.0),
             ) {
                 self.0.append(name, value);
             }
@@ -137,7 +140,7 @@ impl HeaderMap {
         py.detach(|| self.0.contains_key::<&str>(key.as_ref()))
     }
 
-    /// An iterator visiting all keys.
+    /// Returns a list of read-only memoryviews for all keys.
     #[inline]
     fn keys<'py>(&self, py: Python<'py>) -> Vec<PyBuffer> {
         py.detach(|| {
@@ -149,7 +152,7 @@ impl HeaderMap {
         })
     }
 
-    ///  An iterator visiting all values.
+    /// Returns a list of read-only memoryviews for all values.
     #[inline]
     fn values<'py>(&self, py: Python<'py>) -> Vec<PyBuffer> {
         py.detach(|| {
@@ -201,7 +204,7 @@ impl HeaderMap {
     }
 
     #[inline]
-    fn __setitem__(&mut self, py: Python, key: PyBackedStr, value: PyBackedStr) {
+    fn __setitem__(&mut self, py: Python, key: PyBackedStr, value: StrInput) {
         self.insert(py, key, value);
     }
 
@@ -253,9 +256,8 @@ impl FromPyObject<'_, '_> for HeaderMap {
                     };
 
                     let value = {
-                        let value = value.extract::<PyBackedStr>()?;
-                        HeaderValue::from_maybe_shared(Bytes::from_owner(value))
-                            .map_err(Error::from)?
+                        let value = value.extract::<StrInput>()?;
+                        HeaderValue::from_maybe_shared(value.0).map_err(Error::from)?
                     };
 
                     headers.insert(name, value);
@@ -282,8 +284,8 @@ impl OrigHeaderMap {
         // and we want to prevent Python's garbage collector from managing it.
         if let Some(init) = init {
             for name in init.iter() {
-                let name = match name.extract::<PyBackedStr>() {
-                    Ok(n) => Bytes::from_owner(n),
+                let name = match name.extract::<StrInput>() {
+                    Ok(name) => name.0,
                     _ => continue,
                 };
 
@@ -304,8 +306,8 @@ impl OrigHeaderMap {
     /// updated, though; this matters for types that can be `==` without being
     /// identical.
     #[inline]
-    pub fn insert(&mut self, value: PyBackedStr) -> bool {
-        self.0.insert(Bytes::from_owner(value))
+    pub fn insert(&mut self, value: StrInput) -> bool {
+        self.0.insert(value.0)
     }
 
     /// Extends the map with all entries from another [`OrigHeaderMap`], preserving order.
@@ -354,8 +356,8 @@ impl FromPyObject<'_, '_> for OrigHeaderMap {
                 header::OrigHeaderMap::with_capacity(list.len()),
                 |mut headers, name| {
                     let name = {
-                        let name = name.extract::<PyBackedStr>()?;
-                        Bytes::from_owner(name)
+                        let name = name.extract::<StrInput>()?;
+                        name.0
                     };
                     headers.insert(name);
                     Ok(headers)

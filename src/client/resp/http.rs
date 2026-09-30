@@ -209,7 +209,7 @@ impl Response {
             .map_err(Into::into)
     }
 
-    /// Get the response into a `Stream` of `Bytes` from the body.
+    /// Stream read-only memoryviews and any trailing headers from the body.
     pub fn stream(&self) -> PyResult<Streamer> {
         self.stream_response()
             .map(Streamer::new)
@@ -239,7 +239,7 @@ impl Response {
         NoGIL::new(fut, cancel).await
     }
 
-    /// Get the bytes content of the response.
+    /// Read the body as a read-only memoryview, retaining its data after the response closes.
     pub async fn bytes(&self, #[pyo3(cancel_handle)] cancel: CancelHandle) -> PyResult<PyBuffer> {
         let fut = self
             .cache_response()
@@ -366,7 +366,7 @@ impl BlockingResponse {
         self.0.raise_for_status()
     }
 
-    /// Get the response into a `Stream` of `Bytes` from the body.
+    /// Stream read-only memoryviews and any trailing headers from the body.
     #[inline]
     pub fn stream(&self) -> PyResult<Streamer> {
         self.0.stream()
@@ -397,7 +397,7 @@ impl BlockingResponse {
         })
     }
 
-    /// Get the bytes content of the response.
+    /// Read the body as a read-only memoryview, retaining its data after the response closes.
     pub fn bytes(&self, py: Python) -> PyResult<PyBuffer> {
         py.detach(|| {
             let fut = self

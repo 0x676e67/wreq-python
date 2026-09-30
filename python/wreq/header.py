@@ -27,9 +27,12 @@ class HeaderMap:
     The implementation follows HTTP/1.1 specifications for header handling
     and provides both dictionary-like access and specialized methods for
     HTTP header manipulation.
+
+    Header names and values are returned as read-only memoryviews.
+    Each view retains its backing data even if the map is changed or deleted.
     """
 
-    def __getitem__(self, key: str) -> bytes | None:
+    def __getitem__(self, key: str) -> memoryview | None:
         """Get the first value for a header name (case-insensitive)."""
         ...
 
@@ -49,7 +52,7 @@ class HeaderMap:
         """Return the total number of header values (not unique names)."""
         ...
 
-    def __iter__(self) -> Iterator[Tuple[bytes, bytes]]:
+    def __iter__(self) -> Iterator[Tuple[memoryview, memoryview]]:
         """Iterate all header(name, value) pairs, including duplicates for multiple values."""
         ...
 
@@ -140,7 +143,7 @@ class HeaderMap:
         """
         ...
 
-    def get(self, key: str, default: bytes | None = None) -> bytes | None:
+    def get(self, key: str, default: bytes | None = None) -> memoryview | None:
         r"""
         Get the first value for a header name with optional default.
 
@@ -153,15 +156,15 @@ class HeaderMap:
             default: Value to return if header doesn't exist
 
         Returns:
-            The first header value as bytes, or the default value
+            A read-only view of the first header value, or of the default value
         """
         ...
 
-    def get_all(self, key: str) -> Iterator[bytes]:
+    def get_all(self, key: str) -> list[memoryview]:
         r"""
         Get all values for a header name.
 
-        Returns an iterator over all values associated with the header name.
+        Returns a list of read-only views of all values associated with the header name.
         This is useful for headers that can have multiple values, such as
         Set-Cookie, Accept-Encoding, or custom headers.
 
@@ -169,25 +172,25 @@ class HeaderMap:
             key: The header name (case-insensitive)
 
         Returns:
-            An iterator over all header values
+            A list of read-only header value views
         """
         ...
 
-    def values(self) -> Iterator[bytes]:
+    def values(self) -> list[memoryview]:
         """
-        Iterate over all header values.
+        Get all header values.
 
         Returns:
-            An iterator over all header values as bytes.
+            A list of read-only header value views.
         """
         ...
 
-    def keys(self) -> Iterator[bytes]:
+    def keys(self) -> list[memoryview]:
         """
-        Iterate over unique header names.
+        Get all unique header names.
 
         Returns:
-            An iterator over unique header names as bytes.
+            A list of read-only header name views.
         """
         ...
 
@@ -247,6 +250,8 @@ class OrigHeaderMap:
     The map stores a mapping between the case-insensitive (standard) header name and the
     original case-sensitive header name as it appeared in the HTTP message.
 
+    Iteration returns pairs of read-only memoryviews that retain their backing data.
+
     Example:
         If an HTTP message included the following headers:
 
@@ -277,7 +282,7 @@ class OrigHeaderMap:
         """
         ...
 
-    def __iter__(self) -> Iterator[Tuple[bytes, bytes]]:
+    def __iter__(self) -> Iterator[Tuple[memoryview, memoryview]]:
         """
         Returns an iterator over the (standard_name, original_name) pairs.
 
