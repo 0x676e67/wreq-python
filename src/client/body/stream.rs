@@ -7,7 +7,7 @@ use std::{
 use bytes::Bytes;
 use futures_util::{FutureExt, Stream, StreamExt, stream::BoxStream};
 use http_body_util::BodyExt;
-use pyo3::{coroutine::CancelHandle, intern, prelude::*};
+use pyo3::{coroutine::CancelHandle, exceptions::PyStopIteration, intern, prelude::*};
 use tokio::{sync::Mutex, task::JoinHandle};
 
 use crate::{
@@ -225,10 +225,10 @@ impl Stream for PyStream {
                     PyStreamSource::Sync(ref ob) => {
                         let ob = ob.clone();
                         runtime.spawn_blocking(move || {
-                            error::attach(|py| {
-                                ob.call_method0(py, intern!(py, "__next__"))
-                                    .ok()
-                                    .map(|ob| ob.extract(py))
+                            error::attach(|py| match ob.call_method0(py, intern!(py, "__next__")) {
+                                Ok(ob) => Some(ob.extract(py)),
+                                Err(err) if err.is_instance_of::<PyStopIteration>(py) => None,
+                                Err(err) => Some(Err(err)),
                             })
                             .unwrap_or_else(|err| Some(Err(err.into())))
                         })
