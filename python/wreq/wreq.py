@@ -430,11 +430,11 @@ class Response:
 
     async def close(self) -> None:
         r"""
-        Close the response.
-
-        This method closes the network connection regardless of whether connection pooling is
-        enabled or not. It is recommended to use async context managers (`async with` statement)
-        to properly manage response lifecycle instead of calling this method manually.
+        Discard the retained body and mark its connection as non-reusable.
+        This does not guarantee an immediate socket shutdown or cancel an active read.
+        Cancel and await any body-read task before closing. A body transferred to a
+        Streamer is managed separately; previously returned memoryviews remain valid.
+        Prefer an async context manager (`async with`) for response cleanup.
         """
 
     async def __aenter__(self) -> Any: ...

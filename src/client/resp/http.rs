@@ -249,11 +249,11 @@ impl Response {
         NoGIL::new(fut, cancel).await
     }
 
-    /// Close the response.
-    ///
-    /// This method closes the network connection regardless of whether connection pooling is
-    /// enabled or not. It is recommended to use async context managers (`async with` statement)
-    /// to properly manage response lifecycle instead of calling this method manually.
+    /// Discard the retained body and mark its connection as non-reusable.
+    /// This does not guarantee an immediate socket shutdown or cancel an active read.
+    /// Cancel and await any body-read task before closing. A body transferred to a
+    /// Streamer is managed separately; previously returned memoryviews remain valid.
+    /// Prefer an async context manager (`async with`) for response cleanup.
     pub async fn close(&self) {
         Python::attach(|py| {
             py.detach(|| {
@@ -410,11 +410,11 @@ impl BlockingResponse {
         })
     }
 
-    /// Close the response.
-    ///
-    /// This method closes the network connection regardless of whether connection pooling is
-    /// enabled or not. It is recommended to use context managers (`with` statement) to properly
-    /// manage response lifecycle instead of calling this method manually.
+    /// Discard the retained body and mark its connection as non-reusable.
+    /// This does not guarantee an immediate socket shutdown or interrupt an active read.
+    /// Do not close concurrently with a body read. A body transferred to a Streamer
+    /// is managed separately; previously returned memoryviews remain valid.
+    /// Prefer a context manager (`with`) for response cleanup.
     #[inline]
     pub fn close(&self, py: Python) {
         py.detach(|| {
