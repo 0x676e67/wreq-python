@@ -89,6 +89,11 @@ def test_subclass_input_cycles_are_collected():
     class Marker:
         pass
 
+    def collect_garbage():
+        # PyPy may need several GC cycles to finalize C-extension buffers.
+        for _ in range(3):
+            gc.collect()
+
     def header_value(source, method):
         headers = HeaderMap()
         getattr(headers, method)("X-Buffer", source)
@@ -121,7 +126,7 @@ def test_subclass_input_cycles_are_collected():
         assert_readonly_view(view, expected)
         source.view = view
         del source, view
-        gc.collect()
+        collect_garbage()
         assert marker() is None, make_view
 
     for input_type, payload, make_owner in [
@@ -135,7 +140,7 @@ def test_subclass_input_cycles_are_collected():
         owner = make_owner(source)
         source.owner = owner
         del source, owner
-        gc.collect()
+        collect_garbage()
         assert marker() is None, make_owner
 
 
