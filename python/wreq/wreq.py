@@ -289,6 +289,7 @@ class Streamer:
 
     ```python
     import asyncio
+    import sys
     import wreq
     from wreq import Method, Emulation, HeaderMap
 
@@ -297,7 +298,7 @@ class Streamer:
         async with resp.stream() as streamer:
             async for chunk in streamer:
                 if isinstance(chunk, memoryview):
-                    print("Chunk: ", bytes(chunk))
+                    sys.stdout.buffer.write(chunk)
                 elif isinstance(chunk, HeaderMap):
                     print("Trailers: ", chunk)
                 await asyncio.sleep(0.1)

@@ -14,13 +14,13 @@ async def main():
     print("Remote Address: ", resp.remote_addr)
     set_cookie = resp.headers["set-cookie"]
     if set_cookie is not None:
-        print("Headers set-cookie: ", bytes(set_cookie))
+        print("Headers set-cookie: ", str(set_cookie, "latin-1"))
 
     for key in resp.headers.keys():
-        print(bytes(key))
+        print(str(key, "ascii"))
 
     for key, value in resp.headers:
-        print(f"{bytes(key)}: {bytes(value)}")
+        print(f"{str(key, 'ascii')}: {str(value, 'latin-1')}")
 
     for cookie in resp.cookies:
         print(cookie)

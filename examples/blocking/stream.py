@@ -1,3 +1,4 @@
+import sys
 import time
 
 import wreq
@@ -9,7 +10,7 @@ def main():
         with resp.stream() as streamer:
             for chunk in streamer:
                 if isinstance(chunk, memoryview):
-                    print(bytes(chunk))
+                    sys.stdout.buffer.write(chunk)
                 else:
                     print("Trailers:", chunk)
                 time.sleep(0.1)

@@ -1,4 +1,5 @@
 import asyncio
+import sys
 import wreq
 from wreq import Response
 
@@ -9,7 +10,7 @@ async def main():
         async with resp.stream() as streamer:
             async for chunk in streamer:
                 if isinstance(chunk, memoryview):
-                    print(bytes(chunk))
+                    sys.stdout.buffer.write(chunk)
                 else:
                     print("Trailers:", chunk)
                 await asyncio.sleep(0.1)

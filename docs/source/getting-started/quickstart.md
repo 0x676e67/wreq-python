@@ -86,17 +86,28 @@ print(data)
 `response.bytes()` returns a read-only `memoryview`, not a `bytes` object. The view shares Rust-owned data without a copy into Python bytes. Reading a complete response can still allocate memory to combine body chunks.
 
 ```python
+import hashlib
+
 view = await response.bytes()
 await response.close()
 print(view.readonly)  # True; closing the response does not invalidate the view
-
-data = bytes(view)  # Copies into a Python bytes object
-view.release()
+print(hashlib.sha256(view).hexdigest())  # Reads the buffer directly
 ```
 
 The blocking API returns the same type, without `await`. Stream data frames, WebSocket binary fields, header names and values, and peer certificates also return read-only memoryviews. Each view retains its backing data even after the source object is closed or deleted.
 
-This changes the binary return type. `memoryview` supports the buffer protocol, but has no `.decode()` method or byte-string concatenation. Use `bytes(view)` or `view.tobytes()` when an API requires `bytes`; both copy the data. `view.release()` releases that view, not other views or slices sharing the data. Input types are unchanged.
+Use views directly with APIs that accept the buffer protocol, such as `file.write(view)` or `hashlib.sha256(view)`. For text, `str(view, "utf-8")` decodes into a string without an intermediate `bytes` object.
+
+#### Copying data
+
+Only convert when you need an independent `bytes` object or an API requires one:
+
+```python
+data = bytes(view)  # Copies the data; view.tobytes() also copies
+view.release()
+```
+
+This changes the binary return type. `memoryview` has no `.decode()` method or byte-string concatenation. When you finish using a view, you can call `view.release()`; this does not release other views or slices sharing the data. Input types are unchanged.
 
 When passing a view back to wreq's binary inputs (`body`, `Part`, `Message` constructors, or `CertStore`), convert it with `bytes(view)`. These inputs do not treat a memoryview as binary data.
 
@@ -107,7 +118,7 @@ Response headers are available as a [HeaderMap](../api/header/?h=HeaerMap#wreq.h
 ```python
 content_type = response.headers.get("content-type")
 if content_type is not None:
-    print(bytes(content_type).decode("ascii"))
+    print(str(content_type, "ascii"))
 # application/json
 ```
 
