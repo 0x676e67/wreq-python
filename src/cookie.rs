@@ -5,7 +5,7 @@ use cookie::{Cookie as RawCookie, Expiration, ParseError, time::Duration};
 use pyo3::{prelude::*, pybacked::PyBackedStr, types::PyDict};
 use wreq::header::{self, HeaderMap, HeaderValue};
 
-use crate::error::Error;
+use crate::{error::Error, extractor::StrInput};
 
 define_enum!(
     /// The Cookie SameSite attribute.
@@ -189,8 +189,8 @@ impl FromPyObject<'_, '_> for Cookies {
     type Error = PyErr;
 
     fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
-        if let Ok(cookie) = ob.extract::<PyBackedStr>() {
-            return HeaderValue::from_maybe_shared(Bytes::from_owner(cookie))
+        if let Ok(cookie) = ob.extract::<StrInput>() {
+            return HeaderValue::from_maybe_shared(cookie.0)
                 .map(|cookie| Cookies(vec![cookie]))
                 .map_err(Error::from)
                 .map_err(Into::into);

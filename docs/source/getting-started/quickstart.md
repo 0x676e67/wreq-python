@@ -109,6 +109,8 @@ view.release()
 
 This changes the binary return type. `memoryview` has no `.decode()` method or byte-string concatenation. When you finish using a view, you can call `view.release()`; this does not release other views or slices sharing the data. Input types are unchanged.
 
+Built-in `bytes` and `str` inputs can share their storage. Their subclasses are copied from the actual contents to avoid hidden reference cycles; deleting a view releases its ownership normally, without requiring an explicit `release()`.
+
 When passing a view back to wreq's binary inputs (`body`, `Part`, `Message` constructors, or `CertStore`), convert it with `bytes(view)`. These inputs do not treat a memoryview as binary data.
 
 ### Response headers

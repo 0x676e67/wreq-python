@@ -7,18 +7,14 @@ use std::{
 use bytes::Bytes;
 use futures_util::{FutureExt, Stream, StreamExt, stream::BoxStream};
 use http_body_util::BodyExt;
-use pyo3::{
-    coroutine::CancelHandle,
-    intern,
-    prelude::*,
-    pybacked::{PyBackedBytes, PyBackedStr},
-};
+use pyo3::{coroutine::CancelHandle, intern, prelude::*};
 use tokio::{sync::Mutex, task::JoinHandle};
 
 use crate::{
     buffer::PyBuffer,
     client::nogil::NoGIL,
     error::{self, Error},
+    extractor::{BytesInput, StrInput},
     header::HeaderMap,
 };
 
@@ -33,8 +29,8 @@ enum PyStreamSource {
 /// A bytes-like object that can be extracted from Python.
 #[derive(FromPyObject)]
 pub enum PyBytesLike {
-    Bytes(PyBackedBytes),
-    String(PyBackedStr),
+    Bytes(BytesInput),
+    String(StrInput),
 }
 
 /// A response frame exposed as a read-only memoryview or a header map.
@@ -183,8 +179,8 @@ impl From<PyBytesLike> for Bytes {
     #[inline]
     fn from(value: PyBytesLike) -> Self {
         match value {
-            PyBytesLike::Bytes(b) => Bytes::from_owner(b),
-            PyBytesLike::String(s) => Bytes::from_owner(s),
+            PyBytesLike::Bytes(b) => b.0,
+            PyBytesLike::String(s) => s.0,
         }
     }
 }

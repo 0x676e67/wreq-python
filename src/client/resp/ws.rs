@@ -4,7 +4,7 @@ pub mod msg;
 use std::{fmt::Display, time::Duration};
 
 use msg::Message;
-use pyo3::{coroutine::CancelHandle, prelude::*, pybacked::PyBackedStr};
+use pyo3::{coroutine::CancelHandle, prelude::*};
 use tokio::sync::mpsc;
 use wreq::{
     header::HeaderValue,
@@ -15,6 +15,7 @@ use crate::{
     client::{SocketAddr, nogil::NoGIL},
     cookie::Cookie,
     error::Error,
+    extractor::StrInput,
     header::HeaderMap,
     http::{StatusCode, Version},
 };
@@ -136,7 +137,7 @@ impl WebSocket {
         &self,
         #[pyo3(cancel_handle)] cancel: CancelHandle,
         code: Option<u16>,
-        reason: Option<PyBackedStr>,
+        reason: Option<StrInput>,
     ) -> PyResult<()> {
         let tx = self.cmd.clone();
         NoGIL::new(cmd::close(tx, code, reason), cancel).await
@@ -243,12 +244,7 @@ impl BlockingWebSocket {
 
     /// Close the WebSocket connection.
     #[pyo3(signature = (code=None, reason=None))]
-    pub fn close(
-        &self,
-        py: Python,
-        code: Option<u16>,
-        reason: Option<PyBackedStr>,
-    ) -> PyResult<()> {
+    pub fn close(&self, py: Python, code: Option<u16>, reason: Option<StrInput>) -> PyResult<()> {
         py.detach(|| {
             pyo3_async_runtimes::tokio::get_runtime().block_on(cmd::close(
                 self.0.cmd.clone(),

@@ -7,9 +7,8 @@
 
 use std::time::Duration;
 
-use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt, TryStreamExt};
-use pyo3::{prelude::*, pybacked::PyBackedStr};
+use pyo3::prelude::*;
 use tokio::sync::{
     mpsc::{UnboundedReceiver, UnboundedSender},
     oneshot::{self, Sender},
@@ -19,6 +18,7 @@ use super::{
     Error, Message, Utf8Bytes,
     ws::{self, WebSocket},
 };
+use crate::extractor::StrInput;
 
 /// Commands for WebSocket operations.
 pub enum Command {
@@ -40,7 +40,7 @@ pub enum Command {
     /// Close the WebSocket connection.
     ///
     /// Contains an optional close code, optional reason, and a oneshot sender for the result.
-    Close(Option<u16>, Option<PyBackedStr>, Sender<PyResult<()>>),
+    Close(Option<u16>, Option<StrInput>, Sender<PyResult<()>>),
 }
 
 /// The main background task that processes incoming [`Command`]s and interacts with the WebSocket.
@@ -97,7 +97,7 @@ pub async fn task(ws: WebSocket, mut cmd: UnboundedReceiver<Command>) {
                     .map(ws::message::CloseCode::from)
                     .unwrap_or(ws::message::CloseCode::NORMAL);
                 let reason = reason
-                    .map(Bytes::from_owner)
+                    .map(|reason| reason.0)
                     .map(Utf8Bytes::try_from)
                     .transpose();
 
@@ -157,7 +157,7 @@ pub async fn send_all(cmd: UnboundedSender<Command>, messages: Vec<Message>) -> 
 pub async fn close(
     cmd: UnboundedSender<Command>,
     code: Option<u16>,
-    reason: Option<PyBackedStr>,
+    reason: Option<StrInput>,
 ) -> PyResult<()> {
     send_command(cmd, |tx| Command::Close(code, reason, tx)).await?
 }

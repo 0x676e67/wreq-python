@@ -118,9 +118,13 @@ impl BufferView {
 
 #[cfg(test)]
 mod tests {
-    use pyo3::buffer::PyBuffer as PythonBuffer;
+    use pyo3::{
+        buffer::PyBuffer as PythonBuffer,
+        types::{PyBytes, PyString},
+    };
 
     use super::*;
+    use crate::extractor::{BytesInput, StrInput};
 
     #[test]
     fn memoryview_shares_owned_bytes() {
@@ -134,6 +138,20 @@ mod tests {
             assert_eq!(buffer.buf_ptr().cast_const().cast::<u8>(), ptr);
             assert!(buffer.readonly());
             assert_eq!(buffer.to_vec(py).unwrap(), [0, 1, 255]);
+
+            let binary = PyBytes::new(py, b"builtin bytes");
+            let input = binary.extract::<BytesInput>().unwrap();
+            assert_eq!(input.0.as_ptr(), binary.as_bytes().as_ptr());
+            let view = PyBuffer::from(input.0).into_pyobject(py).unwrap();
+            let buffer = PythonBuffer::<u8>::get(view.as_any()).unwrap();
+            assert_eq!(
+                buffer.buf_ptr().cast_const().cast::<u8>(),
+                binary.as_bytes().as_ptr()
+            );
+
+            let text = PyString::new(py, "builtin text");
+            let input = text.extract::<StrInput>().unwrap();
+            assert_eq!(input.0.as_ptr(), text.to_str().unwrap().as_ptr());
         });
     }
 }

@@ -2,12 +2,13 @@ import asyncio
 import datetime
 import gc
 import threading
+import weakref
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
 import wreq
-from wreq import Message, Version, blocking
+from wreq import Message, Multipart, Part, Version, blocking
 from wreq.header import HeaderMap, OrigHeaderMap
 
 
@@ -74,6 +75,68 @@ def test_header_and_message_views():
     parent.release()
     assert child == b"alue"
     child.release()
+
+
+def test_subclass_input_cycles_are_collected():
+    class Text(str):
+        def __str__(self):
+            raise AssertionError("subclass conversion must not be called")
+
+    class Binary(bytes):
+        def __bytes__(self):
+            raise AssertionError("subclass conversion must not be called")
+
+    class Marker:
+        pass
+
+    def header_value(source, method):
+        headers = HeaderMap()
+        getattr(headers, method)("X-Buffer", source)
+        return headers["X-Buffer"]
+
+    def original_name(source):
+        headers = OrigHeaderMap()
+        headers.insert(source)
+        return next(iter(headers))[1]
+
+    cases = [
+        (Text, "payload", lambda source: Message.from_text(source).data),
+        (Binary, b"payload", lambda source: Message.from_binary(source).binary),
+        (Binary, b"payload", lambda source: Message.from_ping(source).ping),
+        (Binary, b"payload", lambda source: Message.from_pong(source).pong),
+        (Text, "payload", lambda source: HeaderMap({"X-Buffer": source})["X-Buffer"]),
+        (Text, "payload", lambda source: header_value(source, "insert")),
+        (Text, "payload", lambda source: header_value(source, "append")),
+        (Text, "payload", lambda source: header_value(source, "__setitem__")),
+        (Binary, b"payload", lambda source: HeaderMap().get("missing", source)),
+        (Text, "X-Buffer", lambda source: next(iter(OrigHeaderMap([source])))[1]),
+        (Text, "X-Buffer", original_name),
+    ]
+    for input_type, payload, make_view in cases:
+        source = input_type(payload)
+        source.marker = Marker()
+        marker = weakref.ref(source.marker)
+        view = make_view(source)
+        expected = payload.encode() if isinstance(payload, str) else payload
+        assert_readonly_view(view, expected)
+        source.view = view
+        del source, view
+        gc.collect()
+        assert marker() is None, make_view
+
+    for input_type, payload, make_owner in [
+        (Text, "payload", lambda source: Part("field", source)),
+        (Binary, b"payload", lambda source: Multipart(Part("field", source))),
+        (Text, "payload", lambda source: Message.from_close(1000, source)),
+    ]:
+        source = input_type(payload)
+        source.marker = Marker()
+        marker = weakref.ref(source.marker)
+        owner = make_owner(source)
+        source.owner = owner
+        del source, owner
+        gc.collect()
+        assert marker() is None, make_owner
 
 
 @pytest.fixture
