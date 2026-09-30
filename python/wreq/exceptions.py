@@ -29,7 +29,7 @@ __all__ = [
 
 class RustPanic(Exception):
     r"""
-    A panic occurred in the underlying Rust code.
+    Compatibility exception; Rust panics are not translated to this type.
     """
 
 

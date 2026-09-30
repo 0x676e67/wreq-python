@@ -8,7 +8,8 @@ __all__ = ["Runtime"]
 class Runtime:
     """Shared Tokio runtime whose workers start when constructed.
 
-    Clients and active work keep it alive; the last owner releases it automatically.
+    Clients, responses and active work keep it alive; the last owner releases
+    it automatically.
     No-steal clients keep a fixed worker, without CPU pinning.
     """
 
@@ -24,6 +25,8 @@ class Runtime:
         """Thread counts must be positive; thread_keep_alive is a nonnegative timedelta.
 
         workers defaults to available CPU parallelism, or 1 if unavailable.
+        work_steal=True uses a multi-thread pool; False uses independent
+        single-thread workers.
         thread_name defaults to the package name, "wreq-python".
         Thread names cannot contain NUL characters.
         Blocking-pool settings apply to each worker runtime in no-steal mode.

@@ -64,16 +64,7 @@ where
     where
         Fut: Future<Output = PyResult<T>> + Send + 'static,
     {
-        Self::new(
-            runtime,
-            async move {
-                tokio::select! {
-                    result = fut => result,
-                    _ = cancel_token.cancelled() => Err(CancelledError::new_err("Operation was cancelled: client has been closed")),
-                }
-            },
-            cancel,
-        )
+        Self::new(runtime, cancel_on_close(fut, cancel_token), cancel)
     }
 }
 
@@ -104,6 +95,18 @@ where
                 },
             )
         })
+    }
+}
+
+/// Cancel pending requests and reject new work after their client is closed.
+pub async fn cancel_on_close<F, T>(future: F, cancel: CancellationToken) -> PyResult<T>
+where
+    F: Future<Output = PyResult<T>>,
+{
+    tokio::select! {
+        biased;
+        _ = cancel.cancelled() => Err(CancelledError::new_err("Operation was cancelled: client has been closed")),
+        result = future => result,
     }
 }
 

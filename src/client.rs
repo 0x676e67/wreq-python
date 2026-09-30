@@ -494,7 +494,8 @@ impl Client {
         })
     }
 
-    /// Close the client, preventing any new requests.
+    /// Cancel pending requests and reject new ones with asyncio.CancelledError.
+    /// Existing responses, WebSockets and the shared runtime remain usable.
     #[inline]
     pub fn close(&self) {
         self.cancel.cancel();
@@ -657,10 +658,12 @@ impl Client {
 
 #[pymethods]
 impl BlockingClient {
+    /// The runtime used by this client and its responses.
     #[getter]
     pub fn runtime(&self) -> runtime::Runtime {
         self.0.runtime()
     }
+
     /// Creates a new blocking Client instance.
     #[new]
     #[inline]
@@ -676,7 +679,8 @@ impl BlockingClient {
         self.0.cookie_jar.clone()
     }
 
-    /// Close the client, preventing any new requests.
+    /// Cancel pending requests and reject new ones with asyncio.CancelledError.
+    /// Existing responses, WebSockets and the shared runtime remain usable.
     #[inline]
     pub fn close(&self) {
         self.0.close();
@@ -790,7 +794,10 @@ impl BlockingClient {
         py.detach(|| {
             nogil::block_on(
                 &self.0.runtime,
-                execute_request(self.0.clone(), method, url, kwds),
+                nogil::cancel_on_close(
+                    execute_request(self.0.clone(), method, url, kwds),
+                    self.0.cancel.clone(),
+                ),
             )
             .map(Into::into)
         })
@@ -807,7 +814,10 @@ impl BlockingClient {
         py.detach(|| {
             nogil::block_on(
                 &self.0.runtime,
-                execute_websocket_request(self.0.clone(), url, kwds),
+                nogil::cancel_on_close(
+                    execute_websocket_request(self.0.clone(), url, kwds),
+                    self.0.cancel.clone(),
+                ),
             )
             .map(Into::into)
         })

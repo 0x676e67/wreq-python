@@ -12,6 +12,10 @@ Async upload generators run on the caller's running event loop with its context 
 Their exceptions fail the request. When an upload ends, the generator is closed;
 cancelling or dropping the upload schedules producer cancellation and cleanup on that loop.
 Keep the loop running until generator cleanup has finished. This also applies to async multipart parts.
+Construct async-generator `Part` objects inside a running event loop; their producers
+start at construction, with bounded buffering before the request consumes them.
+Use synchronous iterators for blocking uploads. A blocking call on the producer's
+event-loop thread prevents async generators from progressing.
 
 ```python
 import asyncio
@@ -95,7 +99,7 @@ if __name__ == "__main__":
 ### Custom runtimes
 
 Clients share a global multi-thread runtime when `runtime` is omitted or `None`.
-It starts when the first default client is created. Construct a `Runtime` to
+It starts on first use. Construct a `Runtime` to
 start a separate worker pool for an async or blocking client:
 
 ```python
@@ -125,7 +129,7 @@ CPU pinning. Sharing the same `Runtime` between clients is supported, and
 Custom runtimes start their threads during construction, before any client is
 bound or request is sent.
 
-`thread_name=None` uses the package name, `wreq-python`, as the thread-name prefix.
+`thread_name=None` uses the package name, `wreq-python`, as the thread name.
 
 `thread_keep_alive` accepts a nonnegative `datetime.timedelta`.
 `max_blocking_threads` and `thread_keep_alive` default to Tokio's settings
@@ -137,7 +141,9 @@ shared runtime; a dedicated client runtime does not isolate Python's GIL or
 every process resource. DNS resolvers are owned by individual clients so their
 connections are not shared across runtimes.
 
-Closing a client cancels its requests but does not shut down its runtime.
+Closing a client cancels pending requests and rejects new requests with
+`asyncio.CancelledError`, for both async and blocking APIs. It does not shut down
+the runtime or invalidate existing responses and WebSockets.
 Clients, responses, streams and active tasks share ownership. Dropping the last
 owner automatically releases a custom runtime without synchronously waiting for
 its workers; already running blocking work may finish later. The default runtime

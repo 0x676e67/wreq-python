@@ -162,7 +162,8 @@ class Part:
         r"""
         Creates a new part.
 
-        Async generators run on the caller's running event loop and are closed after use.
+        Construct async-generator parts inside a running event loop. Their producers
+        start immediately on that loop and are closed after use.
 
         # Arguments
         - `name` - The name of the part.
@@ -1111,6 +1112,7 @@ class Client:
     """
 
     runtime: Runtime
+    """Read-only shared runtime used by this client and its responses."""
 
     cookie_jar: Jar | None
     r"""
@@ -1149,9 +1151,8 @@ class Client:
 
     def close(self) -> None:
         r"""
-        Closes the client and any associated resources.
-
-        After calling this method, the client should not be used to make further requests.
+        Cancels pending requests and rejects new ones with `asyncio.CancelledError`.
+        Existing responses, WebSockets and the shared runtime remain usable.
 
         Examples:
 

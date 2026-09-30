@@ -42,6 +42,8 @@ def test_runtime_configuration():
         for factory in (wreq.Client, wreq.blocking.Client):
             client = factory(runtime=runtime)
             alias = client.runtime
+            with pytest.raises(AttributeError):
+                client.runtime = runtime
             client.close()
             del client
             # Releasing a client does not close a shared runtime.
@@ -135,6 +137,49 @@ async def test_blocking_client_uses_custom_runtime(steal):
         await writer.drain()
         assert await asyncio.wait_for(task, 5) == b"ok"
         del task
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("blocking", [False, True])
+@pytest.mark.parametrize("operation", ["get", "websocket"])
+async def test_client_close_cancels_requests(blocking, operation):
+    factory = wreq.blocking.Client if blocking else wreq.Client
+    client = factory(
+        runtime=Runtime(workers=1, work_steal=False),
+        proxies=[],
+        timeout=timedelta(seconds=10),
+    )
+    task = None
+    try:
+        async with local_server() as (url, connections):
+            if operation == "websocket":
+                url = url.replace("http://", "ws://", 1)
+            request = getattr(client, operation)
+
+            def start():
+                return asyncio.create_task(
+                    asyncio.to_thread(request, url) if blocking else request(url)
+                )
+
+            task = start()
+            reader, _ = await asyncio.wait_for(connections.get(), 5)
+            client.close()
+            done, _ = await asyncio.wait({task}, timeout=5)
+            assert task in done, "close() did not cancel the pending request"
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert await asyncio.wait_for(reader.read(), 5) == b""
+
+            task = start()
+            done, _ = await asyncio.wait({task}, timeout=5)
+            assert task in done, "a closed client started another request"
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert connections.empty()
+    finally:
+        client.close()
+        if task is not None:
+            await asyncio.gather(task, return_exceptions=True)
 
 
 @pytest.mark.asyncio
