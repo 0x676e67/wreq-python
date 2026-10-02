@@ -75,12 +75,14 @@ tikv-jemallocator = { version = "0.7.0", default-features = false, features = [
     "disable_initial_exec_tls",
 ], optional = true }
 
-# Keep the Chrome 150–153 profiles and their required TLS support in sync.
+# Keep the latest emulation profiles and their required TLS support in sync.
 [patch.crates-io]
-wreq-util = { git = "https://github.com/0x676e67/wreq-util", rev = "e3922a2b2d976487cb4cf4e7b0ac290b3ce77f66" }
-wreq = { git = "https://github.com/0x676e67/wreq", rev = "cd76bcdf1307153de289d34e072528bdf0510a3b" }
-btls = { git = "https://github.com/0x676e67/btls", rev = "129887582a538b8f4dcf371d15c953335312ca37" }
-btls-sys = { git = "https://github.com/0x676e67/btls", rev = "129887582a538b8f4dcf371d15c953335312ca37" }
+wreq-util = { git = "https://github.com/0x676e67/wreq-util", rev = "5715529002738f46eea86a7271f918f9374d3582" }
+wreq = { git = "https://github.com/0x676e67/wreq", rev = "4f2342aba1b33cc3534e8e2a853b21945edf6cef" }
+# demo/tokio-btls-vectored-write
+btls = { git = "https://github.com/0x676e67/btls", rev = "ffaf0e8c23d455af4e306986ce81bb57ebd03bc2" }
+btls-sys = { git = "https://github.com/0x676e67/btls", rev = "ffaf0e8c23d455af4e306986ce81bb57ebd03bc2" }
+tokio-btls = { git = "https://github.com/0x676e67/btls", rev = "ffaf0e8c23d455af4e306986ce81bb57ebd03bc2" }
 
 [profile.release]
 codegen-units = 1
