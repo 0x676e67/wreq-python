@@ -226,7 +226,7 @@ impl Response {
     /// Stream read-only memoryviews and any trailing headers from the body.
     pub fn stream(&self) -> PyResult<Streamer> {
         self.stream_response()
-            .map(|response| Streamer::new(response, &self.runtime))
+            .map(|response| Streamer::new(response, self.runtime.clone()))
             .map_err(Into::into)
     }
 

@@ -1,25 +1,30 @@
 use std::{
-    collections::VecDeque,
     pin::Pin,
     sync::{
         Arc, PoisonError,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicUsize, Ordering},
     },
-    task::{Context, Poll, Wake, Waker},
+    task::{Context, Poll},
 };
 
 use bytes::Bytes;
-use futures_util::{FutureExt, Stream, future::poll_fn, ready};
+use futures_util::{FutureExt, Stream, future::poll_fn};
 use http_body_util::BodyExt;
 use pyo3::{
     coroutine::CancelHandle, exceptions::PyStopIteration, intern, prelude::*, sync::PyOnceLock,
 };
-use tokio::{sync::mpsc, task::JoinHandle};
+use tokio::{
+    sync::{
+        Mutex,
+        mpsc::{self, error::TryRecvError},
+    },
+    task::JoinHandle,
+};
 use tokio_util::task::AbortOnDropHandle;
 
 use crate::{
     buffer::PyBuffer,
-    client::nogil,
+    client::nogil::{self, NoGIL},
     error::Error,
     extractor::{BytesInput, StrInput},
     header::HeaderMap,
@@ -67,136 +72,122 @@ struct Sender(mpsc::Sender<Option<PyResult<PyBytesLike>>>);
 /// A response stream yielding read-only memoryviews and any trailing headers.
 #[derive(Clone)]
 #[pyclass(subclass, frozen, skip_from_py_object)]
-pub struct Streamer(Arc<Inner>);
+pub struct Streamer(Arc<Reader>, Runtime);
 
-/// Streamer state shared by Python iterators and context managers.
-struct Inner {
-    buffer: Arc<Buffer>,
-    task: std::sync::Mutex<Task>,
-    started: AtomicBool,
-    runtime: Runtime,
-    /// Consecutive `__anext__` calls that returned without suspending.
+/// Frames read ahead by a Tokio task, which starts on the first read so a read
+/// timeout does not start before iteration. Waiting reads hold the lock in a
+/// Tokio task, never in a suspended Python coroutine.
+struct Reader {
+    state: Mutex<State>,
+    task: std::sync::Mutex<Option<AbortOnDropHandle<()>>>,
+    /// Buffered frames returned since `__anext__` last yielded to the event loop.
     ready: AtomicUsize,
 }
 
-enum Task {
-    /// Not read yet, so a read timeout has not started.
+enum State {
     Idle(Box<wreq::Response>),
-    /// Dropping the handle aborts the read-ahead task.
-    Running {
-        _abort: AbortOnDropHandle<()>,
-    },
+    Reading(mpsc::Receiver<PyResult<Frame>>),
     Closed,
 }
-
-/// Frames read ahead by a Tokio task, bounded by bytes and shared with readers.
-/// Locks are held only within a single poll, so no waiting reader holds them.
-#[derive(Default)]
-struct Buffer(std::sync::Mutex<BufferState>);
-
-#[derive(Default)]
-struct BufferState {
-    items: VecDeque<Item>,
-    buffered: usize,
-    end: bool,
-    closed: bool,
-    readers: Vec<Waker>,
-    producer: Option<Waker>,
-}
-
-enum Item {
-    Data(Bytes),
-    Trailers(http::HeaderMap),
-    Error(wreq::Error),
-}
-
-/// Ends the buffer however the read-ahead task stops, so no reader waits forever.
-struct EndGuard(Arc<Buffer>);
-
-/// Wakes a thread blocked in a synchronous read.
-struct ThreadWaker(std::thread::Thread);
 
 // ===== impl Streamer =====
 
 impl Streamer {
+    /// Frames buffered ahead of Python, about 128 KiB of full TLS records.
+    const READ_AHEAD: usize = 8;
+
     /// Buffered frames returned before `__anext__` yields to the event loop once.
     const YIELD_EVERY: usize = 8;
 
-    /// Create a new [`Streamer`]; reading starts on the first iteration.
-    pub fn new(resp: wreq::Response, runtime: &Runtime) -> Streamer {
-        Streamer(Arc::new(Inner {
-            buffer: Arc::default(),
-            task: std::sync::Mutex::new(Task::Idle(Box::new(resp))),
-            started: AtomicBool::new(false),
-            runtime: runtime.clone(),
+    /// Create a new [`Streamer`] instance.
+    #[inline]
+    pub fn new(resp: wreq::Response, runtime: Runtime) -> Streamer {
+        let reader = Reader {
+            state: Mutex::new(State::Idle(Box::new(resp))),
+            task: std::sync::Mutex::new(None),
             ready: AtomicUsize::new(0),
-        }))
+        };
+        Streamer(Arc::new(reader), runtime)
     }
 
-    async fn read_ahead(mut resp: wreq::Response, buffer: Arc<Buffer>) {
-        let _end = EndGuard(buffer.clone());
+    async fn read_ahead(mut resp: wreq::Response, tx: mpsc::Sender<PyResult<Frame>>) {
         while let Some(frame) = resp.frame().await {
-            let item = match frame {
-                Ok(frame) => match frame.into_data() {
-                    Ok(bytes) => Item::Data(bytes),
-                    Err(frame) => match frame.into_trailers() {
-                        Ok(trailers) => Item::Trailers(trailers),
-                        Err(_) => continue,
-                    },
+            let frame = match frame.map(|frame| frame.into_data()) {
+                Ok(Ok(bytes)) => Ok(Frame::Bytes(PyBuffer::from(bytes))),
+                Ok(Err(frame)) => match frame.into_trailers() {
+                    Ok(trailers) => Ok(Frame::Trailers(HeaderMap(trailers))),
+                    Err(_) => continue,
                 },
                 Err(err) => {
                     // A failed body may leave a stalled HTTP/2 connection behind.
                     resp.forbid_recycle();
-                    buffer.push(Item::Error(err));
-                    return;
+                    Err(Error::Library(err).into())
                 }
             };
-            if !buffer.push(item) || !poll_fn(|cx| buffer.poll_capacity(cx)).await {
-                return;
+            let failed = frame.is_err();
+            if tx.send(frame).await.is_err() || failed {
+                break;
             }
         }
     }
 
-    /// Start the read-ahead task on the first read.
-    fn start(&self) {
-        if self.0.started.load(Ordering::Acquire) {
-            return;
-        }
-        let mut task = self.0.task.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Task::Idle(_) = *task
-            && let Task::Idle(resp) = std::mem::replace(&mut *task, Task::Closed)
+    /// Return a buffered frame, or `None` if the read must wait.
+    fn poll_state(&self, state: &mut State, error: fn() -> Error) -> Option<PyResult<Frame>> {
+        if let State::Idle(_) = state
+            && let State::Idle(resp) = std::mem::replace(state, State::Closed)
         {
-            let handle = self
-                .0
-                .runtime
-                .handle()
-                .spawn(Self::read_ahead(*resp, self.0.buffer.clone()));
-            *task = Task::Running {
-                _abort: AbortOnDropHandle::new(handle),
-            };
+            let (tx, rx) = mpsc::channel(Self::READ_AHEAD);
+            let task = self.1.handle().spawn(Self::read_ahead(*resp, tx));
+            *self.0.task.lock().unwrap_or_else(PoisonError::into_inner) =
+                Some(AbortOnDropHandle::new(task));
+            *state = State::Reading(rx);
+            return None;
         }
-        self.0.started.store(true, Ordering::Release);
-    }
-
-    fn poll_next(&self, cx: &mut Context<'_>, error: fn() -> Error) -> Poll<PyResult<Frame>> {
-        self.start();
-        Poll::Ready(match ready!(self.0.buffer.poll_item(cx)) {
-            Some(Item::Data(bytes)) => Ok(Frame::Bytes(PyBuffer::from(bytes))),
-            Some(Item::Trailers(trailers)) => Ok(Frame::Trailers(HeaderMap(trailers))),
-            Some(Item::Error(err)) => Err(Error::Library(err).into()),
-            None => Err(error().into()),
-        })
-    }
-
-    /// Release the body and wake any reader still waiting on it.
-    fn close(&self) {
-        self.0.started.store(true, Ordering::Release);
-        self.0.buffer.close();
-        let task = {
-            let mut task = self.0.task.lock().unwrap_or_else(PoisonError::into_inner);
-            std::mem::replace(&mut *task, Task::Closed)
+        let State::Reading(rx) = state else {
+            return Some(Err(error().into()));
         };
-        drop(task);
+        match rx.try_recv() {
+            Ok(frame) => Some(frame),
+            Err(TryRecvError::Empty) => None,
+            Err(TryRecvError::Disconnected) => {
+                *state = State::Closed;
+                Some(Err(error().into()))
+            }
+        }
+    }
+
+    /// Return a buffered frame without waiting or spawning.
+    fn try_next(&self, error: fn() -> Error) -> Option<PyResult<Frame>> {
+        let mut state = self.0.state.try_lock().ok()?;
+        self.poll_state(&mut state, error)
+    }
+
+    async fn next(self, error: fn() -> Error) -> PyResult<Frame> {
+        let mut state = self.0.state.lock().await;
+        if let Some(frame) = self.poll_state(&mut state, error) {
+            return frame;
+        }
+        let State::Reading(rx) = &mut *state else {
+            return Err(error().into());
+        };
+        match rx.recv().await {
+            Some(frame) => frame,
+            None => {
+                *state = State::Closed;
+                Err(error().into())
+            }
+        }
+    }
+
+    /// Stop reading ahead; a waiting read then ends and releases the state.
+    fn abort(&self) {
+        drop(
+            self.0
+                .task
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .take(),
+        );
     }
 }
 
@@ -207,16 +198,12 @@ impl Streamer {
         slf
     }
 
+    #[inline]
     fn __next__(&self, py: Python) -> PyResult<Frame> {
         py.detach(|| {
-            let waker = Waker::from(Arc::new(ThreadWaker(std::thread::current())));
-            let mut cx = Context::from_waker(&waker);
-            loop {
-                match self.poll_next(&mut cx, || Error::StopIteration) {
-                    Poll::Ready(frame) => return frame,
-                    Poll::Pending => std::thread::park(),
-                }
-            }
+            self.try_next(|| Error::StopIteration).unwrap_or_else(|| {
+                nogil::block_on(&self.1, self.clone().next(|| Error::StopIteration))
+            })
         })
     }
 
@@ -233,7 +220,10 @@ impl Streamer {
         _exc_value: &Bound<'py, PyAny>,
         _traceback: &Bound<'py, PyAny>,
     ) {
-        py.detach(|| self.close());
+        py.detach(|| {
+            self.abort();
+            *self.0.state.blocking_lock() = State::Closed;
+        });
     }
 }
 
@@ -245,13 +235,12 @@ impl Streamer {
     }
 
     /// Read the next frame when awaited; returns a coroutine, not a Future.
+    #[inline]
     fn __anext__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let this = self.clone();
-        let mut yielded = false;
-        let mut suspended = false;
         // PyO3 0.29 cannot wrap an async __anext__ slot; use its macro constructor.
         // Recheck this internal API when upgrading PyO3. Without a throw callback,
-        // cancellation drops the poll, which holds no lock and loses no frame.
+        // cancellation drops the read, which aborts any spawned wait.
         Bound::new(
             py,
             pyo3::impl_::coroutine::new_coroutine(
@@ -260,29 +249,29 @@ impl Streamer {
                 None,
                 async move {
                     let error = || Error::StopAsyncIteration;
-                    let frame = poll_fn(|cx| {
-                        // Buffered frames complete without suspending; yield to the event
-                        // loop periodically so timeouts, cancellation and other tasks run.
-                        if !yielded && this.0.ready.load(Ordering::Relaxed) >= Self::YIELD_EVERY {
-                            yielded = true;
-                            this.0.ready.store(0, Ordering::Relaxed);
-                            cx.waker().wake_by_ref();
-                            return Poll::Pending;
-                        }
-                        if let Poll::Ready(frame) =
-                            this.poll_next(&mut Context::from_waker(Waker::noop()), error)
-                        {
-                            if !suspended {
-                                this.0.ready.fetch_add(1, Ordering::Relaxed);
-                            }
-                            return Poll::Ready(frame);
-                        }
-                        // The read-ahead task wakes this reader from a Tokio thread.
-                        suspended = true;
+                    // Buffered frames complete without suspending; yield to the event
+                    // loop periodically so timeouts, cancellation and other tasks run.
+                    if this.0.ready.fetch_add(1, Ordering::Relaxed) >= Self::YIELD_EVERY {
                         this.0.ready.store(0, Ordering::Relaxed);
-                        this.poll_next(&mut Context::from_waker(&nogil::guard(cx.waker())), error)
-                    })
-                    .await?;
+                        let mut yielded = false;
+                        poll_fn(|cx| {
+                            if std::mem::replace(&mut yielded, true) {
+                                return Poll::Ready(());
+                            }
+                            cx.waker().wake_by_ref();
+                            Poll::Pending
+                        })
+                        .await;
+                    }
+                    let frame = match this.try_next(error) {
+                        Some(frame) => frame?,
+                        None => {
+                            this.0.ready.store(0, Ordering::Relaxed);
+                            let runtime = this.1.clone();
+                            NoGIL::new(&runtime, this.next(error)).await?
+                        }
+                    };
+                    // PyO3 polls this coroutine while attached, outside the Tokio task.
                     Python::attach(|py| frame.into_pyobject(py).map(|obj| obj.unbind()))
                 },
             ),
@@ -302,130 +291,17 @@ impl Streamer {
         _exc_val: Py<PyAny>,
         _traceback: Py<PyAny>,
     ) -> PyResult<()> {
-        self.close();
-        Ok(())
-    }
-}
-
-// ===== impl Buffer =====
-
-impl Buffer {
-    /// Bytes read ahead while Python lags; the reader resumes below half of it.
-    const READ_AHEAD: usize = 128 * 1024;
-
-    fn lock(&self) -> std::sync::MutexGuard<'_, BufferState> {
-        self.0.lock().unwrap_or_else(PoisonError::into_inner)
-    }
-
-    /// Queue an item for readers; returns `false` once the stream is closed.
-    fn push(&self, item: Item) -> bool {
-        let readers = {
-            let mut state = self.lock();
-            if state.closed {
-                return false;
-            }
-            if let Item::Data(bytes) = &item {
-                state.buffered = state.buffered.saturating_add(bytes.len());
-            }
-            state.items.push_back(item);
-            std::mem::take(&mut state.readers)
-        };
-        readers.into_iter().for_each(Waker::wake);
-        true
-    }
-
-    /// Wait until the buffer has room; resolves to `false` once the stream is closed.
-    fn poll_capacity(&self, cx: &mut Context<'_>) -> Poll<bool> {
-        let mut state = self.lock();
-        if state.closed {
-            Poll::Ready(false)
-        } else if state.buffered < Self::READ_AHEAD {
-            Poll::Ready(true)
-        } else {
-            state.producer = Some(cx.waker().clone());
-            Poll::Pending
+        self.abort();
+        if let Ok(mut state) = self.0.state.try_lock() {
+            *state = State::Closed;
+            return Ok(());
         }
-    }
-
-    /// Take the next item, or `None` at the end of a finished or closed stream.
-    fn poll_item(&self, cx: &mut Context<'_>) -> Poll<Option<Item>> {
-        let (item, producer) = {
-            let mut state = self.lock();
-            if state.closed {
-                return Poll::Ready(None);
-            }
-            let Some(item) = state.items.pop_front() else {
-                if state.end {
-                    return Poll::Ready(None);
-                }
-                if !state.readers.iter().any(|w| w.will_wake(cx.waker())) {
-                    state.readers.push(cx.waker().clone());
-                }
-                return Poll::Pending;
-            };
-            if let Item::Data(bytes) = &item {
-                state.buffered = state.buffered.saturating_sub(bytes.len());
-            }
-            let producer = if state.buffered <= Self::READ_AHEAD / 2 {
-                state.producer.take()
-            } else {
-                None
-            };
-            (item, producer)
-        };
-        if let Some(producer) = producer {
-            producer.wake();
-        }
-        Poll::Ready(Some(item))
-    }
-
-    /// Mark the end of the body and wake readers waiting for more.
-    fn finish(&self) {
-        let readers = {
-            let mut state = self.lock();
-            state.end = true;
-            std::mem::take(&mut state.readers)
-        };
-        readers.into_iter().for_each(Waker::wake);
-    }
-
-    /// Discard buffered frames and wake both sides.
-    fn close(&self) {
-        let (items, readers, producer) = {
-            let mut state = self.lock();
-            state.closed = true;
-            state.buffered = 0;
-            (
-                std::mem::take(&mut state.items),
-                std::mem::take(&mut state.readers),
-                state.producer.take(),
-            )
-        };
-        drop(items);
-        readers.into_iter().for_each(Waker::wake);
-        if let Some(producer) = producer {
-            producer.wake();
-        }
-    }
-}
-
-// ===== impl EndGuard =====
-
-impl Drop for EndGuard {
-    fn drop(&mut self) {
-        self.0.finish();
-    }
-}
-
-// ===== impl ThreadWaker =====
-
-impl Wake for ThreadWaker {
-    fn wake(self: Arc<Self>) {
-        self.0.unpark();
-    }
-
-    fn wake_by_ref(self: &Arc<Self>) {
-        self.0.unpark();
+        let reader = self.0.clone();
+        NoGIL::new(&self.1, async move {
+            *reader.state.lock().await = State::Closed;
+            Ok(())
+        })
+        .await
     }
 }
 
