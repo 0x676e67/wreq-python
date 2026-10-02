@@ -1,4 +1,4 @@
-use pyo3::{class::basic::CompareOp, prelude::*};
+use pyo3::{class::basic::CompareOp, prelude::*, pyclass::PyClassGuardError};
 
 define_enum!(
     /// An HTTP version.
@@ -28,8 +28,16 @@ define_enum!(
 
 /// HTTP status code.
 #[derive(Clone, Copy)]
-#[pyclass(subclass, frozen, str, from_py_object)]
+#[pyclass(subclass, frozen, str, skip_from_py_object)]
 pub struct StatusCode(pub wreq::StatusCode);
+
+impl<'a, 'py> FromPyObject<'a, 'py> for StatusCode {
+    type Error = PyClassGuardError<'a, 'py>;
+
+    fn extract(ob: Borrowed<'a, 'py, PyAny>) -> Result<Self, Self::Error> {
+        Ok(*ob.extract::<PyClassGuard<'_, Self>>()?)
+    }
+}
 
 #[pymethods]
 impl StatusCode {
