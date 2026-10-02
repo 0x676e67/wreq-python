@@ -1,5 +1,5 @@
 use pyo3::{
-    PyErr, create_exception,
+    PyErr, Python, create_exception,
     exceptions::{PyException, PyRuntimeError, PyStopAsyncIteration, PyStopIteration},
 };
 use wreq::header;
@@ -49,12 +49,18 @@ macro_rules! wrap_error {
         {
             $(
                 if $error.$variant() {
-                    return $exception::new_err(format!(concat!(stringify!($variant), " error: {:?}"), $error));
+                    return $exception::new_err(format_library_error(&$error, concat!(stringify!($variant), " error")));
                 }
             )*
-            UpgradeError::new_err(format!("error: {:?}", $error))
+            UpgradeError::new_err(format_library_error(&$error, "error"))
         }
     };
+}
+
+/// Error sources can include PyErr, whose formatting attaches to Python.
+fn format_library_error(error: &wreq::Error, label: &str) -> String {
+    Python::try_attach(|_| format!("{label}: {error:?}"))
+        .unwrap_or_else(|| format!("{label}: The Python interpreter is not available"))
 }
 
 /// Unified error enum
@@ -145,5 +151,69 @@ impl From<wreq::Error> for Error {
 impl From<tokio::time::error::Elapsed> for Error {
     fn from(err: tokio::time::error::Elapsed) -> Self {
         Error::Timeout(err)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{fmt, process::Command};
+
+    use futures_util::FutureExt;
+    use http_body_util::BodyExt;
+
+    use super::*;
+
+    #[test]
+    fn unavailable_interpreter_skips_error_sources() {
+        const CHILD: &str = "WREQ_TEST_UNAVAILABLE_INTERPRETER";
+        if std::env::var_os(CHILD).is_none() {
+            // Other tests may initialize Python; isolate this unavailable-state check.
+            let result = Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "error::tests::unavailable_interpreter_skips_error_sources",
+                    "--test-threads=1",
+                ])
+                .env(CHILD, "1")
+                .output()
+                .unwrap();
+            assert!(
+                result.status.success(),
+                "stdout:\n{}\nstderr:\n{}",
+                String::from_utf8_lossy(&result.stdout),
+                String::from_utf8_lossy(&result.stderr)
+            );
+            return;
+        }
+
+        struct DebugBomb;
+
+        impl fmt::Debug for DebugBomb {
+            fn fmt(&self, _: &mut fmt::Formatter<'_>) -> fmt::Result {
+                panic!("error source must not be formatted without Python");
+            }
+        }
+
+        impl fmt::Display for DebugBomb {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                fmt::Debug::fmt(self, f)
+            }
+        }
+
+        impl std::error::Error for DebugBomb {}
+
+        assert!(Python::try_attach(|_| ()).is_none());
+        let mut body =
+            wreq::Body::wrap_stream(futures_util::stream::iter([Err::<bytes::Bytes, _>(
+                DebugBomb,
+            )]));
+        let error = body.frame().now_or_never().unwrap().unwrap().unwrap_err();
+        assert!(error.is_request());
+        assert_eq!(
+            format_library_error(&error, "is_request error"),
+            "is_request error: The Python interpreter is not available"
+        );
+        // Constructing and dropping the public exception must also avoid its source.
+        drop(PyErr::from(Error::Library(error)));
     }
 }
