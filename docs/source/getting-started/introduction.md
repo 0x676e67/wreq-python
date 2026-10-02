@@ -74,7 +74,7 @@ Due to the complexity of **TLS** encryption and the widespread adoption of **HTT
 
         ---
 
-        `Chrome100` `Chrome101` `Chrome104` `Chrome105` `Chrome106` `Chrome107` `Chrome108` `Chrome109` `Chrome110` `Chrome114` `Chrome116` `Chrome117` `Chrome118` `Chrome119` `Chrome120` `Chrome123` `Chrome124` `Chrome126` `Chrome127` `Chrome128` `Chrome129` `Chrome130` `Chrome131` `Chrome132` `Chrome133` `Chrome134` `Chrome135` `Chrome136` `Chrome137` `Chrome138` `Chrome139` `Chrome140` `Chrome141` `Chrome142` `Chrome143` `Chrome144` `Chrome145` `Chrome146` `Chrome147` `Chrome148` `Chrome149` `Chrome150` `Chrome151` `Chrome152` `Chrome153`
+        `Chrome100` `Chrome101` `Chrome104` `Chrome105` `Chrome106` `Chrome107` `Chrome108` `Chrome109` `Chrome110` `Chrome114` `Chrome116` `Chrome117` `Chrome118` `Chrome119` `Chrome120` `Chrome123` `Chrome124` `Chrome126` `Chrome127` `Chrome128` `Chrome129` `Chrome130` `Chrome131` `Chrome132` `Chrome133` `Chrome134` `Chrome135` `Chrome136` `Chrome137` `Chrome138` `Chrome139` `Chrome140` `Chrome141` `Chrome142` `Chrome143` `Chrome144` `Chrome145` `Chrome146` `Chrome147` `Chrome148` `Chrome149` `Chrome150` `Chrome151` `Chrome152` `Chrome153` `Chrome154`
 
     -   :fontawesome-brands-edge: **Edge**
 
@@ -86,7 +86,7 @@ Due to the complexity of **TLS** encryption and the widespread adoption of **HTT
 
         ---
 
-        `Firefox109` `Firefox117` `Firefox128` `Firefox133` `Firefox135` `FirefoxPrivate135` `FirefoxAndroid135` `Firefox136` `FirefoxPrivate136` `Firefox139` `Firefox142` `Firefox143` `Firefox144` `Firefox145` `Firefox146` `Firefox147` `Firefox148` `Firefox149` `Firefox150` `Firefox151`
+        `Firefox109` `Firefox117` `Firefox128` `Firefox133` `Firefox135` `FirefoxPrivate135` `FirefoxAndroid135` `Firefox136` `FirefoxPrivate136` `Firefox139` `Firefox142` `Firefox143` `Firefox144` `Firefox145` `Firefox146` `Firefox147` `Firefox148` `Firefox149` `Firefox150` `Firefox151` `Firefox152`
 
     -   :fontawesome-brands-safari: **Safari**
 

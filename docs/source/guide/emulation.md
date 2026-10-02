@@ -4,6 +4,9 @@
     - Firefox/Chrome/Android
     - Custom TLS/HTTP2
 
+The built-in profiles include `Profile.Chrome154` and `Profile.Firefox152`.
+Use a profile directly, or combine it with a platform using `Emulation`.
+
 ### Simple Firefox Emulation
 
 ```python
@@ -14,7 +17,7 @@ from wreq.emulation import Emulation
 
 async def main():
     client = Client(
-        emulation=Emulation.Firefox135,
+        emulation=Emulation.Firefox152,
     )
     resp = await client.get("https://tls.peet.ws/api/all")
     print(f"Status: {resp.status}")
@@ -38,7 +41,7 @@ async def main():
     resp = await client.get(
         "https://tls.peet.ws/api/all",
         emulation=Emulation(
-            profile=Profile.Chrome134,
+            profile=Profile.Chrome154,
             platform=Platform.Android,
         ),
         # Disable client default headers

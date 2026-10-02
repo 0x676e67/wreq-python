@@ -54,6 +54,7 @@ define_enum!(
     Chrome151,
     Chrome152,
     Chrome153,
+    Chrome154,
 
     Edge101,
     Edge122,
@@ -95,6 +96,7 @@ define_enum!(
     Firefox149,
     Firefox150,
     Firefox151,
+    Firefox152,
 
     SafariIos17_2,
     SafariIos17_4_1,

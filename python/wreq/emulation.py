@@ -70,6 +70,7 @@ class Profile(Enum):
     Chrome151 = auto()
     Chrome152 = auto()
     Chrome153 = auto()
+    Chrome154 = auto()
 
     # Microsoft Edge versions
     Edge101 = auto()
@@ -113,6 +114,7 @@ class Profile(Enum):
     Firefox149 = auto()
     Firefox150 = auto()
     Firefox151 = auto()
+    Firefox152 = auto()
 
     # Safari versions
     SafariIos17_2 = auto()
@@ -247,6 +249,7 @@ class Emulation:
     Chrome151: ClassVar[Profile] = Profile.Chrome151
     Chrome152: ClassVar[Profile] = Profile.Chrome152
     Chrome153: ClassVar[Profile] = Profile.Chrome153
+    Chrome154: ClassVar[Profile] = Profile.Chrome154
 
     # Microsoft Edge versions
     Edge101: ClassVar[Profile] = Profile.Edge101
@@ -290,6 +293,7 @@ class Emulation:
     Firefox149: ClassVar[Profile] = Profile.Firefox149
     Firefox150: ClassVar[Profile] = Profile.Firefox150
     Firefox151: ClassVar[Profile] = Profile.Firefox151
+    Firefox152: ClassVar[Profile] = Profile.Firefox152
 
     # Safari versions
     SafariIos17_2: ClassVar[Profile] = Profile.SafariIos17_2
