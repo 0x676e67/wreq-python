@@ -15,7 +15,6 @@ on:
       - "bench/**"
       - "*.pyi"
       - "*.md"
-      - "python/**"
       - "README.md"
   workflow_dispatch:
 
