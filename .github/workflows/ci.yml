@@ -311,6 +311,9 @@ jobs:
           target: ${{ matrix.platform.target }}
           args: --release --out dist ${{ matrix.build_type.maturin_args || '' }} ${{ matrix.build_type.cargo_args }} --features ${{ matrix.platform.allocator || '' }}
           sccache: "false"
+      - name: Rust unit tests
+        if: matrix.build_type.name == 'standard' && matrix.platform.target == 'x64'
+        run: cargo test --lib --locked
       - name: Upload wheels
         uses: actions/upload-artifact@v7
         with:
