@@ -1,5 +1,6 @@
 import asyncio
 import gc
+import sys
 import weakref
 from contextlib import asynccontextmanager
 
@@ -10,6 +11,116 @@ import wreq
 
 class Cancellation(asyncio.CancelledError):
     pass
+
+
+@pytest.mark.skipif(
+    sys.implementation.name != "pypy", reason="PyPy legacy throw protocol"
+)
+def test_legacy_coroutine_throw():
+    from wreq._compat import _install
+
+    try:
+        raise RuntimeError("traceback origin")
+    except RuntimeError as error:
+        origin = error.__traceback__
+
+    def contains(traceback):
+        while traceback is not None:
+            if traceback is origin:
+                return True
+            traceback = traceback.tb_next
+        return False
+
+    def invoke(*args, **kwargs):
+        coroutine = wreq.get("")
+        try:
+            coroutine.throw(*args, **kwargs)
+        except BaseException as error:
+            return error
+        finally:
+            coroutine.close()
+        pytest.fail("throw did not raise")
+
+    class ExceptionValue(ValueError):
+        def with_traceback(self, *_):
+            raise AssertionError("overridden method must not run")
+
+    for instance_first in (False, True):
+        for traceback in (None, origin):
+            error = ExceptionValue("identity")
+            BaseException.with_traceback(error, origin)
+            args = (
+                (error, None, traceback)
+                if instance_first
+                else (ExceptionValue, error, traceback)
+            )
+            caught = invoke(*args)
+            assert caught is error
+            assert caught.args == ("identity",)
+            assert contains(caught.__traceback__) is (
+                instance_first or traceback is not None
+            )
+
+    assert invoke(ValueError, ("tuple", 7)).args == ("tuple", 7)
+    error = ValueError("keyword")
+    assert invoke(exc=error) is error
+
+    class PretendException:
+        @property
+        def __class__(self):
+            return ValueError
+
+    value = PretendException()
+    assert invoke(ValueError, value).args == (value,)
+
+    class ExceptionMeta(type):
+        def __subclasscheck__(cls, subclass):
+            return True
+
+    class CustomException(Exception, metaclass=ExceptionMeta):
+        pass
+
+    assert type(invoke(CustomException, value)) is CustomException
+    assert invoke(CustomException, value).args == (value,)
+
+    class HiddenTraceback(RuntimeError):
+        def __getattribute__(self, name):
+            if name == "__traceback__":
+                return None
+            return super().__getattribute__(name)
+
+    class BadConstructor(Exception):
+        def __new__(cls):
+            raise HiddenTraceback("constructor failure")
+
+    class NotAnException(Exception):
+        def __new__(cls):
+            return PretendException()
+
+    caught = invoke(BadConstructor, None, origin)
+    assert type(caught) is HiddenTraceback
+    assert caught.args == ("constructor failure",)
+    assert not contains(BaseException.__traceback__.__get__(caught))
+    assert type(invoke(NotAnException)) is TypeError
+
+    coroutine = wreq.get("")
+    try:
+        installed = vars(type(coroutine))["throw"]
+        _install(type(coroutine))
+        assert vars(type(coroutine))["throw"] is installed
+        for args in (
+            (object(),),
+            (ValueError, None, object()),
+            (error, "value"),
+            (ValueError,) * 4,
+        ):
+            with pytest.raises(TypeError):
+                coroutine.throw(*args)
+        with pytest.raises(ValueError) as caught:
+            coroutine.throw(error)
+        assert caught.value is error
+    finally:
+        coroutine.close()
 
 
 @asynccontextmanager
@@ -35,7 +146,7 @@ async def local_server():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("operation", ["request", "request_error", "bytes", "text", "json"])
+@pytest.mark.parametrize("operation", ["request", "request_error", "stream"])
 async def test_cancellation_after_rust_completion(operation):
     async with local_server() as (url, connections), wreq.Client(proxies=[]) as client:
         response = None
@@ -49,7 +160,7 @@ async def test_cancellation_after_rust_completion(operation):
             writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n")
             await writer.drain()
             response = await asyncio.wait_for(task, 5)
-            coroutine = getattr(response, operation)()
+            coroutine = anext(response.stream())
             waiter = coroutine.send(None)
 
         try:
@@ -81,7 +192,7 @@ async def test_cancellation_after_rust_completion(operation):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("action", ["cancel", "close_coroutine", "close_client"])
+@pytest.mark.parametrize("action", ["cancel", "close_coroutine"])
 async def test_pending_request_cancellation(action):
     async with local_server() as (url, connections), wreq.Client(proxies=[]) as client:
         coroutine = client.get(url)
@@ -94,20 +205,89 @@ async def test_pending_request_cancellation(action):
         if action == "close_coroutine":
             coroutine.close()
         else:
-            if action == "cancel":
-                task.cancel("caller cancellation message")
-            else:
-                client.close()
+            task.cancel("caller cancellation message")
             done, _ = await asyncio.wait({task}, timeout=5)
             assert task in done, "Cancellation did not finish"
             with pytest.raises(asyncio.CancelledError) as caught:
                 await task
-            expected = (
-                "caller cancellation message"
-                if action == "cancel"
-                else "Operation was cancelled: client has been closed"
-            )
-            assert caught.value.args == (expected,)
+            assert caught.value.args == ("caller cancellation message",)
 
         # The cancelled operation must release its pending network request.
         assert await asyncio.wait_for(reader.read(), 5) == b""
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["cancel", "close_coroutine"])
+async def test_pending_stream_cancellation(action):
+    async with local_server() as (url, connections), wreq.Client(proxies=[]) as client:
+        task = asyncio.create_task(client.get(url))
+        _, writer = await asyncio.wait_for(connections.get(), 5)
+        writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n")
+        await writer.drain()
+        response = await asyncio.wait_for(task, 5)
+        stream = response.stream()
+        coroutine = anext(stream)
+
+        if action == "close_coroutine":
+            assert isinstance(coroutine.send(None), asyncio.Future)
+            coroutine.close()
+        else:
+            started = asyncio.Event()
+
+            async def read():
+                started.set()
+                return await coroutine
+
+            task = asyncio.create_task(read())
+            await started.wait()
+            task.cancel("cancel stream read")
+            with pytest.raises(asyncio.CancelledError, match="cancel stream read"):
+                await asyncio.wait_for(task, 5)
+
+        # Closing the stream must acquire the lock held by the pending read.
+        # Do not send a body: that would let a leaked read release it naturally.
+        await asyncio.wait_for(stream.__aexit__(None, None, None), 5)
+        with pytest.raises(StopAsyncIteration):
+            await anext(stream)
+        await response.close()
+
+
+@pytest.mark.asyncio
+async def test_stream_coroutine_iteration():
+    async with local_server() as (url, connections), wreq.Client(proxies=[]) as client:
+        task = asyncio.create_task(client.get(url))
+        _, writer = await asyncio.wait_for(connections.get(), 5)
+        writer.write(
+            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n"
+            b"Trailer: x-check\r\n\r\n1\r\na\r\n"
+        )
+        await writer.drain()
+        response = await asyncio.wait_for(task, 5)
+        async with response.stream() as stream:
+            deferred = stream.__anext__()
+            assert asyncio.iscoroutine(deferred)
+            assert not isinstance(deferred, asyncio.Future)
+            assert deferred.__qualname__ == "Streamer.__anext__"
+            assert not hasattr(stream, "_anext")
+            try:
+                # An unawaited __anext__ must not consume the first frame.
+                assert await asyncio.wait_for(anext(stream), 5) == b"a"
+                writer.write(b"1\r\nb\r\n0\r\nx-check: done\r\n\r\n")
+                await writer.drain()
+                assert await asyncio.wait_for(deferred, 5) == b"b"
+                with pytest.raises(
+                    RuntimeError, match="cannot reuse already awaited coroutine"
+                ):
+                    await deferred
+            finally:
+                deferred.close()
+
+            async with asyncio.timeout(5):
+                frames = [frame async for frame in stream]
+            assert len(frames) == 1
+            assert isinstance(frames[0], wreq.HeaderMap)
+            assert frames[0]["x-check"] == b"done"
+            with pytest.raises(StopAsyncIteration):
+                await stream.__anext__()
+            assert await anext(stream, None) is None
+        await response.close()

@@ -133,9 +133,9 @@ impl Part {
             let mut inner = match value {
                 Value::Text(text) => multipart::Part::stream(text.0),
                 Value::Bytes(bytes) => multipart::Part::stream(bytes.0),
-                Value::File(path) => pyo3_async_runtimes::tokio::get_runtime()
-                    .block_on(multipart::Part::file(path))
-                    .map_err(Error::from)?,
+                Value::File(path) => crate::runtime::get().handle().block_on(async move {
+                    multipart::Part::file(path).await.map_err(Error::from)
+                })?,
                 Value::Stream(stream) => {
                     let stream = Body::wrap_stream(stream);
                     match self.length {

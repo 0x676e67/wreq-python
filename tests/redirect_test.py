@@ -1,8 +1,42 @@
+import asyncio
+
 import pytest
 import wreq
 from wreq import redirect
 
+from cancellation_test import local_server
+
 client = wreq.Client(redirect=redirect.Policy.limited(10))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fail", [False, True])
+async def test_custom_redirect_callback(fail):
+    def callback(attempt):
+        if fail:
+            raise ValueError("redirect callback failed")
+        return attempt.stop()
+
+    async with (
+        local_server() as (url, connections),
+        wreq.Client(proxies=[], redirect=redirect.Policy.custom(callback)) as client,
+    ):
+        task = asyncio.create_task(client.get(url))
+        _, writer = await asyncio.wait_for(connections.get(), 5)
+        writer.write(
+            b"HTTP/1.1 302 Found\r\nLocation: /next\r\nContent-Length: 0\r\n\r\n"
+        )
+        await writer.drain()
+        if fail:
+            with pytest.raises(
+                wreq.exceptions.RequestError,
+                match="ValueError: redirect callback failed",
+            ):
+                await asyncio.wait_for(task, 5)
+        else:
+            response = await asyncio.wait_for(task, 5)
+            assert response.status.is_redirection()
+            await response.close()
 
 
 @pytest.mark.asyncio

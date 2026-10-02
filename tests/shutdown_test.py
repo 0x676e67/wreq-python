@@ -4,63 +4,140 @@ import sys
 
 import pytest
 
-# https://github.com/0x676e67/wreq-python/discussions/305: a Tokio worker that attaches
-# to Python during interpreter shutdown used to hit PyO3's not-initialized panic. wreq
-# now detects the unavailable interpreter and reports a wreq error without panicking.
-
-# A request is left pending on a listener that never accepts, then an uncaught error
-# shuts the interpreter down. Module teardown runs after Py_IsInitialized() drops to 0;
-# `HoldTeardown.__del__` closes the listener there, failing the request so the coroutine
-# waker attaches from a Tokio worker, and stalls teardown until that happens.
+# Keep a pending request alive into CPython module teardown, then fail its I/O.
+# Upload mode also wakes the Python producer waiting for channel capacity.
 SCRIPT = """
 import asyncio
+import os
 import socket
-import time
+import sys
+import threading
+from types import FunctionType
 
 import wreq
 
 listener = socket.socket()
 listener.bind(("127.0.0.1", 0))
 listener.listen(8)
+listener.settimeout(5)
 url = f"http://127.0.0.1:{listener.getsockname()[1]}/"
 
 
+wait_lock = threading.Lock()
+wait_lock.acquire()
+
+
 class HoldTeardown:
-    def __init__(self, listener, task):
-        self.listener = listener
+    def __init__(self, peer, task):
+        self.peer = peer
         self.task = task
 
-    def __del__(self):
-        self.listener.close()
-        time.sleep(1)
+    def __del__(self, write=os.write, wait=wait_lock.acquire):
+        self.peer.close()
+        write(2, b"teardown: connection closed\\n")
+        wait(timeout=1)
+        write(2, b"teardown: wait complete\\n")
 
 
+async def chunks():
+    chunk = b"x" * (1024 * 1024)
+    while True:
+        yield chunk
+
+
+# Do not let the suspended generator retain this module's teardown sentinel.
+chunks = FunctionType(chunks.__code__, {})
 loop = asyncio.new_event_loop()
-task = loop.create_task(wreq.Client().get(url))
+client = wreq.Client(proxies=[])
+upload = sys.argv[1] == "upload"
+task = loop.create_task(
+    client.post(url, body=chunks()) if upload else client.get(url)
+)
 loop.run_until_complete(asyncio.sleep(0.05))
-hold = HoldTeardown(listener, task)
-del listener, task
+peer, _ = listener.accept()
+listener.close()
+peer.settimeout(5)
+assert peer.recv(4096), "request did not reach the server"
+loop.run_until_complete(asyncio.sleep(0.1))
+assert not task.done(), "request must remain pending"
+if upload:
+    assert any(
+        getattr(getattr(t.get_coro(), "cr_await", None), "__name__", None) == "send"
+        for t in asyncio.all_tasks(loop)
+    ), "upload producer must be waiting for channel capacity"
+hold = HoldTeardown(peer, task)
+del peer, task
 raise RuntimeError("uncaught error while a request is in flight")
 """
 
-# PyPy doesn't guarantee `__del__` runs during interpreter exit, so the trigger may not fire.
-pytestmark = pytest.mark.skipif(
+
+@pytest.mark.skipif(
     platform.python_implementation() != "CPython",
-    reason="relies on CPython running __del__ during module teardown",
+    reason="requires CPython module teardown to run __del__",
 )
-
-
-def test_shutdown_wake_reports_error_without_panic():
+@pytest.mark.parametrize("operation", ["request", "upload"])
+def test_shutdown_wake_without_panic(operation):
     proc = subprocess.run(
-        [sys.executable, "-c", SCRIPT],
+        [sys.executable, "-c", SCRIPT, operation],
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=15,
     )
-    # Exits through the uncaught RuntimeError, not an abort.
     assert proc.returncode == 1, proc.stderr
+    assert "uncaught error while a request is in flight" in proc.stderr
+    assert "teardown: connection closed" in proc.stderr
+    assert "teardown: wait complete" in proc.stderr
     assert "panicked" not in proc.stderr
-    assert (
-        "wreq: failed to wake a Python coroutine: "
-        "The Python interpreter is not available" in proc.stderr
+    assert "Exception ignored" not in proc.stderr
+
+
+def test_unconsumed_upload_cleanup():
+    script = """
+import asyncio
+import gc
+import wreq
+
+async def main(retain):
+    produced = []
+    full = asyncio.Event()
+    closed = asyncio.Event()
+
+    async def chunks():
+        try:
+            for index in range(100):
+                produced.append(index)
+                if index == 1:
+                    full.set()
+                yield b"chunk"
+        finally:
+            closed.set()
+            print("generator closed", flush=True)
+
+    # A part retains the body without polling its Rust stream.
+    part = wreq.Part(name="file", value=chunks())
+    try:
+        await asyncio.wait_for(full.wait(), 5)
+        await asyncio.sleep(0.05)
+        assert produced == [0, 1]
+        if retain:
+            return part
+    finally:
+        if not retain:
+            del part
+            # PyPy does not destroy native objects immediately after del.
+            for _ in range(3):
+                gc.collect()
+            await asyncio.wait_for(closed.wait(), 5)
+
+for retain in (False, True):
+    part = asyncio.run(main(retain))
+    print("runner closed", flush=True)
+"""
+    proc = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=15,
     )
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.splitlines() == ["generator closed", "runner closed"] * 2

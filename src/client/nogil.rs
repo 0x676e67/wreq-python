@@ -1,65 +1,57 @@
 use std::{
     future::Future,
     pin::Pin,
-    sync::{Arc, Once},
+    sync::Arc,
     task::{Context, Poll, Wake, Waker},
 };
 
-use pin_project_lite::pin_project;
-use pyo3::{
-    coroutine::CancelHandle,
-    exceptions::{PyRuntimeError, asyncio::CancelledError},
-    prelude::*,
-};
-use tokio_util::{sync::CancellationToken, task::AbortOnDropHandle};
+use pyo3::{coroutine::CancelHandle, exceptions::PyRuntimeError, prelude::*};
+use tokio_util::task::AbortOnDropHandle;
 
-use crate::error;
+use crate::runtime::Runtime;
 
-pin_project! {
-    /// A future that allows Python threads to run while it is being polled or executed.
-    /// It also handles cancellation and spawns the task in tokio runtime.
-    pub struct NoGIL<T> {
-        #[pin]
-        handle: AbortOnDropHandle<PyResult<T>>,
-        cancel: CancelHandle,
-    }
+/// A future that allows Python threads to run while it is being polled or executed.
+/// It also handles cancellation and spawns the task in tokio runtime.
+pub struct NoGIL<T> {
+    handle: AbortOnDropHandle<PyResult<T>>,
+    cancel: CancelHandle,
 }
+
+struct GuardedWaker(Waker);
+
+// ===== impl NoGIL =====
 
 impl<T> NoGIL<T>
 where
     T: Send + 'static,
 {
-    /// Create [`NoGIL`] from a future
+    /// Spawn internal work without a Python cancellation source.
     #[inline]
-    pub fn new<Fut>(fut: Fut, cancel: CancelHandle) -> Self
+    pub fn new<Fut>(runtime: &Runtime, fut: Fut) -> Self
     where
         Fut: Future<Output = PyResult<T>> + Send + 'static,
     {
-        Self {
-            handle: AbortOnDropHandle::new(pyo3_async_runtimes::tokio::get_runtime().spawn(fut)),
-            cancel,
-        }
+        Self::with_cancel(runtime, fut, CancelHandle::new())
     }
 
-    /// Create [`NoGIL`] from a future and a cancellation token
+    /// Spawn with Python cancellation, keeping the runtime alive until the task ends.
     #[inline]
-    pub fn new_with_token<Fut>(
-        fut: Fut,
-        cancel: CancelHandle,
-        cancel_token: CancellationToken,
-    ) -> Self
+    pub fn with_cancel<Fut>(runtime: &Runtime, fut: Fut, cancel: CancelHandle) -> Self
     where
         Fut: Future<Output = PyResult<T>> + Send + 'static,
     {
-        Self::new(
-            async move {
-                tokio::select! {
-                    result = fut => result,
-                    _ = cancel_token.cancelled() => Err(CancelledError::new_err("Operation was cancelled: client has been closed")),
-                }
-            },
+        let owner = runtime.clone();
+        Self {
+            handle: AbortOnDropHandle::new(Python::attach(|py| {
+                py.detach(|| {
+                    runtime.handle().spawn(async move {
+                        let _owner = owner;
+                        fut.await
+                    })
+                })
+            })),
             cancel,
-        )
+        }
     }
 }
 
@@ -71,7 +63,7 @@ where
 
     #[inline]
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.project();
+        let this = self.get_mut();
         // A Python throw must win even when the Tokio task has already finished.
         if let Poll::Ready(exc) = this.cancel.poll_cancelled(cx) {
             this.handle.abort();
@@ -80,11 +72,10 @@ where
             })));
         }
 
-        let waker = Waker::from(Arc::new(GuardedWaker(cx.waker().clone())));
+        let waker = cx.waker();
         Python::attach(|py| {
             py.detach(|| {
-                let mut cx = Context::from_waker(&waker);
-                match this.handle.poll(&mut cx) {
+                match poll_with_guard(Pin::new(&mut this.handle), &mut Context::from_waker(waker)) {
                     Poll::Ready(Ok(result)) => Poll::Ready(result),
                     Poll::Ready(Err(e)) => Poll::Ready(Err(PyRuntimeError::new_err(e.to_string()))),
                     Poll::Pending => Poll::Pending,
@@ -94,12 +85,28 @@ where
     }
 }
 
-/// Wakes the Python coroutine from Tokio threads.
-///
-/// PyO3's coroutine waker calls `Python::attach`, which panics once the interpreter has
-/// shut down. Waking inside [`error::attach`] lets it reuse that attachment instead; when
-/// Python is gone the wake is dropped and reported once, as no coroutine is left to resume.
-struct GuardedWaker(Waker);
+/// Run network work on its selected worker; only wait for completion on the caller.
+/// The caller must be detached from Python and outside an async Tokio context.
+/// Its runtime borrow keeps the workers alive until the join completes.
+pub fn block_on<F, T>(runtime: &Runtime, future: F) -> PyResult<T>
+where
+    F: Future<Output = PyResult<T>> + Send + 'static,
+    T: Send + 'static,
+{
+    let task = runtime.handle().spawn(future);
+    runtime
+        .handle()
+        .block_on(task)
+        .map_err(|err| PyRuntimeError::new_err(err.to_string()))?
+}
+
+/// Protect Python wakers retained by futures that can be woken from Rust threads.
+pub fn poll_with_guard<F: Future>(future: Pin<&mut F>, cx: &mut Context<'_>) -> Poll<F::Output> {
+    let waker = Waker::from(Arc::new(GuardedWaker(cx.waker().clone())));
+    future.poll(&mut Context::from_waker(&waker))
+}
+
+// ===== impl GuardedWaker =====
 
 impl Wake for GuardedWaker {
     fn wake(self: Arc<Self>) {
@@ -107,9 +114,8 @@ impl Wake for GuardedWaker {
     }
 
     fn wake_by_ref(self: &Arc<Self>) {
-        if let Err(err) = error::attach(|_| self.0.wake_by_ref()) {
-            static REPORTED: Once = Once::new();
-            REPORTED.call_once(|| eprintln!("wreq: failed to wake a Python coroutine: {err}"));
-        }
+        // PyO3's nested attach reuses this attachment. If Python is unavailable,
+        // skip the wake instead of invoking its infallible attachment path.
+        Python::try_attach(|_| self.0.wake_by_ref());
     }
 }

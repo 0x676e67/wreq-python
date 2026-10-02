@@ -24,6 +24,7 @@ use crate::{
     header::HeaderMap,
     http::{StatusCode, Version},
     redirect::History,
+    runtime::Runtime,
     tls::TlsInfo,
 };
 
@@ -33,6 +34,7 @@ pub struct Response {
     uri: Uri,
     parts: Parts,
     body: Arc<ArcSwapOption<Body>>,
+    runtime: Runtime,
 }
 
 /// Represents the state of the HTTP response body.
@@ -51,14 +53,19 @@ pub struct BlockingResponse(Response);
 
 impl Response {
     /// Create a new [`Response`] instance.
-    pub fn new(response: wreq::Response) -> Self {
+    pub fn new(response: wreq::Response, runtime: Runtime) -> Self {
         let uri = response.uri().clone();
         let response = HttpResponse::from(response)
             .map(Body::Streamable)
             .map(ArcSwapOption::from_pointee)
             .map(Arc::new);
         let (parts, body) = response.into_parts();
-        Response { uri, parts, body }
+        Response {
+            uri,
+            parts,
+            body,
+            runtime,
+        }
     }
 
     /// Builds a [`wreq::Response`] from the current response metadata and the given body.
@@ -212,7 +219,7 @@ impl Response {
     /// Stream read-only memoryviews and any trailing headers from the body.
     pub fn stream(&self) -> PyResult<Streamer> {
         self.stream_response()
-            .map(Streamer::new)
+            .map(|response| Streamer::new(response, self.runtime.clone()))
             .map_err(Into::into)
     }
 
@@ -227,7 +234,7 @@ impl Response {
             .cache_response()
             .and_then(|resp| ResponseExt::text(resp, encoding))
             .map_err(Into::into);
-        NoGIL::new(fut, cancel).await
+        NoGIL::with_cancel(&self.runtime, fut, cancel).await
     }
 
     /// Get the JSON content of the response.
@@ -236,7 +243,7 @@ impl Response {
             .cache_response()
             .and_then(ResponseExt::json::<Json>)
             .map_err(Into::into);
-        NoGIL::new(fut, cancel).await
+        NoGIL::with_cancel(&self.runtime, fut, cancel).await
     }
 
     /// Read the body as a read-only memoryview, retaining its data after the response closes.
@@ -246,7 +253,7 @@ impl Response {
             .and_then(ResponseExt::bytes)
             .map_ok(PyBuffer::from)
             .map_err(Into::into);
-        NoGIL::new(fut, cancel).await
+        NoGIL::with_cancel(&self.runtime, fut, cancel).await
     }
 
     /// Discard the retained body and mark its connection as non-reusable.
@@ -381,7 +388,7 @@ impl BlockingResponse {
                 .cache_response()
                 .and_then(|resp| ResponseExt::text(resp, encoding))
                 .map_err(Into::into);
-            pyo3_async_runtimes::tokio::get_runtime().block_on(fut)
+            crate::client::nogil::block_on(&self.0.runtime, fut)
         })
     }
 
@@ -393,7 +400,7 @@ impl BlockingResponse {
                 .cache_response()
                 .and_then(ResponseExt::json::<Json>)
                 .map_err(Into::into);
-            pyo3_async_runtimes::tokio::get_runtime().block_on(fut)
+            crate::client::nogil::block_on(&self.0.runtime, fut)
         })
     }
 
@@ -406,7 +413,7 @@ impl BlockingResponse {
                 .and_then(ResponseExt::bytes)
                 .map_ok(PyBuffer::from)
                 .map_err(Into::into);
-            pyo3_async_runtimes::tokio::get_runtime().block_on(fut)
+            crate::client::nogil::block_on(&self.0.runtime, fut)
         })
     }
 

@@ -32,7 +32,7 @@ use crate::{
     http1::Http1Options,
     http2::Http2Options,
     proxy::Proxy,
-    redirect,
+    redirect, runtime,
     tls::{Identity, KeyLog, TlsOptions, TlsVerify, TlsVersion},
 };
 
@@ -59,6 +59,7 @@ impl_print_str!(Display, SocketAddr);
 /// A builder for `Client`.
 #[derive(Default)]
 struct Builder {
+    runtime: Option<runtime::Runtime>,
     /// The Emulation settings for the client.
     emulation: Option<EmulationLike>,
     /// The user agent to use for the client.
@@ -171,6 +172,7 @@ impl FromPyObject<'_, '_> for Builder {
 
     fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
         let mut builder = Self::default();
+        extract_option!(ob, builder, runtime);
         extract_option!(ob, builder, emulation);
         extract_option!(ob, builder, user_agent);
         extract_option!(ob, builder, headers);
@@ -229,10 +231,11 @@ impl FromPyObject<'_, '_> for Builder {
 }
 
 /// A client for making HTTP requests.
-#[derive(Default, Clone)]
+#[derive(Clone)]
 #[pyclass(subclass, frozen, skip_from_py_object)]
 pub struct Client {
     inner: wreq::Client,
+    runtime: runtime::Runtime,
     cancel: CancellationToken,
     raise_for_status: bool,
 
@@ -248,6 +251,19 @@ pub struct BlockingClient(Client);
 
 // ====== Client =====
 
+impl Default for Client {
+    fn default() -> Self {
+        let runtime = runtime::get();
+        Self {
+            inner: wreq::Client::default(),
+            runtime: runtime.clone(),
+            cancel: CancellationToken::new(),
+            raise_for_status: false,
+            cookie_jar: None,
+        }
+    }
+}
+
 #[pymethods]
 impl Client {
     /// Creates a new Client instance.
@@ -255,6 +271,10 @@ impl Client {
     #[pyo3(signature = (**kwds))]
     fn new(py: Python, kwds: Option<Builder>) -> PyResult<Client> {
         py.detach(|| {
+            let runtime = match kwds.as_ref().and_then(|config| config.runtime.as_ref()) {
+                Some(runtime) => runtime.select()?,
+                None => runtime::get().clone(),
+            };
             // Create the client builder.
             let mut builder = wreq::Client::builder();
             let mut cookie_jar: Option<Jar> = None;
@@ -464,6 +484,7 @@ impl Client {
                 .build()
                 .map(|inner| Client {
                     inner,
+                    runtime,
                     cancel: CancellationToken::new(),
                     cookie_jar,
                     raise_for_status,
@@ -473,10 +494,17 @@ impl Client {
         })
     }
 
-    /// Close the client, preventing any new requests.
+    /// Cancel pending requests and reject new ones with asyncio.CancelledError.
+    /// Existing responses, WebSockets and the shared runtime remain usable.
     #[inline]
     pub fn close(&self) {
         self.cancel.cancel();
+    }
+
+    /// The runtime used by this client and its responses.
+    #[getter]
+    pub fn runtime(&self) -> runtime::Runtime {
+        self.runtime.clone()
     }
 
     /// Make a GET request to the given URL.
@@ -585,10 +613,10 @@ impl Client {
         url: PyBackedStr,
         kwds: Option<Request>,
     ) -> PyResult<Response> {
-        NoGIL::new_with_token(
+        NoGIL::with_cancel(
+            &self.runtime,
             execute_request(self.clone(), method, url, kwds),
             cancel,
-            self.cancel.clone(),
         )
         .await
     }
@@ -602,10 +630,10 @@ impl Client {
         url: PyBackedStr,
         kwds: Option<WebSocketRequest>,
     ) -> PyResult<WebSocket> {
-        NoGIL::new_with_token(
+        NoGIL::with_cancel(
+            &self.runtime,
             execute_websocket_request(self.clone(), url, kwds),
             cancel,
-            self.cancel.clone(),
         )
         .await
     }
@@ -628,6 +656,12 @@ impl Client {
 
 #[pymethods]
 impl BlockingClient {
+    /// The runtime used by this client and its responses.
+    #[getter]
+    pub fn runtime(&self) -> runtime::Runtime {
+        self.0.runtime()
+    }
+
     /// Creates a new blocking Client instance.
     #[new]
     #[inline]
@@ -643,7 +677,8 @@ impl BlockingClient {
         self.0.cookie_jar.clone()
     }
 
-    /// Close the client, preventing any new requests.
+    /// Cancel pending requests and reject new ones with asyncio.CancelledError.
+    /// Existing responses, WebSockets and the shared runtime remain usable.
     #[inline]
     pub fn close(&self) {
         self.0.close();
@@ -755,9 +790,11 @@ impl BlockingClient {
         kwds: Option<Request>,
     ) -> PyResult<BlockingResponse> {
         py.detach(|| {
-            pyo3_async_runtimes::tokio::get_runtime()
-                .block_on(execute_request(self.0.clone(), method, url, kwds))
-                .map(Into::into)
+            nogil::block_on(
+                &self.0.runtime,
+                execute_request(self.0.clone(), method, url, kwds),
+            )
+            .map(Into::into)
         })
     }
 
@@ -770,9 +807,11 @@ impl BlockingClient {
         kwds: Option<WebSocketRequest>,
     ) -> PyResult<BlockingWebSocket> {
         py.detach(|| {
-            pyo3_async_runtimes::tokio::get_runtime()
-                .block_on(execute_websocket_request(self.0.clone(), url, kwds))
-                .map(Into::into)
+            nogil::block_on(
+                &self.0.runtime,
+                execute_websocket_request(self.0.clone(), url, kwds),
+            )
+            .map(Into::into)
         })
     }
 }

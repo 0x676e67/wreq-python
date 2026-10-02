@@ -65,6 +65,27 @@ if __name__ == "__main__":
     main()
 ```
 
+### Custom Runtime
+
+The blocking client accepts the same `Runtime` as the async client. Without one,
+it uses the shared global multi-thread runtime.
+
+```python
+from wreq.blocking import Client
+from wreq.runtime import Runtime
+
+runtime = Runtime(workers=1, work_steal=False)
+with Client(runtime=runtime) as client:
+    with client.get("https://httpbin.io/get") as response:
+        print(response.text())
+```
+
+Network work runs on the selected worker while the calling thread waits.
+`client.runtime` is read-only. Closing the client does not shut down a shared
+runtime; it cancels pending requests and rejects new ones with
+`asyncio.CancelledError`. See [custom runtimes](advanced.md#custom-runtimes) for
+configuration and lifetime details.
+
 ### Cookies
 
 ```python

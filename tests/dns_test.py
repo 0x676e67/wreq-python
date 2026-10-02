@@ -45,6 +45,7 @@ async def test_dns_options(dns_http_server, blocking_api):
             kwargs["dns_options"] = options
 
         if blocking_api:
+
             def request():
                 with blocking.Client(**kwargs) as client:
                     with client.get(url) as response:

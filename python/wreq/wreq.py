@@ -26,6 +26,7 @@ from .http1 import Http1Options
 from .http2 import Http2Options
 from .proxy import *
 from .redirect import History
+from .runtime import Runtime
 from .tls import *
 
 
@@ -160,6 +161,9 @@ class Part:
     ) -> None:
         r"""
         Creates a new part.
+
+        Construct async-generator parts inside a running event loop. Their producers
+        start immediately on that loop and are closed after use.
 
         # Arguments
         - `name` - The name of the part.
@@ -309,12 +313,19 @@ class Streamer:
     """
 
     def __iter__(self) -> "Streamer": ...
+
     def __next__(self) -> memoryview | HeaderMap: ...
+
     def __enter__(self) -> Any: ...
+
     def __exit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None: ...
+
     def __aiter__(self) -> "Streamer": ...
+
     async def __anext__(self) -> memoryview | HeaderMap: ...
+
     async def __aenter__(self) -> Any: ...
+
     async def __aexit__(
         self, _exc_type: Any, _exc_value: Any, _traceback: Any
     ) -> None: ...
@@ -514,6 +525,9 @@ class WebSocket:
 
 
 class ClientConfig(TypedDict):
+    runtime: NotRequired[Runtime | None]
+    """Runtime for this client and its responses; None uses the shared default."""
+
     emulation: NotRequired[emulation.Emulation | emulation.Profile]
     """Emulation config."""
 
@@ -947,6 +961,8 @@ class Request(TypedDict):
     ]
     """
     The body to use for the request.
+    Async generators run on the caller's running event loop. Upload errors fail
+    the request; cancellation schedules generator cleanup on that loop.
     """
 
     multipart: NotRequired[Multipart]
@@ -1101,6 +1117,9 @@ class Client:
     A client for making HTTP requests.
     """
 
+    runtime: Runtime
+    """Read-only shared runtime used by this client and its responses."""
+
     cookie_jar: Jar | None
     r"""
     Get the cookie jar used by this client (if enabled/configured).
@@ -1138,9 +1157,8 @@ class Client:
 
     def close(self) -> None:
         r"""
-        Closes the client and any associated resources.
-
-        After calling this method, the client should not be used to make further requests.
+        Cancels pending requests and rejects new ones with `asyncio.CancelledError`.
+        Existing responses, WebSockets and the shared runtime remain usable.
 
         Examples:
 

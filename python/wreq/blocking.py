@@ -19,6 +19,7 @@ from . import (
 from .cookie import Cookie, Jar
 from .header import HeaderMap
 from .redirect import History
+from .runtime import Runtime
 from .tls import TlsInfo
 
 
@@ -213,6 +214,9 @@ class Client:
     A blocking client for making HTTP requests.
     """
 
+    runtime: Runtime
+    """Read-only shared runtime used by this client and its responses."""
+
     cookie_jar: Jar | None
     r"""
     Get the cookie jar used by this client (if enabled/configured).
@@ -247,9 +251,8 @@ class Client:
 
     def close(self) -> None:
         r"""
-        Closes the client and any associated resources.
-
-        After calling this method, the client should not be used to make further requests.
+        Cancels pending requests and rejects new ones with `asyncio.CancelledError`.
+        Existing responses, WebSockets and the shared runtime remain usable.
 
         Examples:
 
