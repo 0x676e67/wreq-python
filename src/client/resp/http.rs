@@ -49,6 +49,9 @@ enum Body {
 #[pyclass(name = "Response", subclass, frozen, str, skip_from_py_object)]
 pub struct BlockingResponse(Response);
 
+/// Forbids connection reuse unless disarmed by taking the response parts.
+struct RecycleGuard(Option<Parts>);
+
 // ===== impl Response =====
 
 impl Response {
@@ -89,11 +92,15 @@ impl Response {
             match Arc::into_inner(arc) {
                 Some(Body::Streamable(stream)) => {
                     return Box::pin(async move {
+                        // A failed or cancelled read may leave a stalled HTTP/2
+                        // connection behind, so only a complete body keeps it reusable.
+                        let mut guard = RecycleGuard(Some(parts));
                         let bytes = stream
                             .collect()
                             .await
                             .map(Collected::to_bytes)
                             .map_err(Error::Library)?;
+                        let parts = guard.0.take().ok_or(Error::Memory)?;
 
                         body.store(Some(Arc::new(Body::Reusable(bytes.clone()))));
                         let response = HttpResponse::from_parts(parts, bytes);
@@ -219,7 +226,7 @@ impl Response {
     /// Stream read-only memoryviews and any trailing headers from the body.
     pub fn stream(&self) -> PyResult<Streamer> {
         self.stream_response()
-            .map(|response| Streamer::new(response, self.runtime.clone()))
+            .map(|response| Streamer::new(response, &self.runtime))
             .map_err(Into::into)
     }
 
@@ -260,7 +267,7 @@ impl Response {
     /// This does not guarantee an immediate socket shutdown or cancel an active read.
     /// Cancel and await any body-read task before closing. A body transferred to a
     /// Streamer is managed separately; previously returned memoryviews remain valid.
-    /// Prefer an async context manager (`async with`) for response cleanup.
+    /// `async with` instead releases the body and keeps a fully read connection reusable.
     pub async fn close(&self) {
         Python::attach(|py| {
             py.detach(|| {
@@ -278,9 +285,11 @@ impl Response {
         Ok(slf)
     }
 
+    /// Release the body without forbidding reuse: a fully read connection returns
+    /// to the pool, while an unread HTTP/1 body drains or closes its connection.
     #[inline]
     async fn __aexit__(&self, _exc_type: Py<PyAny>, _exc_val: Py<PyAny>, _traceback: Py<PyAny>) {
-        self.close().await
+        self.destroy()
     }
 }
 
@@ -300,6 +309,16 @@ impl Drop for Response {
     #[inline]
     fn drop(&mut self) {
         self.destroy();
+    }
+}
+
+// ===== impl RecycleGuard =====
+
+impl Drop for RecycleGuard {
+    fn drop(&mut self) {
+        if let Some(parts) = self.0.take() {
+            wreq::Response::from(HttpResponse::from_parts(parts, Bytes::new())).forbid_recycle();
+        }
     }
 }
 
@@ -421,7 +440,7 @@ impl BlockingResponse {
     /// This does not guarantee an immediate socket shutdown or interrupt an active read.
     /// Do not close concurrently with a body read. A body transferred to a Streamer
     /// is managed separately; previously returned memoryviews remain valid.
-    /// Prefer a context manager (`with`) for response cleanup.
+    /// `with` instead releases the body and keeps a fully read connection reusable.
     #[inline]
     pub fn close(&self, py: Python) {
         py.detach(|| {
@@ -446,7 +465,8 @@ impl BlockingResponse {
         _exc_value: &Bound<'py, PyAny>,
         _traceback: &Bound<'py, PyAny>,
     ) {
-        self.close(py)
+        // Like `__aexit__`, release the body and leave reuse to the protocol.
+        py.detach(|| self.0.destroy())
     }
 }
 

@@ -133,12 +133,16 @@ async def test_blocking_client_runtime(steal):
 
     async with local_server() as (url, connections):
         task = asyncio.create_task(asyncio.to_thread(request, url))
-        for _ in range(2):
-            reader, writer = await asyncio.wait_for(connections.get(), 5)
+        reader, writer = await asyncio.wait_for(connections.get(), 5)
+        for index in range(2):
+            if index:
+                # Leaving `with` after a full read keeps the connection reusable.
+                await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 5)
             assert await asyncio.wait_for(read_chunked(reader), 5) == b"sync upload"
             writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}")
             await writer.drain()
         assert await asyncio.wait_for(task, 5) == b"{}"
+        assert connections.empty()
         del task
 
 

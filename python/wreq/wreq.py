@@ -445,7 +445,7 @@ class Response:
         This does not guarantee an immediate socket shutdown or cancel an active read.
         Cancel and await any body-read task before closing. A body transferred to a
         Streamer is managed separately; previously returned memoryviews remain valid.
-        Prefer an async context manager (`async with`) for response cleanup.
+        `async with` instead releases the body and keeps a fully read connection reusable.
         """
 
     async def __aenter__(self) -> Any: ...

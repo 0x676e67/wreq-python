@@ -1,7 +1,7 @@
 use std::{
     future::Future,
     pin::Pin,
-    sync::Arc,
+    sync::{Arc, Condvar, Mutex, OnceLock, PoisonError},
     task::{Context, Poll, Wake, Waker},
 };
 
@@ -18,6 +18,15 @@ pub struct NoGIL<T> {
 }
 
 struct GuardedWaker(Waker);
+
+/// Wakes Python coroutines from a dedicated thread, attaching once per batch so
+/// Tokio workers never wait for the interpreter while they own network tasks.
+struct WakeRelay {
+    /// The relay thread exists only in the process that started it.
+    pid: u32,
+    pending: Mutex<Vec<Waker>>,
+    ready: Condvar,
+}
 
 // ===== impl NoGIL =====
 
@@ -41,15 +50,13 @@ where
         Fut: Future<Output = PyResult<T>> + Send + 'static,
     {
         let owner = runtime.clone();
+        // Spawning only queues the task, so it needs no detach from Python.
+        let handle = runtime.handle().spawn(async move {
+            let _owner = owner;
+            fut.await
+        });
         Self {
-            handle: AbortOnDropHandle::new(Python::attach(|py| {
-                py.detach(|| {
-                    runtime.handle().spawn(async move {
-                        let _owner = owner;
-                        fut.await
-                    })
-                })
-            })),
+            handle: AbortOnDropHandle::new(handle),
             cancel,
         }
     }
@@ -72,16 +79,12 @@ where
             })));
         }
 
-        let waker = cx.waker();
-        Python::attach(|py| {
-            py.detach(|| {
-                match poll_with_guard(Pin::new(&mut this.handle), &mut Context::from_waker(waker)) {
-                    Poll::Ready(Ok(result)) => Poll::Ready(result),
-                    Poll::Ready(Err(e)) => Poll::Ready(Err(PyRuntimeError::new_err(e.to_string()))),
-                    Poll::Pending => Poll::Pending,
-                }
-            })
-        })
+        // Polling a join handle never blocks; keep the attachment.
+        match poll_with_guard(Pin::new(&mut this.handle), cx) {
+            Poll::Ready(Ok(result)) => Poll::Ready(result),
+            Poll::Ready(Err(e)) => Poll::Ready(Err(PyRuntimeError::new_err(e.to_string()))),
+            Poll::Pending => Poll::Pending,
+        }
     }
 }
 
@@ -102,8 +105,12 @@ where
 
 /// Protect Python wakers retained by futures that can be woken from Rust threads.
 pub fn poll_with_guard<F: Future>(future: Pin<&mut F>, cx: &mut Context<'_>) -> Poll<F::Output> {
-    let waker = Waker::from(Arc::new(GuardedWaker(cx.waker().clone())));
-    future.poll(&mut Context::from_waker(&waker))
+    future.poll(&mut Context::from_waker(&guard(cx.waker())))
+}
+
+/// Wrap a Python waker so Rust threads wake it through the relay.
+pub fn guard(waker: &Waker) -> Waker {
+    Waker::from(Arc::new(GuardedWaker(waker.clone())))
 }
 
 // ===== impl GuardedWaker =====
@@ -114,8 +121,63 @@ impl Wake for GuardedWaker {
     }
 
     fn wake_by_ref(self: &Arc<Self>) {
-        // PyO3's nested attach reuses this attachment. If Python is unavailable,
-        // skip the wake instead of invoking its infallible attachment path.
-        Python::try_attach(|_| self.0.wake_by_ref());
+        WakeRelay::wake(self.0.clone());
+    }
+}
+
+// ===== impl WakeRelay =====
+
+impl WakeRelay {
+    /// Queue a Python waker, falling back to waking inline without a relay thread.
+    /// A forked child never touches the relay state inherited from its parent.
+    fn wake(waker: Waker) {
+        static RELAY: OnceLock<Option<&'static WakeRelay>> = OnceLock::new();
+        let relay = RELAY.get_or_init(|| {
+            let relay: &'static WakeRelay = Box::leak(Box::new(WakeRelay {
+                pid: std::process::id(),
+                pending: Mutex::new(Vec::new()),
+                ready: Condvar::new(),
+            }));
+            std::thread::Builder::new()
+                .name("wreq-python-waker".into())
+                .spawn(move || relay.run())
+                .ok()
+                .map(|_| relay)
+        });
+
+        match relay {
+            Some(relay) if relay.pid == std::process::id() => {
+                let mut pending = relay.pending.lock().unwrap_or_else(PoisonError::into_inner);
+                pending.push(waker);
+                if pending.len() == 1 {
+                    relay.ready.notify_one();
+                }
+            }
+            _ => Self::wake_all(&mut vec![waker]),
+        }
+    }
+
+    fn run(&self) {
+        let mut batch = Vec::new();
+        loop {
+            {
+                let mut pending = self.pending.lock().unwrap_or_else(PoisonError::into_inner);
+                while pending.is_empty() {
+                    pending = self
+                        .ready
+                        .wait(pending)
+                        .unwrap_or_else(PoisonError::into_inner);
+                }
+                std::mem::swap(&mut *pending, &mut batch);
+            }
+            Self::wake_all(&mut batch);
+        }
+    }
+
+    /// Wake a batch under one attachment. If Python is unavailable, skip the
+    /// wakes instead of invoking PyO3's infallible attachment path.
+    fn wake_all(batch: &mut Vec<Waker>) {
+        Python::try_attach(|_| batch.drain(..).for_each(Waker::wake));
+        batch.clear();
     }
 }

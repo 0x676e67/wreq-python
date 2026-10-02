@@ -1,7 +1,15 @@
+import asyncio
+import socket
+import threading
+import time
+from datetime import timedelta
+
 import pytest
 import wreq
 from pathlib import Path
 from wreq import Version, Multipart, Part
+
+from cancellation_test import local_server
 
 client = wreq.Client(tls_info=True)
 
@@ -120,3 +128,92 @@ async def test_peer_certificate():
         certificate = resp.tls_info.peer_certificate()
         assert type(certificate) is memoryview
         assert certificate.readonly
+
+
+@pytest.mark.asyncio
+async def test_context_exit_keeps_connection_but_close_forbids_reuse():
+    reply = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"
+    async with local_server() as (url, connections), wreq.Client(proxies=[]) as client:
+        task = asyncio.create_task(client.get(url))
+        reader, writer = await asyncio.wait_for(connections.get(), 5)
+        writer.write(reply)
+        async with await asyncio.wait_for(task, 5) as response:
+            assert bytes(await response.bytes()) == b"ok"
+
+        # Leaving `async with` after a full read returns the connection to the pool.
+        task = asyncio.create_task(client.get(url))
+        await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 5)
+        writer.write(reply)
+        response = await asyncio.wait_for(task, 5)
+        assert bytes(await response.bytes()) == b"ok"
+        await response.close()
+
+        # An explicit close() still forbids reuse, so the next request reconnects.
+        task = asyncio.create_task(client.get(url))
+        _, writer = await asyncio.wait_for(connections.get(), 5)
+        writer.write(reply)
+        assert bytes(await (await asyncio.wait_for(task, 5)).bytes()) == b"ok"
+        assert connections.empty()
+
+
+@pytest.mark.asyncio
+async def test_stream_read_ahead_yields_and_closes_waiting_readers():
+    stalled = threading.Event()
+
+    def serve(listener):
+        for size in (64 << 20, None):
+            conn, _ = listener.accept()
+            with conn:
+                while b"\r\n\r\n" not in conn.recv(65536):
+                    pass
+                length = size or 1 << 20
+                conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n" % length)
+                try:
+                    conn.sendall(b"x" * (size or 4096))
+                except OSError:
+                    pass
+                if size is None:
+                    stalled.wait(10)
+
+    listener = socket.create_server(("127.0.0.1", 0))
+    url = f"http://127.0.0.1:{listener.getsockname()[1]}/"
+    thread = threading.Thread(target=serve, args=(listener,), daemon=True)
+    thread.start()
+    try:
+        async with wreq.Client(proxies=[]) as client:
+            response = await client.get(url, read_timeout=timedelta(seconds=1))
+            streamer = response.stream()
+            # Reading starts on the first iteration, so this wait is not a read timeout.
+            await asyncio.sleep(1.5)
+
+            ticks = 0
+
+            async def tick():
+                nonlocal ticks
+                while True:
+                    ticks += 1
+                    await asyncio.sleep(0)
+
+            ticker = asyncio.create_task(tick())
+            with pytest.raises(TimeoutError):
+                async with asyncio.timeout(0.3), streamer:
+                    async for _ in streamer:
+                        # A consumer slower than the network must still yield to the loop.
+                        time.sleep(0.002)
+            ticker.cancel()
+            assert ticks > 1
+
+            response = await client.get(url)
+            streamer = response.stream()
+            assert len(await anext(streamer)) == 4096
+            reader = asyncio.create_task(anext(streamer))
+            await asyncio.sleep(0.1)
+            assert not reader.done()
+            # A synchronous exit must not wait for the pending read; it ends that read.
+            streamer.__exit__(None, None, None)
+            with pytest.raises(StopAsyncIteration):
+                await asyncio.wait_for(reader, 5)
+    finally:
+        stalled.set()
+        listener.close()
+        thread.join(10)
