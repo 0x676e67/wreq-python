@@ -197,6 +197,13 @@ impl Port {
 
 #[pymethods]
 impl Drain {
+    fn __repr__(&self) -> &'static str {
+        match self.0.bell {
+            Bell::Socket { .. } => "<wreq.Drain socket>",
+            Bell::Loop(_) => "<wreq.Drain scheduled>",
+        }
+    }
+
     fn __call__(&self, py: Python<'_>) -> PyResult<()> {
         let port = &self.0;
         // Clear the bell before taking the queue so no ring is lost; a short read
