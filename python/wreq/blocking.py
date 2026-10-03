@@ -123,7 +123,11 @@ class Response:
         """
 
     def __enter__(self) -> Any: ...
-    def __exit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None: ...
+    def __exit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
+        r"""
+        Release the body without forbidding reuse: a fully read connection returns
+        to the pool, while an unread HTTP/1 body drains or closes its connection.
+        """
     def __str__(self) -> str: ...
 
 

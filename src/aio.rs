@@ -1,9 +1,11 @@
-//! Awaitables that resume asyncio tasks without attaching Tokio threads to Python.
+//! Awaitables that drive Rust futures from asyncio tasks.
 //!
-//! Rust futures complete on Tokio workers, which never take the GIL. A wake marks
-//! its [`Coroutine`] ready and queues it on the [`Port`] of the awaiting event loop,
-//! ringing a socket the loop polls only when the queue was empty. The loop thread
-//! then resolves every queued asyncio future in one batch.
+//! A [`Coroutine`] polls its future on the event loop thread, and [`spawn`] moves
+//! the work to Tokio. A wake marks the coroutine ready and queues it on the [`Port`]
+//! of the awaiting loop, ringing a socket the loop watches only when the queue was
+//! empty, so waking Tokio threads never take the GIL. A loop that cannot watch the
+//! socket is woken with `call_soon_threadsafe`, which does attach the waking thread.
+//! The loop thread then resolves every queued asyncio future in one batch.
 
 mod coroutine;
 mod port;

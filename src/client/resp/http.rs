@@ -92,8 +92,8 @@ impl Response {
             match Arc::into_inner(arc) {
                 Some(Body::Streamable(stream)) => {
                     return Box::pin(async move {
-                        // A failed or cancelled read may leave a stalled HTTP/2
-                        // connection behind, so only a complete body keeps it reusable.
+                        // Conservatively keep the connection out of the pool unless the
+                        // body is read in full.
                         let mut guard = RecycleGuard(Some(parts));
                         let bytes = stream
                             .collect()
@@ -473,6 +473,8 @@ impl BlockingResponse {
         slf
     }
 
+    /// Release the body without forbidding reuse: a fully read connection returns
+    /// to the pool, while an unread HTTP/1 body drains or closes its connection.
     fn __exit__<'py>(
         &self,
         py: Python<'py>,
@@ -480,7 +482,6 @@ impl BlockingResponse {
         _exc_value: &Bound<'py, PyAny>,
         _traceback: &Bound<'py, PyAny>,
     ) {
-        // Like `__aexit__`, release the body and leave reuse to the protocol.
         py.detach(|| self.0.destroy())
     }
 }
