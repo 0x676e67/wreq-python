@@ -44,7 +44,7 @@ use http2::{
 #[cfg(feature = "mimalloc")]
 use mimalloc as _;
 use proxy::Proxy;
-use pyo3::{intern, prelude::*, pybacked::PyBackedStr, types::PyDict, wrap_pymodule};
+use pyo3::{intern, prelude::*, types::PyDict, wrap_pymodule};
 use runtime::Runtime;
 #[cfg(feature = "jemalloc")]
 use tikv_jemallocator as _;
@@ -63,8 +63,6 @@ static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 #[cfg(all(feature = "mimalloc", not(feature = "jemalloc")))]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
-
-use aio::Coroutine;
 
 mod r#async {
     use pyo3::{prelude::*, pybacked::PyBackedStr, types::PyDict};
@@ -193,7 +191,10 @@ mod r#async {
         url: PyBackedStr,
         kwds: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, Coroutine>> {
-        connect(py, url, kwds)
+        let kwds = kwds.map(Bound::unbind);
+        aio::local(py, "websocket", async move {
+            Client::default().connect(url, kwds).await
+        })
     }
 
     /// Return a coroutine named `qualname` that sends a request with the default
@@ -208,18 +209,6 @@ mod r#async {
         let kwds = kwds.map(Bound::unbind);
         aio::local(py, qualname, async move {
             Client::default().execute(method, url, kwds).await
-        })
-    }
-
-    /// Return a coroutine that opens a WebSocket with the default client.
-    pub(crate) fn connect<'py>(
-        py: Python<'py>,
-        url: PyBackedStr,
-        kwds: Option<Bound<'py, PyDict>>,
-    ) -> PyResult<Bound<'py, Coroutine>> {
-        let kwds = kwds.map(Bound::unbind);
-        aio::local(py, "websocket", async move {
-            Client::default().connect(url, kwds).await
         })
     }
 }
@@ -340,18 +329,6 @@ mod blocking {
     ) -> PyResult<BlockingWebSocket> {
         BlockingClient::default().websocket(py, url, kwds)
     }
-}
-
-/// Make a WebSocket connection with the given parameters.
-#[inline]
-#[pyfunction]
-#[pyo3(signature = (url, **kwds))]
-pub fn websocket<'py>(
-    py: Python<'py>,
-    url: PyBackedStr,
-    kwds: Option<Bound<'py, PyDict>>,
-) -> PyResult<Bound<'py, Coroutine>> {
-    r#async::connect(py, url, kwds)
 }
 
 #[pymodule(gil_used = false)]

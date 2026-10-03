@@ -265,10 +265,8 @@ impl Client {
         aio::local(py, qualname, self.clone().execute(method, url, kwds))
     }
 
-    /// Send a request on the client's runtime.
-    ///
-    /// Like PyO3 async methods, options are extracted on first await, where an async
-    /// generator body can bind to the running loop.
+    /// Send a request on the client's runtime, extracting options on first await so an
+    /// async generator body binds to the running loop.
     pub(crate) async fn execute(
         self,
         method: Method,
@@ -692,9 +690,9 @@ impl Client {
         _exc_val: Py<PyAny>,
         _traceback: Py<PyAny>,
     ) -> PyResult<Bound<'py, Coroutine>> {
-        let client = self.clone();
+        let cancel = self.cancel.clone();
         aio::local(py, "Client.__aexit__", async move {
-            client.close();
+            cancel.cancel();
             Ok(())
         })
     }
