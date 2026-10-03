@@ -275,7 +275,7 @@ fn raw(socket: &Socket) -> i64 {
 }
 
 #[cfg(windows)]
-fn raw(socket: &Socket) -> u64 {
+fn raw(socket: &Socket) -> std::os::windows::io::RawSocket {
     use std::os::windows::io::AsRawSocket;
     socket.as_raw_socket()
 }
