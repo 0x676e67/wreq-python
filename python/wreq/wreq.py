@@ -318,7 +318,10 @@ class Streamer:
 
     def __enter__(self) -> Any: ...
 
-    def __exit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None: ...
+    def __exit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
+        r"""
+        Release the body and end any pending read; returned views stay valid.
+        """
 
     def __aiter__(self) -> "Streamer": ...
 
@@ -326,9 +329,10 @@ class Streamer:
 
     async def __aenter__(self) -> Any: ...
 
-    async def __aexit__(
-        self, _exc_type: Any, _exc_value: Any, _traceback: Any
-    ) -> None: ...
+    async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
+        r"""
+        Release the body and end any pending read; returned views stay valid.
+        """
 
 
 class Response:
@@ -348,7 +352,6 @@ class Response:
         print("Response URL: ", response.url)
         print("Headers: ", response.headers)
         print("Content-Length: ", response.content_length)
-        print("Encoding: ", response.encoding)
         print("Remote Address: ", response.remote_addr)
 
         text_content = await response.text()
@@ -449,9 +452,12 @@ class Response:
         """
 
     async def __aenter__(self) -> Any: ...
-    async def __aexit__(
-        self, _exc_type: Any, _exc_value: Any, _traceback: Any
-    ) -> Any: ...
+    async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> Any:
+        r"""
+        Release the body without forbidding reuse: a fully read connection returns
+        to the pool, while an unread HTTP/1 body drains or closes its connection.
+        """
+
     def __str__(self) -> str: ...
 
 
@@ -519,8 +525,12 @@ class WebSocket:
         Close the WebSocket connection.
         """
 
-    def __aenter__(self) -> Any: ...
-    def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> Any: ...
+    async def __aenter__(self) -> Any: ...
+    async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> Any:
+        r"""
+        Close the WebSocket connection without a close code or reason, unless already closed.
+        """
+
     def __str__(self) -> str: ...
 
 
@@ -1433,9 +1443,10 @@ class Client:
         ...
 
     async def __aenter__(self) -> Any: ...
-    async def __aexit__(
-        self, _exc_type: Any, _exc_value: Any, _traceback: Any
-    ) -> Any: ...
+    async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> Any:
+        r"""
+        Close the client like `close()`: cancel pending requests and reject new ones.
+        """
 
 
 async def delete(

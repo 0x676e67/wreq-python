@@ -670,6 +670,7 @@ impl Client {
         aio::ready("Client.__aenter__", slf)
     }
 
+    /// Close the client like `close()`: cancel pending requests and reject new ones.
     fn __aexit__<'py>(
         &self,
         py: Python<'py>,
@@ -844,6 +845,7 @@ impl BlockingClient {
         slf
     }
 
+    /// Close the client like `close()`: cancel pending requests and reject new ones.
     fn __exit__<'py>(
         &self,
         _py: Python<'py>,

@@ -7,7 +7,7 @@ use std::{
     },
 };
 
-use pyo3::{intern, prelude::*, sync::PyOnceLock};
+use pyo3::{PyTraverseError, PyVisit, intern, prelude::*, sync::PyOnceLock};
 
 use super::coroutine::Slot;
 
@@ -15,7 +15,8 @@ use super::coroutine::Slot;
 pub(crate) struct Port {
     queue: Mutex<Vec<Arc<Slot>>>,
     bell: Bell,
-    /// Cleared once the loop drops its drain; later wakes are discarded.
+    /// Cleared once the loop drops its drain or keeper, or a scheduled drain cannot be
+    /// queued; later wakes are discarded.
     open: AtomicBool,
 }
 
@@ -23,7 +24,8 @@ enum Bell {
     /// A socket pair whose read end the loop watches. The read end is `None`
     /// when Python owns it, as with a proactor loop.
     Socket { tx: Socket, rx: Option<Socket> },
-    /// A loop that cannot watch the socket: the waking thread schedules the drain.
+    /// A loop that cannot watch the socket: the waking thread schedules the drain,
+    /// and a [`Keeper`] holds the port until the loop closes.
     Loop(Py<PyAny>),
 }
 
@@ -34,8 +36,13 @@ type Socket = std::os::unix::net::UnixStream;
 type Socket = std::net::TcpStream;
 
 /// Resolves the asyncio futures of queued coroutines on the loop thread.
-#[pyclass(frozen)]
+#[pyclass(frozen, module = "wreq")]
 struct Drain(Arc<Port>);
+
+/// Owns a scheduled-drain port through a renewing timer, which the loop discards when
+/// closed. It reports the port's loop reference so an unclosed loop can be collected.
+#[pyclass(module = "wreq")]
+struct Keeper(Option<Arc<Port>>);
 
 thread_local! {
     /// Ports of the loops that ran on this thread, keyed by loop address.
@@ -57,7 +64,8 @@ impl Port {
             .bind(py)
             .call0()?;
 
-        // A loop drops its drain when closed or freed, so a reused address never matches.
+        // A loop drops its drain or keeper when closed or freed, so a reused address
+        // never matches.
         let key = event_loop.as_ptr() as usize;
         let cached = PORTS.with_borrow_mut(|ports| {
             ports.retain(|(_, port)| port.upgrade().is_some_and(|port| port.is_open()));
@@ -92,7 +100,7 @@ impl Port {
                 if watched.is_ok() {
                     return Ok(port);
                 }
-                return Ok(Self::new(Bell::Loop(event_loop.clone().unbind())));
+                return Self::scheduled(event_loop);
             }
 
             let fd = raw(&rx);
@@ -106,7 +114,15 @@ impl Port {
                 return Ok(port);
             }
         }
-        Ok(Self::new(Bell::Loop(event_loop.clone().unbind())))
+        Self::scheduled(event_loop)
+    }
+
+    /// Open a port whose wakes schedule drains on `event_loop`.
+    fn scheduled(event_loop: &Bound<'_, PyAny>) -> PyResult<Arc<Port>> {
+        let port = Self::new(Bell::Loop(event_loop.clone().unbind()));
+        let keeper = Bound::new(event_loop.py(), Keeper(Some(port.clone())))?;
+        Keeper::arm(&keeper, event_loop)?;
+        Ok(port)
     }
 
     fn new(bell: Bell) -> Arc<Port> {
@@ -182,6 +198,13 @@ impl Port {
 
 #[pymethods]
 impl Drain {
+    fn __repr__(&self) -> &'static str {
+        match self.0.bell {
+            Bell::Socket { .. } => "<wreq.Drain socket>",
+            Bell::Loop(_) => "<wreq.Drain scheduled>",
+        }
+    }
+
     fn __call__(&self, py: Python<'_>) -> PyResult<()> {
         let port = &self.0;
         // Clear the bell before taking the queue so no ring is lost; a short read
@@ -197,12 +220,13 @@ impl Drain {
                 continue;
             };
             // Resume the task awaiting the waiter, unless it was already cancelled.
-            let future = waiter.bind(py);
-            let done = future
+            let done = waiter
+                .bind(py)
                 .call_method0(intern!(py, "done"))
                 .and_then(|done| done.is_truthy());
             let released = match done {
-                Ok(false) => future
+                Ok(false) => waiter
+                    .bind(py)
                     .call_method1(intern!(py, "set_result"), (py.None(),))
                     .map(drop),
                 done => done.map(drop),
@@ -226,6 +250,58 @@ impl Drop for Drain {
         if let Bell::Socket { .. } = self.0.bell {
             self.0.close();
         }
+    }
+}
+
+// ===== impl Keeper =====
+
+impl Keeper {
+    /// Seconds between renewals; any delay works, as only a closing loop drops the timer.
+    const RENEW_SECS: f64 = 3600.0;
+
+    fn arm(keeper: &Bound<'_, Keeper>, event_loop: &Bound<'_, PyAny>) -> PyResult<()> {
+        let py = keeper.py();
+        event_loop
+            .call_method1(intern!(py, "call_later"), (Self::RENEW_SECS, keeper))
+            .map(drop)
+    }
+}
+
+#[pymethods]
+impl Keeper {
+    fn __call__(slf: &Bound<'_, Self>) -> PyResult<()> {
+        let event_loop = match slf.borrow().0.as_deref() {
+            Some(Port {
+                bell: Bell::Loop(event_loop),
+                ..
+            }) => event_loop.clone_ref(slf.py()),
+            _ => return Ok(()),
+        };
+        Self::arm(slf, event_loop.bind(slf.py()))
+    }
+
+    fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {
+        // The keeper is the only object reporting this reference, so it is counted once.
+        if let Some(Port {
+            bell: Bell::Loop(event_loop),
+            ..
+        }) = self.0.as_deref()
+        {
+            visit.call(event_loop)?;
+        }
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        if let Some(port) = self.0.take() {
+            port.close();
+        }
+    }
+}
+
+impl Drop for Keeper {
+    fn drop(&mut self) {
+        self.__clear__();
     }
 }
 
@@ -306,12 +382,16 @@ class Watch:
 
 
 def watch(loop, fileno, drain):
-    sock = socket.socket(fileno=fileno)
+    sock = None
     try:
+        sock = socket.socket(fileno=fileno)
         # A first receive that fails lets the caller fall back to scheduled drains.
         Watch(loop, sock, drain).arm()
     except BaseException:
-        sock.close()
+        if sock is None:
+            socket.close(fileno)
+        else:
+            sock.close()
         raise
 ",
                 c"wreq/_proactor.py",

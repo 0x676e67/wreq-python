@@ -89,6 +89,38 @@ async def test_upload_errors(failure):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["cancel", "early_response"])
+async def test_abandoned_upload_to_stalled_peer(action):
+    # The peer reads only the head, so the upload stalls with the socket buffers full.
+    closed = asyncio.Event()
+
+    async def chunks():
+        try:
+            while True:
+                yield b"x" * 65536
+        finally:
+            closed.set()
+
+    async with local_server() as (url, connections), wreq.Client(proxies=[]) as client:
+        task = asyncio.create_task(client.post(url, body=chunks()))
+        _, writer = await asyncio.wait_for(connections.get(), 5)
+        await asyncio.sleep(0.5)
+        if action == "cancel":
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        else:
+            # Close an early response whose body never completes, mid-upload.
+            writer.write(
+                b"HTTP/1.1 413 Payload Too Large\r\nContent-Length: 10\r\n\r\nab"
+            )
+            await writer.drain()
+            response = await asyncio.wait_for(task, 5)
+            await response.close()
+        await asyncio.wait_for(closed.wait(), 5)
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("action", ["cancel", "close_client"])
 async def test_upload_cancellation(action):
     started = asyncio.Event()

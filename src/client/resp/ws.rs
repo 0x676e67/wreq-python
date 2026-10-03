@@ -166,6 +166,7 @@ impl WebSocket {
         aio::ready("WebSocket.__aenter__", slf)
     }
 
+    /// Close the WebSocket connection without a close code or reason, unless already closed.
     fn __aexit__<'py>(
         &self,
         py: Python<'py>,
@@ -177,7 +178,7 @@ impl WebSocket {
             py,
             "WebSocket.__aexit__",
             &self.runtime,
-            cmd::close(self.cmd.clone(), None, None),
+            cmd::close_on_exit(self.cmd.clone()),
         )
     }
 }
@@ -279,6 +280,7 @@ impl BlockingWebSocket {
         slf
     }
 
+    /// Close the WebSocket connection without a close code or reason, unless already closed.
     fn __exit__<'py>(
         &self,
         py: Python<'py>,
@@ -286,7 +288,9 @@ impl BlockingWebSocket {
         _exc_value: &Bound<'py, PyAny>,
         _traceback: &Bound<'py, PyAny>,
     ) -> PyResult<()> {
-        self.close(py, None, None)
+        py.detach(|| {
+            crate::client::nogil::block_on(&self.0.runtime, cmd::close_on_exit(self.0.cmd.clone()))
+        })
     }
 }
 

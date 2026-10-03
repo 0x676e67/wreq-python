@@ -88,9 +88,9 @@ print(data)
 ```python
 import hashlib
 
-view = await response.bytes()
-await response.close()
-print(view.readonly)  # True; closing the response does not invalidate the view
+async with response:
+    view = await response.bytes()
+print(view.readonly)  # True; releasing the response does not invalidate the view
 print(hashlib.sha256(view).hexdigest())  # Reads the buffer directly
 ```
 

@@ -184,6 +184,6 @@ async def main():
  
 Data chunks are read-only `memoryview` objects; trailer frames are `HeaderMap` objects. The example writes data directly through the buffer protocol. Each view stays valid after the stream is closed. See [Binary data](../getting-started/quickstart.md#binary-data) for copying and releasing views.
 
-Finish a body read before closing the response. If a read task is still running, cancel it and await its cancellation first: `response.close()` does not cancel active reads or guarantee an immediate socket shutdown. `response.stream()` transfers the body to the streamer, so manage the streamer with its own context manager as shown above.
+Finish a body read before closing the response. If a read task is still running, cancel it and await its cancellation first: `response.close()` does not cancel active reads or guarantee an immediate socket shutdown. It also marks the connection as non-reusable; leaving `async with response:` instead releases the body and keeps a fully read connection reusable. `response.stream()` transfers the body to the streamer, so manage the streamer with its own context manager as shown above.
  
 ---

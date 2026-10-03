@@ -93,16 +93,21 @@ pub async fn task(ws: WebSocket, mut cmd: UnboundedReceiver<Command>) {
                 }
             }
             Command::Close(code, reason, tx) => {
-                let code = code
-                    .map(ws::message::CloseCode::from)
-                    .unwrap_or(ws::message::CloseCode::NORMAL);
                 let reason = reason
                     .map(|reason| reason.0)
                     .map(Utf8Bytes::try_from)
                     .transpose();
 
+                // A reason requires a code (RFC 6455 §5.5.1), so a lone reason closes normally.
                 let close_frame = match reason {
-                    Ok(Some(reason)) => Some(ws::message::CloseFrame { code, reason }),
+                    Ok(reason) if code.is_some() || reason.is_some() => {
+                        Some(ws::message::CloseFrame {
+                            code: code
+                                .map(ws::message::CloseCode::from)
+                                .unwrap_or(ws::message::CloseCode::NORMAL),
+                            reason: reason.unwrap_or_default(),
+                        })
+                    }
                     _ => None,
                 };
 
@@ -127,7 +132,9 @@ pub async fn recv(
     cmd: UnboundedSender<Command>,
     timeout: Option<Duration>,
 ) -> PyResult<Option<Message>> {
-    send_command(cmd, |tx| Command::Recv(timeout, tx)).await?
+    send_command(cmd, |tx| Command::Recv(timeout, tx))
+        .await
+        .ok_or(Error::WebSocketDisconnected)?
 }
 
 /// Sends a [`Command::Send`] to the background task to transmit a message over the WebSocket.
@@ -135,7 +142,9 @@ pub async fn recv(
 /// Returns Ok if the message was sent successfully, or an error otherwise.
 #[inline]
 pub async fn send(cmd: UnboundedSender<Command>, message: Message) -> PyResult<()> {
-    send_command(cmd, |tx| Command::Send(message, tx)).await?
+    send_command(cmd, |tx| Command::Send(message, tx))
+        .await
+        .ok_or(Error::WebSocketDisconnected)?
 }
 
 /// Send as [`Command::SendMany`] to the background task to transmit multiple messages over the
@@ -147,7 +156,9 @@ pub async fn send_all(cmd: UnboundedSender<Command>, messages: Vec<Message>) -> 
     if messages.is_empty() {
         return Ok(());
     }
-    send_command(cmd, |tx| Command::SendMany(messages, tx)).await?
+    send_command(cmd, |tx| Command::SendMany(messages, tx))
+        .await
+        .ok_or(Error::WebSocketDisconnected)?
 }
 
 /// Sends a [`Command::Close`] to the background task to gracefully close the WebSocket connection.
@@ -159,18 +170,29 @@ pub async fn close(
     code: Option<u16>,
     reason: Option<StrInput>,
 ) -> PyResult<()> {
-    send_command(cmd, |tx| Command::Close(code, reason, tx)).await?
+    send_command(cmd, |tx| Command::Close(code, reason, tx))
+        .await
+        .ok_or(Error::WebSocketDisconnected)?
 }
 
+/// Closes the WebSocket like [`close`], treating an already closed connection as done, as a
+/// context manager exit does.
+#[inline]
+pub async fn close_on_exit(cmd: UnboundedSender<Command>) -> PyResult<()> {
+    send_command(cmd, |tx| Command::Close(None, None, tx))
+        .await
+        .unwrap_or(Ok(()))
+}
+
+/// Run a command on the background task, or return `None` once it has ended.
 async fn send_command<T>(
     cmd: UnboundedSender<Command>,
     make: impl FnOnce(oneshot::Sender<T>) -> Command,
-) -> PyResult<T> {
+) -> Option<T> {
     if cmd.is_closed() {
-        return Err(Error::WebSocketDisconnected.into());
+        return None;
     }
     let (tx, rx) = oneshot::channel();
-    cmd.send(make(tx))
-        .map_err(|_| Error::WebSocketDisconnected)?;
-    Ok(rx.await.map_err(|_| Error::WebSocketDisconnected)?)
+    cmd.send(make(tx)).ok()?;
+    rx.await.ok()
 }

@@ -2,6 +2,7 @@ import asyncio
 import gc
 import socket
 import sys
+import time
 import weakref
 
 import pytest
@@ -11,7 +12,11 @@ import wreq
 class NoReaderLoop(asyncio.SelectorEventLoop):
     """A loop that cannot watch the wake socket, so wakes are scheduled thread-safely."""
 
+    ports = 0
+
     def add_reader(self, *args):
+        # Each wake port first tries to register its socket.
+        self.ports += 1
         raise NotImplementedError
 
 
@@ -63,7 +68,8 @@ async def exchange():
         finally:
             writer.close()
 
-    server = await asyncio.start_server(serve, "127.0.0.1", 0)
+    # The default backlog of 100 could overflow with 300 concurrent stream connections.
+    server = await asyncio.start_server(serve, "127.0.0.1", 0, backlog=512)
     url = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}"
     try:
         async with wreq.Client(proxies=[]) as client:
@@ -118,6 +124,8 @@ def test_wakes_resume_tasks_on_event_loops(new_loop):
         loop = new_loop()
         try:
             loop.run_until_complete(asyncio.wait_for(exchange(), 30))
+            # A loop keeps one wake port across all of its awaits.
+            assert getattr(loop, "ports", 1) == 1
         finally:
             loop.close()
 
@@ -126,15 +134,23 @@ def test_wakes_resume_tasks_on_event_loops(new_loop):
     sys.implementation.name != "cpython",
     reason="PyPy's cpyext does not collect cycles through extension objects",
 )
-@pytest.mark.parametrize("new_loop", [p for p in LOOPS if p.id != "no-reader"])
-def test_closed_loop_releases_pending_requests(new_loop):
-    # The listener accepts connections into its backlog but never answers.
+@pytest.mark.parametrize("new_loop", LOOPS)
+@pytest.mark.parametrize("woken", [False, True], ids=["pending", "woken"])
+def test_closed_loop_releases_pending_requests(new_loop, woken):
+    # The listener accepts connections into its backlog and answers only when woken.
     with socket.create_server(("127.0.0.1", 0)) as server:
         url = f"http://127.0.0.1:{server.getsockname()[1]}/"
         client = wreq.Client(proxies=[])
         loop = new_loop()
         task = loop.create_task(client.get(url))
         loop.run_until_complete(asyncio.sleep(0.2))
+        if woken:
+            # Answer while the loop is stopped, so its wake is queued but never runs.
+            conn, _ = server.accept()
+            conn.recv(65536)
+            conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+            time.sleep(0.2)
+            conn.close()
         loop.close()
         # Once its loop is closed, a task left pending can be collected with its request.
         ref = weakref.ref(task)

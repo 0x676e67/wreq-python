@@ -1,4 +1,4 @@
-"""Compatibility for PyPy's legacy exception delegation to PyO3 coroutines."""
+"""Compatibility for PyPy's legacy exception delegation to wreq coroutines."""
 
 from types import TracebackType
 
@@ -8,7 +8,8 @@ def _install(coroutine_type):
     if getattr(original, "_wreq_pypy_throw_compat", False):
         return
 
-    # Remove this shim once PyO3 accepts throw(type, value, traceback).
+    # Coroutine.throw takes one exception, as asyncio passes; PyPy delegates
+    # throws from awaiting generators as the legacy (type, value, traceback).
     def throw(self, exc, value=None, traceback=None):
         if traceback is not None and type(traceback) is not TracebackType:
             raise TypeError("throw() third argument must be a traceback object")

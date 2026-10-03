@@ -36,9 +36,8 @@ pyo3 = { version = "0.29.0", features = [
     "multiple-pymethods",
     "extension-module",
     "generate-import-lib",
-    "experimental-async",
 ] }
-futures-util = { version = "0.3.33", default-features = false }
+futures-util = { version = "0.3.33", default-features = false, features = ["std"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1"
 serde_urlencoded = "0.7.1"
@@ -84,6 +83,8 @@ wreq = { git = "https://github.com/0x676e67/wreq", rev = "54fdc7c9e0c1290e2f70f3
 btls = { git = "https://github.com/0x676e67/btls", rev = "ffaf0e8c23d455af4e306986ce81bb57ebd03bc2" }
 btls-sys = { git = "https://github.com/0x676e67/btls", rev = "ffaf0e8c23d455af4e306986ce81bb57ebd03bc2" }
 tokio-btls = { git = "https://github.com/0x676e67/btls", rev = "ffaf0e8c23d455af4e306986ce81bb57ebd03bc2" }
+# main (0x676e67/netty#145)
+netty = { git = "https://github.com/0x676e67/netty", rev = "f8652ddf5e386d66b7f03cceedbc6b319d849762" }
 
 [profile.release]
 codegen-units = 1
