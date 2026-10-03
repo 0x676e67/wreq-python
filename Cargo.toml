@@ -83,8 +83,8 @@ wreq = { git = "https://github.com/0x676e67/wreq", rev = "54fdc7c9e0c1290e2f70f3
 btls = { git = "https://github.com/0x676e67/btls", rev = "ffaf0e8c23d455af4e306986ce81bb57ebd03bc2" }
 btls-sys = { git = "https://github.com/0x676e67/btls", rev = "ffaf0e8c23d455af4e306986ce81bb57ebd03bc2" }
 tokio-btls = { git = "https://github.com/0x676e67/btls", rev = "ffaf0e8c23d455af4e306986ce81bb57ebd03bc2" }
-# demo/http1-cancel-shutdown
-netty = { git = "https://github.com/0x676e67/netty", rev = "1b07384f8e517d835b0d336a1a3874aaeb08bc08" }
+# main (0x676e67/netty#145)
+netty = { git = "https://github.com/0x676e67/netty", rev = "f8652ddf5e386d66b7f03cceedbc6b319d849762" }
 
 [profile.release]
 codegen-units = 1
