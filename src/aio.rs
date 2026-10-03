@@ -8,7 +8,10 @@
 mod coroutine;
 mod port;
 
-use std::future::Future;
+use std::{
+    future::{Future, poll_fn},
+    task::Poll,
+};
 
 use pyo3::{IntoPyObjectExt, exceptions::PyRuntimeError, prelude::*};
 use tokio_util::task::AbortOnDropHandle;
@@ -64,21 +67,23 @@ pub fn ready<'py, T>(
 }
 
 /// Yield to the event loop once, like `asyncio.sleep(0)`.
+#[inline]
 pub async fn yield_now() {
     let mut yielded = false;
-    std::future::poll_fn(|cx| {
+    poll_fn(|cx| {
         if std::mem::replace(&mut yielded, true) {
-            return std::task::Poll::Ready(());
+            return Poll::Ready(());
         }
         // A wake during the poll makes the coroutine yield without a future.
         cx.waker().wake_by_ref();
-        std::task::Poll::Pending
+        Poll::Pending
     })
     .await;
 }
 
 /// Spawn `fut` on the runtime and wait for it; dropping the wait aborts the task.
 /// The task keeps the runtime alive until it ends.
+#[inline]
 pub async fn run<F, T>(runtime: Runtime, fut: F) -> PyResult<T>
 where
     F: Future<Output = PyResult<T>> + Send + 'static,

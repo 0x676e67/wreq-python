@@ -170,6 +170,7 @@ impl Coroutine {
 
 impl Slot {
     /// Start a poll; wakes from now on resume the coroutine.
+    #[inline]
     fn begin(&self) {
         drop(self.take_waiter());
         self.state.store(POLLING, Ordering::Release);
@@ -202,10 +203,12 @@ impl Slot {
         }
     }
 
+    #[inline]
     fn lock_port(&self) -> MutexGuard<'_, Option<Arc<Port>>> {
         self.port.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
+    #[inline]
     pub(super) fn set_waiter(&self, waiter: Py<PyAny>) {
         *self.waiter.lock().unwrap_or_else(PoisonError::into_inner) = Some(waiter);
     }
@@ -219,6 +222,7 @@ impl Slot {
 }
 
 impl Wake for Slot {
+    #[inline]
     fn wake(self: Arc<Self>) {
         self.wake_by_ref();
     }

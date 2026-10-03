@@ -117,10 +117,12 @@ impl Port {
         })
     }
 
+    #[inline]
     pub(super) fn is_open(&self) -> bool {
         self.open.load(Ordering::Acquire)
     }
 
+    #[inline]
     fn lock(&self) -> MutexGuard<'_, Vec<Arc<Slot>>> {
         self.queue.lock().unwrap_or_else(PoisonError::into_inner)
     }
