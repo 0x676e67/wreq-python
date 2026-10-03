@@ -115,7 +115,6 @@ impl Coroutine {
 
 #[pymethods]
 impl Coroutine {
-    #[inline]
     #[getter]
     fn __name__(&self) -> &'static str {
         self.qualname
@@ -123,34 +122,28 @@ impl Coroutine {
             .map_or(self.qualname, |(_, name)| name)
     }
 
-    #[inline]
     #[getter]
     fn __qualname__(&self) -> &'static str {
         self.qualname
     }
 
-    #[inline]
     fn send(&mut self, py: Python<'_>, _value: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         self.step(py)
     }
 
-    #[inline]
     fn throw(&mut self, exc: Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         self.finish();
         Err(PyErr::from_value(exc))
     }
 
-    #[inline]
     fn close(&mut self) {
         self.finish();
     }
 
-    #[inline]
     fn __await__(slf: Py<Self>) -> Py<Self> {
         slf
     }
 
-    #[inline]
     fn __next__(&mut self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         self.step(py)
     }
