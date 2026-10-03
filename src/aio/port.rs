@@ -2,7 +2,7 @@ use std::{
     cell::RefCell,
     io::{Read, Write},
     sync::{
-        Arc, Mutex, PoisonError, Weak,
+        Arc, Mutex, MutexGuard, PoisonError, Weak,
         atomic::{AtomicBool, Ordering},
     },
 };
@@ -35,11 +35,7 @@ type Socket = std::net::TcpStream;
 
 /// Resolves the asyncio futures of queued coroutines on the loop thread.
 #[pyclass(frozen)]
-struct Drain {
-    port: Arc<Port>,
-    /// The drain registered with the loop owns the port's lifetime.
-    registered: bool,
-}
+struct Drain(Arc<Port>);
 
 thread_local! {
     /// Ports of the loops that ran on this thread, keyed by loop address.
@@ -90,10 +86,7 @@ impl Port {
                 use std::os::windows::io::IntoRawSocket;
 
                 let port = Self::new(Bell::Socket { tx, rx: None });
-                let drain = Drain {
-                    port: port.clone(),
-                    registered: true,
-                };
+                let drain = Drain(port.clone());
                 let watched = proactor_watch(py)
                     .and_then(|watch| watch.call1((event_loop, rx.into_raw_socket(), drain)));
                 if watched.is_ok() {
@@ -104,10 +97,7 @@ impl Port {
 
             let fd = raw(&rx);
             let port = Self::new(Bell::Socket { tx, rx: Some(rx) });
-            let drain = Drain {
-                port: port.clone(),
-                registered: true,
-            };
+            let drain = Drain(port.clone());
             // Loops without reader support fall back to scheduling drains.
             if event_loop
                 .call_method1(intern!(py, "add_reader"), (fd, drain))
@@ -127,11 +117,11 @@ impl Port {
         })
     }
 
-    fn is_open(&self) -> bool {
+    pub(super) fn is_open(&self) -> bool {
         self.open.load(Ordering::Acquire)
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, Vec<Arc<Slot>>> {
+    fn lock(&self) -> MutexGuard<'_, Vec<Arc<Slot>>> {
         self.queue.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
@@ -162,10 +152,7 @@ impl Port {
             },
             Bell::Loop(event_loop) => {
                 Python::try_attach(|py| {
-                    let drain = Drain {
-                        port: self.clone(),
-                        registered: false,
-                    };
+                    let drain = Drain(self.clone());
                     let scheduled = event_loop
                         .bind(py)
                         .call_method1(intern!(py, "call_soon_threadsafe"), (drain,));
@@ -194,11 +181,12 @@ impl Port {
 #[pymethods]
 impl Drain {
     fn __call__(&self, py: Python<'_>) -> PyResult<()> {
-        let port = &self.port;
-        // Clear the bell before taking the queue so no ring is lost.
+        let port = &self.0;
+        // Clear the bell before taking the queue so no ring is lost; a short read
+        // means the bell is empty.
         if let Bell::Socket { rx: Some(rx), .. } = &port.bell {
             let mut buf = [0; 64];
-            while matches!((&*rx).read(&mut buf), Ok(n) if n > 0) {}
+            while matches!((&*rx).read(&mut buf), Ok(n) if n == buf.len()) {}
         }
 
         let mut slots = std::mem::take(&mut *port.lock()).into_iter();
@@ -210,11 +198,7 @@ impl Drain {
                 // A raising callback, such as a signal handler, ends this drain. Requeue
                 // this wake and the rest; the next drain skips futures already done.
                 slot.set_waiter(waiter);
-                let rest: Vec<_> = std::iter::once(slot).chain(slots).collect();
-                let mut queue = port.lock();
-                let tail = std::mem::replace(&mut *queue, rest);
-                queue.extend(tail);
-                drop(queue);
+                port.lock().splice(..0, std::iter::once(slot).chain(slots));
                 port.ring();
                 return Err(err);
             }
@@ -225,8 +209,9 @@ impl Drain {
 
 impl Drop for Drain {
     fn drop(&mut self) {
-        if self.registered {
-            self.port.close();
+        // A socket port's drain is registered with the loop and owns the port's lifetime.
+        if let Bell::Socket { .. } = self.0.bell {
+            self.0.close();
         }
     }
 }

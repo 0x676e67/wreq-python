@@ -2,14 +2,14 @@ use std::{
     future::Future,
     pin::Pin,
     sync::{
-        Arc, Mutex, PoisonError,
+        Arc, Mutex, MutexGuard, PoisonError,
         atomic::{AtomicU8, Ordering},
     },
     task::{Context, Poll, Wake, Waker},
 };
 
-use arc_swap::ArcSwapOption;
 use pyo3::{
+    PyTraverseError, PyVisit,
     exceptions::{PyRuntimeError, PyStopIteration},
     intern,
     prelude::*,
@@ -24,7 +24,7 @@ type BoxFuture = Pin<Box<dyn Future<Output = PyResult<Py<PyAny>>> + Send>>;
 /// Each suspension hands the task a real asyncio future, so task cancellation and
 /// the C task fast path work unchanged. A throw or close drops the Rust future,
 /// which aborts any spawned work. PyO3's borrow flag rejects reentrant polls.
-#[pyclass(module = "wreq", name = "Coroutine")]
+#[pyclass(module = "wreq")]
 pub struct Coroutine {
     qualname: &'static str,
     /// Polled only through `&mut self`, so `get_mut` reaches it without locking.
@@ -41,7 +41,7 @@ pub struct Coroutine {
 pub(super) struct Slot {
     state: AtomicU8,
     /// The port of the loop the coroutine last waited on, set before each wait.
-    port: ArcSwapOption<Port>,
+    port: Mutex<Option<Arc<Port>>>,
     /// The asyncio future the task awaits while the coroutine waits.
     waiter: Mutex<Option<Py<PyAny>>>,
 }
@@ -75,6 +75,21 @@ impl Coroutine {
             .as_mut()
             .ok_or_else(|| PyRuntimeError::new_err("cannot reuse already awaited coroutine"))?;
 
+        // A pending waiter means another task is suspended on this coroutine.
+        if let Some(waiter) = self.slot.take_waiter() {
+            let done = waiter
+                .bind(py)
+                .call_method0(intern!(py, "done"))
+                .and_then(|done| done.is_truthy());
+            if !matches!(done, Ok(true)) {
+                self.slot.set_waiter(waiter);
+                done?;
+                return Err(PyRuntimeError::new_err(
+                    "coroutine is being awaited already",
+                ));
+            }
+        }
+
         self.slot.begin();
         if let Poll::Ready(result) = future.as_mut().poll(&mut Context::from_waker(&self.waker)) {
             self.finish();
@@ -90,6 +105,9 @@ impl Coroutine {
             .get_mut()
             .unwrap_or_else(PoisonError::into_inner) = None;
         self.slot.state.store(DONE, Ordering::Release);
+        // A finished coroutine must not keep its loop's port open.
+        let port = self.slot.lock_port().take();
+        drop(port);
         drop(self.slot.take_waiter());
     }
 }
@@ -98,7 +116,9 @@ impl Coroutine {
 impl Coroutine {
     #[getter]
     fn __name__(&self) -> &'static str {
-        self.qualname.rsplit('.').next().unwrap_or(self.qualname)
+        self.qualname
+            .rsplit_once('.')
+            .map_or(self.qualname, |(_, name)| name)
     }
 
     #[getter]
@@ -126,6 +146,24 @@ impl Coroutine {
     fn __next__(&mut self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         self.step(py)
     }
+
+    fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {
+        // Pending Rust work owns the waiter until its loop closes the port; only then
+        // can a cycle through the waiter be collected without aborting live requests.
+        let closed = self
+            .slot
+            .port
+            .try_lock()
+            .is_ok_and(|port| port.as_ref().is_some_and(|port| !port.is_open()));
+        if closed && let Ok(waiter) = self.slot.waiter.try_lock() {
+            visit.call(&*waiter)?;
+        }
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.finish();
+    }
 }
 
 // ===== impl Slot =====
@@ -139,15 +177,17 @@ impl Slot {
 
     /// Suspend after a pending poll, returning the future the task should await,
     /// or `None` for a bare yield when a wake already arrived.
-    fn suspend(self: &Arc<Self>, py: Python<'_>) -> PyResult<Py<PyAny>> {
+    fn suspend(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         if self.state.load(Ordering::Acquire) == NOTIFIED {
             return Ok(py.None());
         }
         let (event_loop, port) = Port::current(py)?;
-        let waiter = waiter(&event_loop)?.unbind();
+        let waiter = event_loop.call_method0(intern!(py, "create_future"))?;
+        waiter.setattr(intern!(py, "_asyncio_future_blocking"), true)?;
+        let waiter = waiter.unbind();
         // Publish the port and waiter before waiting, so a wake that sees WAITING
         // always reaches the loop that runs this task.
-        self.port.store(Some(port));
+        *self.lock_port() = Some(port);
         self.set_waiter(waiter.clone_ref(py));
         match self
             .state
@@ -162,6 +202,10 @@ impl Slot {
         }
     }
 
+    fn lock_port(&self) -> MutexGuard<'_, Option<Arc<Port>>> {
+        self.port.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
     pub(super) fn set_waiter(&self, waiter: Py<PyAny>) {
         *self.waiter.lock().unwrap_or_else(PoisonError::into_inner) = Some(waiter);
     }
@@ -174,37 +218,24 @@ impl Slot {
     }
 }
 
-/// Create the asyncio future a task awaits while its coroutine waits.
-fn waiter<'py>(event_loop: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
-    let py = event_loop.py();
-    let future = event_loop.call_method0(intern!(py, "create_future"))?;
-    future.setattr(intern!(py, "_asyncio_future_blocking"), true)?;
-    Ok(future)
-}
-
 impl Wake for Slot {
     fn wake(self: Arc<Self>) {
         self.wake_by_ref();
     }
 
     fn wake_by_ref(self: &Arc<Self>) {
-        let mut state = self.state.load(Ordering::Acquire);
-        while matches!(state, POLLING | WAITING) {
-            match self.state.compare_exchange_weak(
-                state,
-                NOTIFIED,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            ) {
-                Ok(_) => break,
-                Err(actual) => state = actual,
-            }
-        }
+        let prev = self
+            .state
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |state| {
+                matches!(state, POLLING | WAITING).then_some(NOTIFIED)
+            });
         // A wake during a poll is seen by `suspend`; only a waiting task needs the loop.
-        if state == WAITING
-            && let Some(port) = &*self.port.load()
-        {
-            port.push(self.clone());
+        if prev == Ok(WAITING) {
+            // Release the lock before pushing, which may attach to Python.
+            let port = self.lock_port().clone();
+            if let Some(port) = port {
+                port.push(self.clone());
+            }
         }
     }
 }

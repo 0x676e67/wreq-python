@@ -84,9 +84,8 @@ where
     F: Future<Output = PyResult<T>> + Send + 'static,
     T: Send + 'static,
 {
-    let owner = runtime.clone();
-    let task = runtime.handle().spawn(async move {
-        let _owner = owner;
+    let task = runtime.handle().clone().spawn(async move {
+        let _owner = runtime;
         fut.await
     });
     AbortOnDropHandle::new(task)
