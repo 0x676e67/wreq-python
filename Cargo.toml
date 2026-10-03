@@ -84,7 +84,7 @@ btls = { git = "https://github.com/0x676e67/btls", rev = "ffaf0e8c23d455af4e3069
 btls-sys = { git = "https://github.com/0x676e67/btls", rev = "ffaf0e8c23d455af4e306986ce81bb57ebd03bc2" }
 tokio-btls = { git = "https://github.com/0x676e67/btls", rev = "ffaf0e8c23d455af4e306986ce81bb57ebd03bc2" }
 # demo/http1-cancel-shutdown
-netty = { git = "https://github.com/0x676e67/netty", rev = "7b35fed8886df5618ecfa55456634e5627e9e442" }
+netty = { git = "https://github.com/0x676e67/netty", rev = "1b07384f8e517d835b0d336a1a3874aaeb08bc08" }
 
 [profile.release]
 codegen-units = 1
