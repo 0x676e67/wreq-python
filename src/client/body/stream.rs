@@ -19,6 +19,7 @@ use pyo3::{
     sync::PyOnceLock,
 };
 use tokio::{
+    runtime::Handle,
     sync::{
         Notify,
         mpsc::{self, error::TryRecvError},
@@ -476,8 +477,11 @@ impl Drop for PyAsyncStream {
     fn drop(&mut self) {
         self.rx.close();
         if let Some((task, event_loop)) = self.task.take() {
-            // Body drop can run on Tokio: acquire the interpreter on a blocking thread.
-            crate::runtime::get().handle().spawn_blocking(move || {
+            // Body drop can run on Tokio: acquire the interpreter on a blocking thread of the
+            // current runtime, so a client's own runtime never starts the shared one.
+            let handle =
+                Handle::try_current().unwrap_or_else(|_| crate::runtime::get().handle().clone());
+            handle.spawn_blocking(move || {
                 Python::try_attach(|py| {
                     if let Ok(cancel) = task.bind(py).getattr(intern!(py, "cancel")) {
                         let _ = event_loop.call_method1(
