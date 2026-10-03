@@ -2,7 +2,7 @@ use std::{
     future::Future,
     pin::{Pin, pin},
     sync::{
-        Arc, PoisonError,
+        Arc, Mutex, MutexGuard, PoisonError,
         atomic::{AtomicUsize, Ordering},
     },
     task::{Context, Poll},
@@ -77,7 +77,7 @@ pub struct Streamer(Arc<Reader>, Runtime);
 /// timeout does not start before iteration. Readers poll the buffer from Python
 /// and wait on `arrived`, which the task signals once per burst of frames.
 struct Reader {
-    state: std::sync::Mutex<State>,
+    state: Mutex<State>,
     arrived: Arc<Notify>,
     /// Buffered frames returned since `__anext__` last yielded to the event loop.
     ready: AtomicUsize,
@@ -108,7 +108,7 @@ impl Streamer {
     #[inline]
     pub fn new(resp: wreq::Response, runtime: Runtime) -> Streamer {
         let reader = Reader {
-            state: std::sync::Mutex::new(State::Idle(Box::new(resp))),
+            state: Mutex::new(State::Idle(Box::new(resp))),
             arrived: Arc::new(Notify::new()),
             ready: AtomicUsize::new(0),
         };
@@ -146,13 +146,9 @@ impl Streamer {
         }
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, State> {
-        self.0.state.lock().unwrap_or_else(PoisonError::into_inner)
-    }
-
     /// Return a buffered frame, or `None` if the read must wait for `arrived`.
     fn try_next(&self, error: fn() -> Error) -> Option<PyResult<Frame>> {
-        let mut state = self.lock();
+        let mut state = self.0.lock();
         if let State::Idle(_) = *state
             && let State::Idle(resp) = std::mem::replace(&mut *state, State::Closed)
         {
@@ -178,13 +174,6 @@ impl Streamer {
             }
         }
     }
-
-    /// Release the body and end any waiting read.
-    fn close(&self) {
-        let state = std::mem::replace(&mut *self.lock(), State::Closed);
-        drop(state);
-        self.0.arrived.notify_waiters();
-    }
 }
 
 #[pymethods]
@@ -195,10 +184,13 @@ impl Streamer {
     }
 
     fn __next__(&self, py: Python) -> PyResult<Frame> {
+        // Buffered frames are returned without releasing the GIL.
+        if let Some(frame) = self.try_next(|| Error::StopIteration) {
+            return frame;
+        }
         py.detach(|| {
             loop {
-                let mut arrived = pin!(self.0.arrived.notified());
-                arrived.as_mut().enable();
+                let arrived = pin!(self.0.arrived.notified());
                 if let Some(frame) = self.try_next(|| Error::StopIteration) {
                     return frame;
                 }
@@ -220,7 +212,7 @@ impl Streamer {
         _exc_value: &Bound<'py, PyAny>,
         _traceback: &Bound<'py, PyAny>,
     ) {
-        py.detach(|| self.close());
+        py.detach(|| self.0.close());
     }
 }
 
@@ -232,9 +224,11 @@ impl Streamer {
     }
 
     /// Read the next frame when awaited.
-    fn __anext__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, Coroutine>> {
-        let this = self.clone();
+    fn __anext__(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
+        let py = slf.py();
+        let slf = slf.unbind();
         aio::local(py, "Streamer.__anext__", async move {
+            let this = slf.get();
             // Buffered frames complete without suspending; yield to the event loop
             // periodically so timeouts, cancellation and other tasks run.
             if this.0.ready.fetch_add(1, Ordering::Relaxed) >= Self::YIELD_EVERY {
@@ -242,8 +236,9 @@ impl Streamer {
                 aio::yield_now().await;
             }
             loop {
-                let mut arrived = pin!(this.0.arrived.notified());
-                arrived.as_mut().enable();
+                // Readers are woken by `notify_waiters`, which reaches a `Notified`
+                // from its creation, so it needs no `enable`.
+                let arrived = pin!(this.0.arrived.notified());
                 if let Some(frame) = this.try_next(|| Error::StopAsyncIteration) {
                     return frame;
                 }
@@ -266,9 +261,9 @@ impl Streamer {
         _exc_val: Py<PyAny>,
         _traceback: Py<PyAny>,
     ) -> PyResult<Bound<'py, Coroutine>> {
-        let this = self.clone();
+        let reader = self.0.clone();
         aio::local(py, "Streamer.__aexit__", async move {
-            this.close();
+            reader.close();
             Ok(())
         })
     }
@@ -286,6 +281,21 @@ async fn burst<F: Future>(fut: F, arrived: &Notify) -> F::Output {
         poll
     })
     .await
+}
+
+// ===== impl Reader =====
+
+impl Reader {
+    fn lock(&self) -> MutexGuard<'_, State> {
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Release the body and end any waiting read.
+    fn close(&self) {
+        let state = std::mem::replace(&mut *self.lock(), State::Closed);
+        drop(state);
+        self.arrived.notify_waiters();
+    }
 }
 
 // ===== impl NotifyOnDrop =====
@@ -506,10 +516,6 @@ impl Sender {
         tx: mpsc::Sender<Option<PyResult<PyBytesLike>>>,
         item: Option<PyResult<PyBytesLike>>,
     ) -> PyResult<bool> {
-        Ok(match tx.try_send(item) {
-            Ok(()) => true,
-            Err(mpsc::error::TrySendError::Closed(_)) => false,
-            Err(mpsc::error::TrySendError::Full(item)) => tx.send(item).await.is_ok(),
-        })
+        Ok(tx.send(item).await.is_ok())
     }
 }
