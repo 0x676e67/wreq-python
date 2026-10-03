@@ -72,6 +72,8 @@ jobs:
         run: |
           uv pip install .[test]
           uv pip install maturin
+          # uvloop is optional and can lag a new Python release; never build it from source.
+          uv pip install --only-binary uvloop uvloop || echo "::warning::no uvloop wheel; skipping uvloop tests"
       - name: Build wheels
         run: |
           source .venv/bin/activate
@@ -366,7 +368,8 @@ jobs:
         timeout-minutes: 10
         run: |
           python -m pip install --no-index --find-links dist wreq
-          python -m pip install pytest pytest-asyncio uvloop
+          python -m pip install pytest pytest-asyncio
+          python -m pip install --only-binary uvloop uvloop || echo "::warning::no uvloop wheel; skipping uvloop tests"
           python -m pytest -v -o faulthandler_timeout=60 tests/aio_test.py tests/cancellation_test.py tests/upload_test.py tests/runtime_test.py
       - name: Upload wheels
         uses: actions/upload-artifact@v7
