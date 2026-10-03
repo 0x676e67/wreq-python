@@ -1,0 +1,31 @@
+[package]
+name = "wreq-benchmark-server"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+publish = false
+
+[workspace]
+
+[dependencies]
+btls = "0.5.6"
+bytes = "1.12.1"
+http-body-util = "0.1.4"
+hyper = { version = "1.7.0", features = ["server", "http1", "http2"] }
+hyper-util = { version = "0.1.20", features = ["tokio"] }
+serde_json = "1"
+tokio = { version = "1.52.2", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }
+tokio-btls = "0.5.6"
+
+[patch.crates-io]
+# Match the TLS IO implementation used by the Python extension.
+btls = { git = "https://github.com/0x676e67/btls", rev = "ffaf0e8c23d455af4e306986ce81bb57ebd03bc2" }
+btls-sys = { git = "https://github.com/0x676e67/btls", rev = "ffaf0e8c23d455af4e306986ce81bb57ebd03bc2" }
+tokio-btls = { git = "https://github.com/0x676e67/btls", rev = "ffaf0e8c23d455af4e306986ce81bb57ebd03bc2" }
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+opt-level = 3
+panic = "abort"
+strip = true
