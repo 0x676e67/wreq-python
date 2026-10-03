@@ -329,9 +329,7 @@ class Streamer:
 
     async def __aenter__(self) -> Any: ...
 
-    async def __aexit__(
-        self, _exc_type: Any, _exc_value: Any, _traceback: Any
-    ) -> None:
+    async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
         r"""
         Release the body and end any pending read; returned views stay valid.
         """
@@ -455,9 +453,7 @@ class Response:
         """
 
     async def __aenter__(self) -> Any: ...
-    async def __aexit__(
-        self, _exc_type: Any, _exc_value: Any, _traceback: Any
-    ) -> Any:
+    async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> Any:
         r"""
         Release the body without forbidding reuse: a fully read connection returns
         to the pool, while an unread HTTP/1 body drains or closes its connection.
@@ -531,9 +527,7 @@ class WebSocket:
         """
 
     async def __aenter__(self) -> Any: ...
-    async def __aexit__(
-        self, _exc_type: Any, _exc_value: Any, _traceback: Any
-    ) -> Any:
+    async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> Any:
         r"""
         Close the WebSocket connection without a close code or reason.
         """
@@ -1450,9 +1444,7 @@ class Client:
         ...
 
     async def __aenter__(self) -> Any: ...
-    async def __aexit__(
-        self, _exc_type: Any, _exc_value: Any, _traceback: Any
-    ) -> Any:
+    async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> Any:
         r"""
         Close the client like `close()`: cancel pending requests and reject new ones.
         """

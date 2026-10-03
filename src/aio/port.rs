@@ -15,7 +15,8 @@ use super::coroutine::Slot;
 pub(crate) struct Port {
     queue: Mutex<Vec<Arc<Slot>>>,
     bell: Bell,
-    /// Cleared once the loop drops its drain; later wakes are discarded.
+    /// Cleared once the loop drops its drain or keeper, or a scheduled drain cannot be
+    /// queued; later wakes are discarded.
     open: AtomicBool,
 }
 

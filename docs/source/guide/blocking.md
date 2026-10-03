@@ -210,4 +210,4 @@ if __name__ == "__main__":
 
 Data chunks are read-only `memoryview` objects that stay valid after the stream is closed. `resp.bytes()` returns the same type. Pass views directly to APIs that accept the buffer protocol; use `bytes(view)` or `view.tobytes()` only when you need a copy.
 
-Do not close a response while another thread is reading its body. `resp.close()` discards the retained body and marks its connection as non-reusable, but does not guarantee an immediate socket shutdown or interrupt an active read. A body transferred by `resp.stream()` belongs to the streamer and needs its own context manager, as shown above.
+Do not close a response while another thread is reading its body. `resp.close()` discards the retained body and marks its connection as non-reusable, but does not guarantee an immediate socket shutdown or interrupt an active read. Leaving `with resp:` instead keeps a fully read connection reusable. A body transferred by `resp.stream()` belongs to the streamer and needs its own context manager, as shown above.

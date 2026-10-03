@@ -104,8 +104,9 @@ struct NotifyOnDrop(Arc<Notify>);
 // ===== impl Streamer =====
 
 impl Streamer {
-    /// Frames buffered ahead of Python. A frame holds at most one transport read, up
-    /// to 408 KiB on HTTP/1, so the buffer stays under about 3.3 MiB.
+    /// Frames buffered ahead of Python. A frame holds at most one transport read, up to
+    /// 408 KiB on HTTP/1 by default, so the 8 queued frames plus the one being sent stay
+    /// under about 3.6 MiB.
     const READ_AHEAD: usize = 8;
 
     /// Buffered frames returned before `__anext__` yields to the event loop once.
@@ -479,8 +480,8 @@ impl Drop for PyAsyncStream {
     fn drop(&mut self) {
         self.rx.close();
         if let Some((task, event_loop)) = self.task.take() {
-            // Body drop can run on Tokio: acquire the interpreter on a blocking thread of the
-            // current runtime, so a client's own runtime never starts the shared one.
+            // Body drop can run on Tokio: cancel from a blocking thread, preferring the current
+            // runtime so a drop on a client's own runtime does not start the shared one.
             let handle =
                 Handle::try_current().unwrap_or_else(|_| crate::runtime::get().handle().clone());
             handle.spawn_blocking(move || {

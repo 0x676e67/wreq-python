@@ -128,6 +128,7 @@ class Response:
         Release the body without forbidding reuse: a fully read connection returns
         to the pool, while an unread HTTP/1 body drains or closes its connection.
         """
+
     def __str__(self) -> str: ...
 
 
