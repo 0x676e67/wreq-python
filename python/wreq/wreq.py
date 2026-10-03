@@ -352,7 +352,6 @@ class Response:
         print("Response URL: ", response.url)
         print("Headers: ", response.headers)
         print("Content-Length: ", response.content_length)
-        print("Encoding: ", response.encoding)
         print("Remote Address: ", response.remote_addr)
 
         text_content = await response.text()
