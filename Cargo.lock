@@ -111,7 +111,7 @@ dependencies = [
  "regex",
  "rustc-hash",
  "shlex",
- "syn 3.0.5",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -1178,8 +1178,7 @@ checksum = "27b02d87554356db9e9a873add8782d4ea6e3e58ea071a9adb9a2e8ddb884a8b"
 [[package]]
 name = "netty"
 version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6d4d60c6b6193ac462e05a1c8ae826a624eff20368e208e59101f5a1fbfc055"
+source = "git+https://github.com/0x676e67/netty?rev=7b35fed8886df5618ecfa55456634e5627e9e442#7b35fed8886df5618ecfa55456634e5627e9e442"
 dependencies = [
  "bytes",
  "futures-channel",
