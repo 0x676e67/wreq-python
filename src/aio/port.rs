@@ -280,22 +280,39 @@ fn proactor_watch(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
                 py,
                 c"import socket
 
-def watch(loop, fileno, drain):
-    sock = socket.socket(fileno=fileno)
 
-    def rearm(fut=None):
-        if fut is not None and (fut.cancelled() or fut.exception() or not fut.result()):
-            sock.close()
+class Watch:
+    # Pending receives reference the watch only through bound methods, so a closed
+    # loop frees it, and with it the drain, without waiting for the cycle collector.
+
+    def __init__(self, loop, sock, drain):
+        self.loop = loop
+        self.sock = sock
+        self.drain = drain
+
+    def arm(self):
+        self.loop._proactor.recv(self.sock, 4096).add_done_callback(self.ready)
+
+    def ready(self, fut):
+        if fut.cancelled() or fut.exception() or not fut.result():
+            self.sock.close()
             return
         try:
-            loop._proactor.recv(sock, 4096).add_done_callback(rearm)
+            self.arm()
         except Exception:
-            sock.close()
+            self.sock.close()
             return
-        if fut is not None:
-            drain()
+        self.drain()
 
-    rearm()
+
+def watch(loop, fileno, drain):
+    sock = socket.socket(fileno=fileno)
+    try:
+        # A first receive that fails lets the caller fall back to scheduled drains.
+        Watch(loop, sock, drain).arm()
+    except BaseException:
+        sock.close()
+        raise
 ",
                 c"wreq/_proactor.py",
                 c"wreq._proactor",
