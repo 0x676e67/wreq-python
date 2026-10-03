@@ -528,7 +528,7 @@ class WebSocket:
     async def __aenter__(self) -> Any: ...
     async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> Any:
         r"""
-        Close the WebSocket connection without a close code or reason.
+        Close the WebSocket connection without a close code or reason, unless already closed.
         """
 
     def __str__(self) -> str: ...
