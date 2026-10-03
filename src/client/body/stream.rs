@@ -1,5 +1,6 @@
 use std::{
     future::Future,
+    panic::AssertUnwindSafe,
     pin::{Pin, pin},
     sync::{
         Arc, Mutex, MutexGuard, PoisonError,
@@ -11,7 +12,12 @@ use std::{
 use bytes::Bytes;
 use futures_util::{FutureExt, Stream, future::poll_fn};
 use http_body_util::BodyExt;
-use pyo3::{exceptions::PyStopIteration, intern, prelude::*, sync::PyOnceLock};
+use pyo3::{
+    exceptions::{PyRuntimeError, PyStopIteration},
+    intern,
+    prelude::*,
+    sync::PyOnceLock,
+};
 use tokio::{
     sync::{
         Notify,
@@ -69,7 +75,6 @@ struct PyAsyncStream {
 struct Sender(mpsc::Sender<Option<PyResult<PyBytesLike>>>);
 
 /// A response stream yielding read-only memoryviews and any trailing headers.
-#[derive(Clone)]
 #[pyclass(subclass, frozen, skip_from_py_object)]
 pub struct Streamer(Arc<Reader>, Runtime);
 
@@ -80,7 +85,7 @@ struct Reader {
     state: Mutex<State>,
     arrived: Arc<Notify>,
     /// Buffered frames returned since `__anext__` last yielded to the event loop.
-    ready: AtomicUsize,
+    since_yield: AtomicUsize,
 }
 
 enum State {
@@ -98,7 +103,8 @@ struct NotifyOnDrop(Arc<Notify>);
 // ===== impl Streamer =====
 
 impl Streamer {
-    /// Frames buffered ahead of Python, about 128 KiB of full TLS records.
+    /// Frames buffered ahead of Python. A frame holds at most one transport read, up
+    /// to 408 KiB on HTTP/1, so the buffer stays under about 3.3 MiB.
     const READ_AHEAD: usize = 8;
 
     /// Buffered frames returned before `__anext__` yields to the event loop once.
@@ -110,7 +116,7 @@ impl Streamer {
         let reader = Reader {
             state: Mutex::new(State::Idle(Box::new(resp))),
             arrived: Arc::new(Notify::new()),
-            ready: AtomicUsize::new(0),
+            since_yield: AtomicUsize::new(0),
         };
         Streamer(Arc::new(reader), runtime)
     }
@@ -120,12 +126,21 @@ impl Streamer {
         tx: mpsc::Sender<PyResult<Frame>>,
         arrived: Arc<Notify>,
     ) {
-        // Readers wake only after `pump` drops the sender, so they see the end.
-        let _end = NotifyOnDrop(arrived.clone());
-        Self::pump(resp, tx, &arrived).await;
+        let end = NotifyOnDrop(arrived);
+        // Without this a panic would drop `tx` and read as the end of the body.
+        if AssertUnwindSafe(Self::pump(resp, &tx, &end.0))
+            .catch_unwind()
+            .await
+            .is_err()
+        {
+            let panicked = Err(PyRuntimeError::new_err("response body reader panicked"));
+            let _ = burst(tx.send(panicked), &end.0).await;
+        }
+        // Readers wake only after the sender drops, so they see the end.
+        drop(tx);
     }
 
-    async fn pump(mut resp: wreq::Response, tx: mpsc::Sender<PyResult<Frame>>, arrived: &Notify) {
+    async fn pump(mut resp: wreq::Response, tx: &mpsc::Sender<PyResult<Frame>>, arrived: &Notify) {
         while let Some(frame) = burst(resp.frame(), arrived).await {
             let frame = match frame.map(|frame| frame.into_data()) {
                 Ok(Ok(bytes)) => Ok(Frame::Bytes(PyBuffer::from(bytes))),
@@ -134,7 +149,7 @@ impl Streamer {
                     Err(_) => continue,
                 },
                 Err(err) => {
-                    // A failed body may leave a stalled HTTP/2 connection behind.
+                    // Conservatively keep the connection out of the pool after a body error.
                     resp.forbid_recycle();
                     Err(Error::Library(err).into())
                 }
@@ -227,8 +242,8 @@ impl Streamer {
             let this = slf.get();
             // Buffered frames complete without suspending; yield to the event loop
             // periodically so timeouts, cancellation and other tasks run.
-            if this.0.ready.fetch_add(1, Ordering::Relaxed) >= Self::YIELD_EVERY {
-                this.0.ready.store(0, Ordering::Relaxed);
+            if this.0.since_yield.fetch_add(1, Ordering::Relaxed) >= Self::YIELD_EVERY {
+                this.0.since_yield.store(0, Ordering::Relaxed);
                 aio::yield_now().await;
             }
             loop {
@@ -238,7 +253,7 @@ impl Streamer {
                 if let Some(frame) = this.try_next(|| Error::StopAsyncIteration) {
                     return frame;
                 }
-                this.0.ready.store(0, Ordering::Relaxed);
+                this.0.since_yield.store(0, Ordering::Relaxed);
                 arrived.await;
             }
         })
