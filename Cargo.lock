@@ -2489,7 +2489,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
- "sync_wrapper",
  "tikv-jemallocator",
  "tokio",
  "tokio-util",

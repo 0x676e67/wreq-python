@@ -14,7 +14,6 @@ use pyo3::{
     intern,
     prelude::*,
 };
-use sync_wrapper::SyncWrapper;
 
 use super::Port;
 
@@ -28,8 +27,8 @@ type BoxFuture = Pin<Box<dyn Future<Output = PyResult<Py<PyAny>>> + Send>>;
 #[pyclass(module = "wreq", name = "Coroutine")]
 pub struct Coroutine {
     qualname: &'static str,
-    /// Polled only through `&mut self`, so it needs no lock to be shared.
-    future: SyncWrapper<Option<BoxFuture>>,
+    /// Polled only through `&mut self`, so `get_mut` reaches it without locking.
+    future: Mutex<Option<BoxFuture>>,
     slot: Arc<Slot>,
     waker: Waker,
 }
@@ -62,7 +61,7 @@ impl Coroutine {
         let slot = Arc::new(Slot::default());
         Coroutine {
             qualname,
-            future: SyncWrapper::new(Some(Box::pin(future))),
+            future: Mutex::new(Some(Box::pin(future))),
             waker: Waker::from(slot.clone()),
             slot,
         }
@@ -72,6 +71,7 @@ impl Coroutine {
         let future = self
             .future
             .get_mut()
+            .unwrap_or_else(PoisonError::into_inner)
             .as_mut()
             .ok_or_else(|| PyRuntimeError::new_err("cannot reuse already awaited coroutine"))?;
 
@@ -85,7 +85,10 @@ impl Coroutine {
     }
 
     fn finish(&mut self) {
-        *self.future.get_mut() = None;
+        *self
+            .future
+            .get_mut()
+            .unwrap_or_else(PoisonError::into_inner) = None;
         self.slot.state.store(DONE, Ordering::Release);
         drop(self.slot.take_waiter());
     }
