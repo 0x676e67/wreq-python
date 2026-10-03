@@ -45,6 +45,7 @@ serde_urlencoded = "0.7.1"
 indexmap = { version = "2.13.0", features = ["serde"] }
 bytes = "1.12.1"
 arc-swap = "1.9.2"
+sync_wrapper = "1.0.2"
 http = "1.4.2"
 http-body-util = "0.1.4"
 wreq = { version = "0.16.1", default-features = false, features = [

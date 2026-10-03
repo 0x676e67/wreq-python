@@ -1,5 +1,6 @@
 use std::{
-    pin::Pin,
+    future::Future,
+    pin::{Pin, pin},
     sync::{
         Arc, PoisonError,
         atomic::{AtomicUsize, Ordering},
@@ -10,12 +11,10 @@ use std::{
 use bytes::Bytes;
 use futures_util::{FutureExt, Stream, future::poll_fn};
 use http_body_util::BodyExt;
-use pyo3::{
-    coroutine::CancelHandle, exceptions::PyStopIteration, intern, prelude::*, sync::PyOnceLock,
-};
+use pyo3::{exceptions::PyStopIteration, intern, prelude::*, sync::PyOnceLock};
 use tokio::{
     sync::{
-        Mutex,
+        Notify,
         mpsc::{self, error::TryRecvError},
     },
     task::JoinHandle,
@@ -23,8 +22,8 @@ use tokio::{
 use tokio_util::task::AbortOnDropHandle;
 
 use crate::{
+    aio::{self, Coroutine},
     buffer::PyBuffer,
-    client::nogil::{self, NoGIL},
     error::Error,
     extractor::{BytesInput, StrInput},
     header::HeaderMap,
@@ -75,20 +74,26 @@ struct Sender(mpsc::Sender<Option<PyResult<PyBytesLike>>>);
 pub struct Streamer(Arc<Reader>, Runtime);
 
 /// Frames read ahead by a Tokio task, which starts on the first read so a read
-/// timeout does not start before iteration. Waiting reads hold the lock in a
-/// Tokio task, never in a suspended Python coroutine.
+/// timeout does not start before iteration. Readers poll the buffer from Python
+/// and wait on `arrived`, which the task signals once per burst of frames.
 struct Reader {
-    state: Mutex<State>,
-    task: std::sync::Mutex<Option<AbortOnDropHandle<()>>>,
+    state: std::sync::Mutex<State>,
+    arrived: Arc<Notify>,
     /// Buffered frames returned since `__anext__` last yielded to the event loop.
     ready: AtomicUsize,
 }
 
 enum State {
     Idle(Box<wreq::Response>),
-    Reading(mpsc::Receiver<PyResult<Frame>>),
+    Reading {
+        rx: mpsc::Receiver<PyResult<Frame>>,
+        _task: AbortOnDropHandle<()>,
+    },
     Closed,
 }
+
+/// Wakes readers however the read-ahead task ends, including when aborted.
+struct NotifyOnDrop(Arc<Notify>);
 
 // ===== impl Streamer =====
 
@@ -103,15 +108,25 @@ impl Streamer {
     #[inline]
     pub fn new(resp: wreq::Response, runtime: Runtime) -> Streamer {
         let reader = Reader {
-            state: Mutex::new(State::Idle(Box::new(resp))),
-            task: std::sync::Mutex::new(None),
+            state: std::sync::Mutex::new(State::Idle(Box::new(resp))),
+            arrived: Arc::new(Notify::new()),
             ready: AtomicUsize::new(0),
         };
         Streamer(Arc::new(reader), runtime)
     }
 
-    async fn read_ahead(mut resp: wreq::Response, tx: mpsc::Sender<PyResult<Frame>>) {
-        while let Some(frame) = resp.frame().await {
+    async fn read_ahead(
+        resp: wreq::Response,
+        tx: mpsc::Sender<PyResult<Frame>>,
+        arrived: Arc<Notify>,
+    ) {
+        // Readers wake only after `pump` drops the sender, so they see the end.
+        let _end = NotifyOnDrop(arrived.clone());
+        Self::pump(resp, tx, &arrived).await;
+    }
+
+    async fn pump(mut resp: wreq::Response, tx: mpsc::Sender<PyResult<Frame>>, arrived: &Notify) {
+        while let Some(frame) = burst(resp.frame(), arrived).await {
             let frame = match frame.map(|frame| frame.into_data()) {
                 Ok(Ok(bytes)) => Ok(Frame::Bytes(PyBuffer::from(bytes))),
                 Ok(Err(frame)) => match frame.into_trailers() {
@@ -125,25 +140,33 @@ impl Streamer {
                 }
             };
             let failed = frame.is_err();
-            if tx.send(frame).await.is_err() || failed {
+            if burst(tx.send(frame), arrived).await.is_err() || failed {
                 break;
             }
         }
     }
 
-    /// Return a buffered frame, or `None` if the read must wait.
-    fn poll_state(&self, state: &mut State, error: fn() -> Error) -> Option<PyResult<Frame>> {
-        if let State::Idle(_) = state
-            && let State::Idle(resp) = std::mem::replace(state, State::Closed)
+    fn lock(&self) -> std::sync::MutexGuard<'_, State> {
+        self.0.state.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Return a buffered frame, or `None` if the read must wait for `arrived`.
+    fn try_next(&self, error: fn() -> Error) -> Option<PyResult<Frame>> {
+        let mut state = self.lock();
+        if let State::Idle(_) = *state
+            && let State::Idle(resp) = std::mem::replace(&mut *state, State::Closed)
         {
             let (tx, rx) = mpsc::channel(Self::READ_AHEAD);
-            let task = self.1.handle().spawn(Self::read_ahead(*resp, tx));
-            *self.0.task.lock().unwrap_or_else(PoisonError::into_inner) =
-                Some(AbortOnDropHandle::new(task));
-            *state = State::Reading(rx);
-            return None;
+            let task = self
+                .1
+                .handle()
+                .spawn(Self::read_ahead(*resp, tx, self.0.arrived.clone()));
+            *state = State::Reading {
+                rx,
+                _task: AbortOnDropHandle::new(task),
+            };
         }
-        let State::Reading(rx) = state else {
+        let State::Reading { rx, .. } = &mut *state else {
             return Some(Err(error().into()));
         };
         match rx.try_recv() {
@@ -156,38 +179,11 @@ impl Streamer {
         }
     }
 
-    /// Return a buffered frame without waiting or spawning.
-    fn try_next(&self, error: fn() -> Error) -> Option<PyResult<Frame>> {
-        let mut state = self.0.state.try_lock().ok()?;
-        self.poll_state(&mut state, error)
-    }
-
-    async fn next(self, error: fn() -> Error) -> PyResult<Frame> {
-        let mut state = self.0.state.lock().await;
-        if let Some(frame) = self.poll_state(&mut state, error) {
-            return frame;
-        }
-        let State::Reading(rx) = &mut *state else {
-            return Err(error().into());
-        };
-        match rx.recv().await {
-            Some(frame) => frame,
-            None => {
-                *state = State::Closed;
-                Err(error().into())
-            }
-        }
-    }
-
-    /// Stop reading ahead; a waiting read then ends and releases the state.
-    fn abort(&self) {
-        drop(
-            self.0
-                .task
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .take(),
-        );
+    /// Release the body and end any waiting read.
+    fn close(&self) {
+        let state = std::mem::replace(&mut *self.lock(), State::Closed);
+        drop(state);
+        self.0.arrived.notify_waiters();
     }
 }
 
@@ -198,12 +194,16 @@ impl Streamer {
         slf
     }
 
-    #[inline]
     fn __next__(&self, py: Python) -> PyResult<Frame> {
         py.detach(|| {
-            self.try_next(|| Error::StopIteration).unwrap_or_else(|| {
-                nogil::block_on(&self.1, self.clone().next(|| Error::StopIteration))
-            })
+            loop {
+                let mut arrived = pin!(self.0.arrived.notified());
+                arrived.as_mut().enable();
+                if let Some(frame) = self.try_next(|| Error::StopIteration) {
+                    return frame;
+                }
+                self.1.handle().block_on(arrived);
+            }
         })
     }
 
@@ -220,10 +220,7 @@ impl Streamer {
         _exc_value: &Bound<'py, PyAny>,
         _traceback: &Bound<'py, PyAny>,
     ) {
-        py.detach(|| {
-            self.abort();
-            *self.0.state.blocking_lock() = State::Closed;
-        });
+        py.detach(|| self.close());
     }
 }
 
@@ -234,74 +231,68 @@ impl Streamer {
         slf
     }
 
-    /// Read the next frame when awaited; returns a coroutine, not a Future.
-    #[inline]
-    fn __anext__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    /// Read the next frame when awaited.
+    fn __anext__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, Coroutine>> {
         let this = self.clone();
-        // PyO3 0.29 cannot wrap an async __anext__ slot; use its macro constructor.
-        // Recheck this internal API when upgrading PyO3. Without a throw callback,
-        // cancellation drops the read, which aborts any spawned wait.
-        Bound::new(
-            py,
-            pyo3::impl_::coroutine::new_coroutine(
-                intern!(py, "__anext__"),
-                Some("Streamer"),
-                None,
-                async move {
-                    let error = || Error::StopAsyncIteration;
-                    // Buffered frames complete without suspending; yield to the event
-                    // loop periodically so timeouts, cancellation and other tasks run.
-                    if this.0.ready.fetch_add(1, Ordering::Relaxed) >= Self::YIELD_EVERY {
-                        this.0.ready.store(0, Ordering::Relaxed);
-                        let mut yielded = false;
-                        poll_fn(|cx| {
-                            if std::mem::replace(&mut yielded, true) {
-                                return Poll::Ready(());
-                            }
-                            cx.waker().wake_by_ref();
-                            Poll::Pending
-                        })
-                        .await;
-                    }
-                    let frame = match this.try_next(error) {
-                        Some(frame) => frame?,
-                        None => {
-                            this.0.ready.store(0, Ordering::Relaxed);
-                            let runtime = this.1.clone();
-                            NoGIL::new(&runtime, this.next(error)).await?
-                        }
-                    };
-                    // PyO3 polls this coroutine while attached, outside the Tokio task.
-                    Python::attach(|py| frame.into_pyobject(py).map(|obj| obj.unbind()))
-                },
-            ),
-        )
-        .map(Bound::into_any)
+        aio::local(py, "Streamer.__anext__", async move {
+            // Buffered frames complete without suspending; yield to the event loop
+            // periodically so timeouts, cancellation and other tasks run.
+            if this.0.ready.fetch_add(1, Ordering::Relaxed) >= Self::YIELD_EVERY {
+                this.0.ready.store(0, Ordering::Relaxed);
+                aio::yield_now().await;
+            }
+            loop {
+                let mut arrived = pin!(this.0.arrived.notified());
+                arrived.as_mut().enable();
+                if let Some(frame) = this.try_next(|| Error::StopAsyncIteration) {
+                    return frame;
+                }
+                this.0.ready.store(0, Ordering::Relaxed);
+                arrived.await;
+            }
+        })
     }
 
     #[inline]
-    async fn __aenter__(slf: Py<Self>) -> PyResult<Py<Self>> {
-        Ok(slf)
+    fn __aenter__(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
+        aio::ready("Streamer.__aenter__", slf)
     }
 
     #[inline]
-    async fn __aexit__(
+    fn __aexit__<'py>(
         &self,
+        py: Python<'py>,
         _exc_type: Py<PyAny>,
         _exc_val: Py<PyAny>,
         _traceback: Py<PyAny>,
-    ) -> PyResult<()> {
-        self.abort();
-        if let Ok(mut state) = self.0.state.try_lock() {
-            *state = State::Closed;
-            return Ok(());
-        }
-        let reader = self.0.clone();
-        NoGIL::new(&self.1, async move {
-            *reader.state.lock().await = State::Closed;
+    ) -> PyResult<Bound<'py, Coroutine>> {
+        let this = self.clone();
+        aio::local(py, "Streamer.__aexit__", async move {
+            this.close();
             Ok(())
         })
-        .await
+    }
+}
+
+/// Await `fut`, notifying readers whenever it suspends, so a burst of ready
+/// frames costs one wake while a slow stream still delivers each frame at once.
+async fn burst<F: Future>(fut: F, arrived: &Notify) -> F::Output {
+    let mut fut = pin!(fut);
+    poll_fn(|cx| {
+        let poll = fut.as_mut().poll(cx);
+        if poll.is_pending() {
+            arrived.notify_waiters();
+        }
+        poll
+    })
+    .await
+}
+
+// ===== impl NotifyOnDrop =====
+
+impl Drop for NotifyOnDrop {
+    fn drop(&mut self) {
+        self.0.notify_waiters();
     }
 }
 
@@ -485,48 +476,40 @@ impl Drop for PyAsyncStream {
 
 #[pymethods]
 impl Sender {
-    async fn send(
+    fn send<'py>(
         &self,
-        item: Py<PyAny>,
+        py: Python<'py>,
+        item: Bound<'py, PyAny>,
         error: bool,
-        #[pyo3(cancel_handle)] cancel: CancelHandle,
-    ) -> PyResult<bool> {
-        let item = Python::attach(|py| {
-            if error {
-                Ok(Err(PyErr::from_value(item.into_bound(py))))
-            } else {
-                item.extract(py).map(Ok)
-            }
-        })?;
-        self.send_item(Some(item), cancel).await
+    ) -> PyResult<Bound<'py, Coroutine>> {
+        let item = if error {
+            Err(PyErr::from_value(item))
+        } else {
+            Ok(item.extract()?)
+        };
+        aio::local(
+            py,
+            "Sender.send",
+            Self::send_item(self.0.clone(), Some(item)),
+        )
     }
 
-    async fn finish(&self, #[pyo3(cancel_handle)] cancel: CancelHandle) -> PyResult<bool> {
+    fn finish<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, Coroutine>> {
         // Python may retain the sender after completion, especially on PyPy.
-        self.send_item(None, cancel).await
+        aio::local(py, "Sender.finish", Self::send_item(self.0.clone(), None))
     }
 }
 
 impl Sender {
+    /// Channel readiness is runtime-independent, so this waits on the Python loop.
     async fn send_item(
-        &self,
+        tx: mpsc::Sender<Option<PyResult<PyBytesLike>>>,
         item: Option<PyResult<PyBytesLike>>,
-        mut cancel: CancelHandle,
     ) -> PyResult<bool> {
-        let item = match self.0.try_send(item) {
-            Ok(()) => return Ok(true),
-            Err(mpsc::error::TrySendError::Closed(_)) => return Ok(false),
-            Err(mpsc::error::TrySendError::Full(item)) => item,
-        };
-        let tx = self.0.clone();
-        // Channel readiness is runtime-independent; keep this on the Python loop.
-        let mut send = std::pin::pin!(tx.send(item));
-        tokio::select! {
-            biased;
-            exception = poll_fn(|cx| cancel.poll_cancelled(cx)) => {
-                Err(Python::attach(|py| PyErr::from_value(exception.into_bound(py))))
-            }
-            result = poll_fn(|cx| nogil::poll_with_guard(send.as_mut(), cx)) => Ok(result.is_ok()),
-        }
+        Ok(match tx.try_send(item) {
+            Ok(()) => true,
+            Err(mpsc::error::TrySendError::Closed(_)) => false,
+            Err(mpsc::error::TrySendError::Full(item)) => tx.send(item).await.is_ok(),
+        })
     }
 }

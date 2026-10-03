@@ -1,4 +1,4 @@
-use std::{fmt::Display, sync::Arc};
+use std::{fmt::Display, future::Future, sync::Arc};
 
 use arc_swap::ArcSwapOption;
 use bytes::Bytes;
@@ -8,15 +8,15 @@ use futures_util::{
 };
 use http::response::{Parts, Response as HttpResponse};
 use http_body_util::{BodyExt, Collected};
-use pyo3::{coroutine::CancelHandle, prelude::*, pybacked::PyBackedStr};
+use pyo3::{prelude::*, pybacked::PyBackedStr};
 use wreq::{self, Uri};
 
 use crate::{
+    aio::{self, Coroutine},
     buffer::PyBuffer,
     client::{
         SocketAddr,
         body::{Json, Streamer},
-        nogil::NoGIL,
         resp::ext::ResponseExt,
     },
     cookie::Cookie,
@@ -129,6 +129,26 @@ impl Response {
         Err(Error::Memory)
     }
 
+    /// Read the body on the runtime once awaited; the body is taken on first await.
+    fn read<'py, F, Fut, T>(
+        slf: Bound<'py, Self>,
+        qualname: &'static str,
+        read: F,
+    ) -> PyResult<Bound<'py, Coroutine>>
+    where
+        F: FnOnce(wreq::Response) -> Fut + Send + 'static,
+        Fut: Future<Output = Result<T, Error>> + Send + 'static,
+        T: for<'a> IntoPyObject<'a> + Send + 'static,
+    {
+        let py = slf.py();
+        let slf = slf.unbind();
+        aio::local(py, qualname, async move {
+            let this = slf.get();
+            let fut = this.cache_response().and_then(read).map_err(Into::into);
+            aio::run(this.runtime.clone(), fut).await
+        })
+    }
+
     /// Forcefully destroys the response [`Body`], preventing any further reads.
     fn destroy(&self) {
         #[allow(clippy::option_map_unit_fn)]
@@ -232,35 +252,25 @@ impl Response {
 
     /// Get the text content with the response encoding, defaulting to utf-8 when unspecified.
     #[pyo3(signature = (encoding = None))]
-    pub async fn text(
-        &self,
-        #[pyo3(cancel_handle)] cancel: CancelHandle,
+    pub fn text(
+        slf: Bound<'_, Self>,
         encoding: Option<PyBackedStr>,
-    ) -> PyResult<String> {
-        let fut = self
-            .cache_response()
-            .and_then(|resp| ResponseExt::text(resp, encoding))
-            .map_err(Into::into);
-        NoGIL::with_cancel(&self.runtime, fut, cancel).await
+    ) -> PyResult<Bound<'_, Coroutine>> {
+        Self::read(slf, "Response.text", |resp| {
+            ResponseExt::text(resp, encoding)
+        })
     }
 
     /// Get the JSON content of the response.
-    pub async fn json(&self, #[pyo3(cancel_handle)] cancel: CancelHandle) -> PyResult<Json> {
-        let fut = self
-            .cache_response()
-            .and_then(ResponseExt::json::<Json>)
-            .map_err(Into::into);
-        NoGIL::with_cancel(&self.runtime, fut, cancel).await
+    pub fn json(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
+        Self::read(slf, "Response.json", ResponseExt::json::<Json>)
     }
 
     /// Read the body as a read-only memoryview, retaining its data after the response closes.
-    pub async fn bytes(&self, #[pyo3(cancel_handle)] cancel: CancelHandle) -> PyResult<PyBuffer> {
-        let fut = self
-            .cache_response()
-            .and_then(ResponseExt::bytes)
-            .map_ok(PyBuffer::from)
-            .map_err(Into::into);
-        NoGIL::with_cancel(&self.runtime, fut, cancel).await
+    pub fn bytes(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
+        Self::read(slf, "Response.bytes", |resp| {
+            ResponseExt::bytes(resp).map_ok(PyBuffer::from)
+        })
     }
 
     /// Discard the retained body and mark its connection as non-reusable.
@@ -268,28 +278,40 @@ impl Response {
     /// Cancel and await any body-read task before closing. A body transferred to a
     /// Streamer is managed separately; previously returned memoryviews remain valid.
     /// `async with` instead releases the body and keeps a fully read connection reusable.
-    pub async fn close(&self) {
-        Python::attach(|py| {
-            py.detach(|| {
-                self.empty_response().forbid_recycle();
-                self.destroy()
-            });
-        });
+    pub fn close(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
+        let py = slf.py();
+        let slf = slf.unbind();
+        aio::local(py, "Response.close", async move {
+            let this = slf.get();
+            this.empty_response().forbid_recycle();
+            this.destroy();
+            Ok(())
+        })
     }
 }
 
 #[pymethods]
 impl Response {
     #[inline]
-    async fn __aenter__(slf: Py<Self>) -> PyResult<Py<Self>> {
-        Ok(slf)
+    fn __aenter__(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
+        aio::ready("Response.__aenter__", slf)
     }
 
     /// Release the body without forbidding reuse: a fully read connection returns
     /// to the pool, while an unread HTTP/1 body drains or closes its connection.
     #[inline]
-    async fn __aexit__(&self, _exc_type: Py<PyAny>, _exc_val: Py<PyAny>, _traceback: Py<PyAny>) {
-        self.destroy()
+    fn __aexit__<'py>(
+        slf: Bound<'py, Self>,
+        _exc_type: Py<PyAny>,
+        _exc_val: Py<PyAny>,
+        _traceback: Py<PyAny>,
+    ) -> PyResult<Bound<'py, Coroutine>> {
+        let py = slf.py();
+        let slf = slf.unbind();
+        aio::local(py, "Response.__aexit__", async move {
+            slf.get().destroy();
+            Ok(())
+        })
     }
 }
 

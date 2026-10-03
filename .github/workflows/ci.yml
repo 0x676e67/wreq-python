@@ -314,6 +314,13 @@ jobs:
       - name: Rust unit tests
         if: matrix.build_type.name == 'standard' && matrix.platform.target == 'x64'
         run: cargo test --lib --locked
+      - name: Event loop tests
+        if: matrix.build_type.name == 'standard' && matrix.platform.target == 'x64'
+        shell: bash
+        run: |
+          python -m pip install --no-index --find-links dist wreq
+          python -m pip install pytest pytest-asyncio
+          python -m pytest -v -o faulthandler_timeout=60 tests/aio_test.py tests/cancellation_test.py tests/upload_test.py tests/runtime_test.py
       - name: Upload wheels
         uses: actions/upload-artifact@v7
         with:
@@ -353,6 +360,12 @@ jobs:
           target: ${{ matrix.platform.target }}
           args: --release --out dist ${{ matrix.build_type.maturin_args }} --features ${{ matrix.platform.allocator || '' }}
           sccache: "false"
+      - name: Event loop tests
+        if: matrix.build_type.name == 'standard' && matrix.platform.target == 'aarch64'
+        run: |
+          python -m pip install --no-index --find-links dist wreq
+          python -m pip install pytest pytest-asyncio uvloop
+          python -m pytest -v -o faulthandler_timeout=60 tests/aio_test.py tests/cancellation_test.py tests/upload_test.py tests/runtime_test.py
       - name: Upload wheels
         uses: actions/upload-artifact@v7
         with:

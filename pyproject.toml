@@ -41,6 +41,7 @@ test = [
   "pytest",
   "pytest-asyncio",
   "pytest-rerunfailures",
+  "uvloop; sys_platform != 'win32' and platform_python_implementation == 'CPython'",
 ]
 docs = [
   "zensical",
