@@ -209,7 +209,11 @@ class WebSocket:
         """
 
     def __enter__(self) -> Any: ...
-    def __exit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None: ...
+    def __exit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
+        r"""
+        Close the WebSocket connection without a close code or reason.
+        """
+
     def __str__(self) -> str: ...
 
 
@@ -493,7 +497,10 @@ class Client:
         ...
 
     def __enter__(self) -> Any: ...
-    def __exit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None: ...
+    def __exit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
+        r"""
+        Close the client like `close()`: cancel pending requests and reject new ones.
+        """
 
 
 def delete(

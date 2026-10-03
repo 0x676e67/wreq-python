@@ -218,6 +218,7 @@ impl Streamer {
         slf
     }
 
+    /// Release the body and end any pending read; returned views stay valid.
     fn __exit__<'py>(
         &self,
         py: Python,
@@ -264,6 +265,7 @@ impl Streamer {
         aio::ready("Streamer.__aenter__", slf)
     }
 
+    /// Release the body and end any pending read; returned views stay valid.
     fn __aexit__<'py>(
         &self,
         py: Python<'py>,

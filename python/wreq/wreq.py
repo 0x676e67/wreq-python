@@ -318,7 +318,10 @@ class Streamer:
 
     def __enter__(self) -> Any: ...
 
-    def __exit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None: ...
+    def __exit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
+        r"""
+        Release the body and end any pending read; returned views stay valid.
+        """
 
     def __aiter__(self) -> "Streamer": ...
 
@@ -328,7 +331,10 @@ class Streamer:
 
     async def __aexit__(
         self, _exc_type: Any, _exc_value: Any, _traceback: Any
-    ) -> None: ...
+    ) -> None:
+        r"""
+        Release the body and end any pending read; returned views stay valid.
+        """
 
 
 class Response:
@@ -524,8 +530,14 @@ class WebSocket:
         Close the WebSocket connection.
         """
 
-    def __aenter__(self) -> Any: ...
-    def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> Any: ...
+    async def __aenter__(self) -> Any: ...
+    async def __aexit__(
+        self, _exc_type: Any, _exc_value: Any, _traceback: Any
+    ) -> Any:
+        r"""
+        Close the WebSocket connection without a close code or reason.
+        """
+
     def __str__(self) -> str: ...
 
 
@@ -1440,7 +1452,10 @@ class Client:
     async def __aenter__(self) -> Any: ...
     async def __aexit__(
         self, _exc_type: Any, _exc_value: Any, _traceback: Any
-    ) -> Any: ...
+    ) -> Any:
+        r"""
+        Close the client like `close()`: cancel pending requests and reject new ones.
+        """
 
 
 async def delete(

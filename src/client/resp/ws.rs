@@ -166,6 +166,7 @@ impl WebSocket {
         aio::ready("WebSocket.__aenter__", slf)
     }
 
+    /// Close the WebSocket connection without a close code or reason.
     fn __aexit__<'py>(
         &self,
         py: Python<'py>,
@@ -279,6 +280,7 @@ impl BlockingWebSocket {
         slf
     }
 
+    /// Close the WebSocket connection without a close code or reason.
     fn __exit__<'py>(
         &self,
         py: Python<'py>,
