@@ -286,6 +286,7 @@ async fn burst<F: Future>(fut: F, arrived: &Notify) -> F::Output {
 // ===== impl Reader =====
 
 impl Reader {
+    #[inline]
     fn lock(&self) -> MutexGuard<'_, State> {
         self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
@@ -497,25 +498,18 @@ impl Sender {
         } else {
             Ok(item.extract()?)
         };
-        aio::local(
-            py,
-            "Sender.send",
-            Self::send_item(self.0.clone(), Some(item)),
-        )
+        let tx = self.0.clone();
+        // Channel readiness is runtime-independent, so this waits on the Python loop.
+        aio::local(py, "Sender.send", async move {
+            Ok(tx.send(Some(item)).await.is_ok())
+        })
     }
 
     fn finish<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, Coroutine>> {
         // Python may retain the sender after completion, especially on PyPy.
-        aio::local(py, "Sender.finish", Self::send_item(self.0.clone(), None))
-    }
-}
-
-impl Sender {
-    /// Channel readiness is runtime-independent, so this waits on the Python loop.
-    async fn send_item(
-        tx: mpsc::Sender<Option<PyResult<PyBytesLike>>>,
-        item: Option<PyResult<PyBytesLike>>,
-    ) -> PyResult<bool> {
-        Ok(tx.send(item).await.is_ok())
+        let tx = self.0.clone();
+        aio::local(py, "Sender.finish", async move {
+            Ok(tx.send(None).await.is_ok())
+        })
     }
 }

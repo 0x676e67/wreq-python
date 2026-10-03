@@ -196,7 +196,18 @@ impl Drain {
             let Some(waiter) = slot.take_waiter() else {
                 continue;
             };
-            if let Err(err) = release(waiter.bind(py)) {
+            // Resume the task awaiting the waiter, unless it was already cancelled.
+            let future = waiter.bind(py);
+            let done = future
+                .call_method0(intern!(py, "done"))
+                .and_then(|done| done.is_truthy());
+            let released = match done {
+                Ok(false) => future
+                    .call_method1(intern!(py, "set_result"), (py.None(),))
+                    .map(drop),
+                done => done.map(drop),
+            };
+            if let Err(err) = released {
                 // A raising callback, such as a signal handler, ends this drain. Requeue
                 // this wake and the rest; the next drain skips futures already done.
                 slot.set_waiter(waiter);
@@ -216,15 +227,6 @@ impl Drop for Drain {
             self.0.close();
         }
     }
-}
-
-/// Resume the task awaiting `waiter`, unless it was already cancelled.
-fn release(waiter: &Bound<'_, PyAny>) -> PyResult<()> {
-    let py = waiter.py();
-    if !waiter.call_method0(intern!(py, "done"))?.is_truthy()? {
-        waiter.call_method1(intern!(py, "set_result"), (py.None(),))?;
-    }
-    Ok(())
 }
 
 #[cfg(unix)]
