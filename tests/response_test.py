@@ -162,10 +162,17 @@ async def test_stream_read_ahead_yields_and_closes_waiting_readers():
 
     def serve(listener):
         for size in (64 << 20, None):
-            conn, _ = listener.accept()
+            try:
+                conn, _ = listener.accept()
+            except OSError:
+                return
             with conn:
-                while b"\r\n\r\n" not in conn.recv(65536):
-                    pass
+                head = b""
+                while b"\r\n\r\n" not in head:
+                    data = conn.recv(65536)
+                    if not data:
+                        return
+                    head += data
                 length = size or 1 << 20
                 conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n" % length)
                 try:
@@ -176,6 +183,8 @@ async def test_stream_read_ahead_yields_and_closes_waiting_readers():
                     stalled.wait(10)
 
     listener = socket.create_server(("127.0.0.1", 0))
+    # Closing the listener does not wake a blocked accept after a failed test.
+    listener.settimeout(10)
     url = f"http://127.0.0.1:{listener.getsockname()[1]}/"
     thread = threading.Thread(target=serve, args=(listener,), daemon=True)
     thread.start()
