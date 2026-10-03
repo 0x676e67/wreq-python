@@ -122,6 +122,10 @@ def test_wakes_resume_tasks_on_event_loops(new_loop):
             loop.close()
 
 
+@pytest.mark.skipif(
+    sys.implementation.name != "cpython",
+    reason="PyPy's cpyext does not collect cycles through extension objects",
+)
 @pytest.mark.parametrize("new_loop", [p for p in LOOPS if p.id != "no-reader"])
 def test_closed_loop_releases_pending_requests(new_loop):
     # The listener accepts connections into its backlog but never answers.
