@@ -541,7 +541,6 @@ impl Client {
 
     /// Cancel pending requests and reject new ones with asyncio.CancelledError.
     /// Existing responses, WebSockets and the shared runtime remain usable.
-    #[inline]
     pub fn close(&self) {
         self.cancel.cancel();
     }
@@ -553,7 +552,6 @@ impl Client {
     }
 
     /// Make a GET request to the given URL.
-    #[inline(always)]
     #[pyo3(signature = (url, **kwds))]
     pub fn get<'py>(
         &self,
@@ -565,7 +563,6 @@ impl Client {
     }
 
     /// Make a HEAD request to the given URL.
-    #[inline(always)]
     #[pyo3(signature = (url, **kwds))]
     pub fn head<'py>(
         &self,
@@ -577,7 +574,6 @@ impl Client {
     }
 
     /// Make a POST request to the given URL.
-    #[inline(always)]
     #[pyo3(signature = (url, **kwds))]
     pub fn post<'py>(
         &self,
@@ -589,7 +585,6 @@ impl Client {
     }
 
     /// Make a PUT request to the given URL.
-    #[inline(always)]
     #[pyo3(signature = (url, **kwds))]
     pub fn put<'py>(
         &self,
@@ -601,7 +596,6 @@ impl Client {
     }
 
     /// Make a DELETE request to the given URL.
-    #[inline(always)]
     #[pyo3(signature = (url, **kwds))]
     pub fn delete<'py>(
         &self,
@@ -613,7 +607,6 @@ impl Client {
     }
 
     /// Make a PATCH request to the given URL.
-    #[inline(always)]
     #[pyo3(signature = (url, **kwds))]
     pub fn patch<'py>(
         &self,
@@ -625,7 +618,6 @@ impl Client {
     }
 
     /// Make a OPTIONS request to the given URL.
-    #[inline(always)]
     #[pyo3(signature = (url, **kwds))]
     pub fn options<'py>(
         &self,
@@ -637,7 +629,6 @@ impl Client {
     }
 
     /// Make a TRACE request to the given URL.
-    #[inline(always)]
     #[pyo3(signature = (url, **kwds))]
     pub fn trace<'py>(
         &self,
@@ -649,7 +640,6 @@ impl Client {
     }
 
     /// Make a request with the given method and URL.
-    #[inline]
     #[pyo3(signature = (method, url, **kwds))]
     pub fn request<'py>(
         &self,
@@ -662,7 +652,6 @@ impl Client {
     }
 
     /// Make a WebSocket request to the given URL.
-    #[inline]
     #[pyo3(signature = (url, **kwds))]
     pub fn websocket<'py>(
         &self,
@@ -677,12 +666,10 @@ impl Client {
 
 #[pymethods]
 impl Client {
-    #[inline]
     fn __aenter__(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
         aio::ready("Client.__aenter__", slf)
     }
 
-    #[inline]
     fn __aexit__<'py>(
         &self,
         py: Python<'py>,
@@ -710,14 +697,12 @@ impl BlockingClient {
 
     /// Creates a new blocking Client instance.
     #[new]
-    #[inline]
     #[pyo3(signature = (**kwds))]
     fn new(py: Python, kwds: Option<Builder>) -> PyResult<BlockingClient> {
         Client::new(py, kwds).map(BlockingClient)
     }
 
     /// Get the cookie jar of the client.
-    #[inline]
     #[getter]
     pub fn cookie_jar(&self) -> Option<Jar> {
         self.0.cookie_jar.clone()
@@ -725,13 +710,11 @@ impl BlockingClient {
 
     /// Cancel pending requests and reject new ones with asyncio.CancelledError.
     /// Existing responses, WebSockets and the shared runtime remain usable.
-    #[inline]
     pub fn close(&self) {
         self.0.close();
     }
 
     /// Make a GET request to the specified URL.
-    #[inline(always)]
     #[pyo3(signature = (url, **kwds))]
     pub fn get(
         &self,
@@ -743,7 +726,6 @@ impl BlockingClient {
     }
 
     /// Make a POST request to the specified URL.
-    #[inline(always)]
     #[pyo3(signature = (url, **kwds))]
     pub fn post(
         &self,
@@ -755,7 +737,6 @@ impl BlockingClient {
     }
 
     /// Make a PUT request to the specified URL.
-    #[inline(always)]
     #[pyo3(signature = (url, **kwds))]
     pub fn put(
         &self,
@@ -767,7 +748,6 @@ impl BlockingClient {
     }
 
     /// Make a PATCH request to the specified URL.
-    #[inline(always)]
     #[pyo3(signature = (url, **kwds))]
     pub fn patch(
         &self,
@@ -779,7 +759,6 @@ impl BlockingClient {
     }
 
     /// Make a DELETE request to the specified URL.
-    #[inline(always)]
     #[pyo3(signature = (url, **kwds))]
     pub fn delete(
         &self,
@@ -791,7 +770,6 @@ impl BlockingClient {
     }
 
     /// Make a HEAD request to the specified URL.
-    #[inline(always)]
     #[pyo3(signature = (url, **kwds))]
     pub fn head(
         &self,
@@ -803,7 +781,6 @@ impl BlockingClient {
     }
 
     /// Make a OPTIONS request to the specified URL.
-    #[inline(always)]
     #[pyo3(signature = (url, **kwds))]
     pub fn options(
         &self,
@@ -815,7 +792,6 @@ impl BlockingClient {
     }
 
     /// Make a TRACE request to the specified URL.
-    #[inline(always)]
     #[pyo3(signature = (url, **kwds))]
     pub fn trace(
         &self,
@@ -864,12 +840,10 @@ impl BlockingClient {
 
 #[pymethods]
 impl BlockingClient {
-    #[inline]
     fn __enter__(slf: PyRef<Self>) -> PyRef<Self> {
         slf
     }
 
-    #[inline]
     fn __exit__<'py>(
         &self,
         _py: Python<'py>,

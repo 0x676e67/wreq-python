@@ -162,12 +162,10 @@ impl WebSocket {
 
 #[pymethods]
 impl WebSocket {
-    #[inline]
     fn __aenter__(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
         aio::ready("WebSocket.__aenter__", slf)
     }
 
-    #[inline]
     fn __aexit__<'py>(
         &self,
         py: Python<'py>,
@@ -277,12 +275,10 @@ impl BlockingWebSocket {
 
 #[pymethods]
 impl BlockingWebSocket {
-    #[inline]
     fn __enter__(slf: PyRef<Self>) -> PyRef<Self> {
         slf
     }
 
-    #[inline]
     fn __exit__<'py>(
         &self,
         py: Python<'py>,

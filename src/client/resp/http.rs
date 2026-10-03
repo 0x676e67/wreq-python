@@ -292,14 +292,12 @@ impl Response {
 
 #[pymethods]
 impl Response {
-    #[inline]
     fn __aenter__(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
         aio::ready("Response.__aenter__", slf)
     }
 
     /// Release the body without forbidding reuse: a fully read connection returns
     /// to the pool, while an unread HTTP/1 body drains or closes its connection.
-    #[inline]
     fn __aexit__<'py>(
         slf: Bound<'py, Self>,
         _exc_type: Py<PyAny>,
@@ -409,13 +407,11 @@ impl BlockingResponse {
     }
 
     /// Turn a response into an error if the server returned an error.
-    #[inline]
     pub fn raise_for_status(&self) -> PyResult<()> {
         self.0.raise_for_status()
     }
 
     /// Stream read-only memoryviews and any trailing headers from the body.
-    #[inline]
     pub fn stream(&self) -> PyResult<Streamer> {
         self.0.stream()
     }
@@ -463,7 +459,6 @@ impl BlockingResponse {
     /// Do not close concurrently with a body read. A body transferred to a Streamer
     /// is managed separately; previously returned memoryviews remain valid.
     /// `with` instead releases the body and keeps a fully read connection reusable.
-    #[inline]
     pub fn close(&self, py: Python) {
         py.detach(|| {
             self.0.empty_response().forbid_recycle();
@@ -474,12 +469,10 @@ impl BlockingResponse {
 
 #[pymethods]
 impl BlockingResponse {
-    #[inline]
     fn __enter__(slf: PyRef<Self>) -> PyRef<Self> {
         slf
     }
 
-    #[inline]
     fn __exit__<'py>(
         &self,
         py: Python<'py>,

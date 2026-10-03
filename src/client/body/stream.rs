@@ -178,7 +178,6 @@ impl Streamer {
 
 #[pymethods]
 impl Streamer {
-    #[inline]
     fn __iter__(slf: PyRef<Self>) -> PyRef<Self> {
         slf
     }
@@ -199,12 +198,10 @@ impl Streamer {
         })
     }
 
-    #[inline]
     fn __enter__(slf: PyRef<Self>) -> PyRef<Self> {
         slf
     }
 
-    #[inline]
     fn __exit__<'py>(
         &self,
         py: Python,
@@ -218,7 +215,6 @@ impl Streamer {
 
 #[pymethods]
 impl Streamer {
-    #[inline]
     fn __aiter__(slf: PyRef<Self>) -> PyRef<Self> {
         slf
     }
@@ -248,12 +244,10 @@ impl Streamer {
         })
     }
 
-    #[inline]
     fn __aenter__(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
         aio::ready("Streamer.__aenter__", slf)
     }
 
-    #[inline]
     fn __aexit__<'py>(
         &self,
         py: Python<'py>,

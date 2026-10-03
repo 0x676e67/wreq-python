@@ -136,7 +136,6 @@ impl_print_str!(Debug, Policy);
 #[pymethods]
 impl Attempt {
     /// Returns an action meaning the client should follow the next URI.
-    #[inline]
     pub fn follow(&self) -> Action {
         Action {
             kind: ActionKind::Follow,
@@ -146,7 +145,6 @@ impl Attempt {
     /// Returns an action meaning the client should not follow the next URI.
     ///
     /// The 30x response will be returned as the result.
-    #[inline]
     pub fn stop(&self) -> Action {
         Action {
             kind: ActionKind::Stop,
@@ -156,7 +154,6 @@ impl Attempt {
     /// Returns an action failing the redirect with an error.
     ///
     /// The error will be returned for the result of the sent request.
-    #[inline]
     pub fn error(&self, message: String) -> Action {
         Action {
             kind: ActionKind::Error(message),

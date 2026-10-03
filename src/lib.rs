@@ -74,7 +74,6 @@ mod r#async {
     };
 
     /// Make a GET request with the given parameters.
-    #[inline]
     #[pyfunction]
     #[pyo3(signature = (url, **kwds))]
     pub fn get<'py>(
@@ -86,7 +85,6 @@ mod r#async {
     }
 
     /// Make a POST request with the given parameters.
-    #[inline]
     #[pyfunction]
     #[pyo3(signature = (url, **kwds))]
     pub fn post<'py>(
@@ -98,7 +96,6 @@ mod r#async {
     }
 
     /// Make a PUT request with the given parameters.
-    #[inline]
     #[pyfunction]
     #[pyo3(signature = (url, **kwds))]
     pub fn put<'py>(
@@ -110,7 +107,6 @@ mod r#async {
     }
 
     /// Make a PATCH request with the given parameters.
-    #[inline]
     #[pyfunction]
     #[pyo3(signature = (url, **kwds))]
     pub fn patch<'py>(
@@ -122,7 +118,6 @@ mod r#async {
     }
 
     /// Make a DELETE request with the given parameters.
-    #[inline]
     #[pyfunction]
     #[pyo3(signature = (url, **kwds))]
     pub fn delete<'py>(
@@ -134,7 +129,6 @@ mod r#async {
     }
 
     /// Make a HEAD request with the given parameters.
-    #[inline]
     #[pyfunction]
     #[pyo3(signature = (url, **kwds))]
     pub fn head<'py>(
@@ -146,7 +140,6 @@ mod r#async {
     }
 
     /// Make a OPTIONS request with the given parameters.
-    #[inline]
     #[pyfunction]
     #[pyo3(signature = (url, **kwds))]
     pub fn options<'py>(
@@ -158,7 +151,6 @@ mod r#async {
     }
 
     /// Make a TRACE request with the given parameters.
-    #[inline]
     #[pyfunction]
     #[pyo3(signature = (url, **kwds))]
     pub fn trace<'py>(
@@ -170,7 +162,6 @@ mod r#async {
     }
 
     /// Make a request with the given parameters.
-    #[inline]
     #[pyfunction]
     #[pyo3(signature = (method, url, **kwds))]
     pub fn request<'py>(
@@ -183,7 +174,6 @@ mod r#async {
     }
 
     /// Make a WebSocket connection with the given parameters.
-    #[inline]
     #[pyfunction]
     #[pyo3(signature = (url, **kwds))]
     pub fn websocket<'py>(
@@ -226,7 +216,6 @@ mod blocking {
     };
 
     /// Make a GET request with the given parameters (blocking).
-    #[inline]
     #[pyfunction]
     #[pyo3(signature = (url, **kwds))]
     pub fn get(py: Python, url: PyBackedStr, kwds: Option<Request>) -> PyResult<BlockingResponse> {
@@ -234,7 +223,6 @@ mod blocking {
     }
 
     /// Make a POST request with the given parameters (blocking).
-    #[inline]
     #[pyfunction]
     #[pyo3(signature = (url, **kwds))]
     pub fn post(py: Python, url: PyBackedStr, kwds: Option<Request>) -> PyResult<BlockingResponse> {
@@ -242,7 +230,6 @@ mod blocking {
     }
 
     /// Make a PUT request with the given parameters (blocking).
-    #[inline]
     #[pyfunction]
     #[pyo3(signature = (url, **kwds))]
     pub fn put(py: Python, url: PyBackedStr, kwds: Option<Request>) -> PyResult<BlockingResponse> {
@@ -250,7 +237,6 @@ mod blocking {
     }
 
     /// Make a PATCH request with the given parameters (blocking).
-    #[inline]
     #[pyfunction]
     #[pyo3(signature = (url, **kwds))]
     pub fn patch(
@@ -262,7 +248,6 @@ mod blocking {
     }
 
     /// Make a DELETE request with the given parameters (blocking).
-    #[inline]
     #[pyfunction]
     #[pyo3(signature = (url, **kwds))]
     pub fn delete(
@@ -274,7 +259,6 @@ mod blocking {
     }
 
     /// Make a HEAD request with the given parameters (blocking).
-    #[inline]
     #[pyfunction]
     #[pyo3(signature = (url, **kwds))]
     pub fn head(py: Python, url: PyBackedStr, kwds: Option<Request>) -> PyResult<BlockingResponse> {
@@ -282,7 +266,6 @@ mod blocking {
     }
 
     /// Make a OPTIONS request with the given parameters (blocking).
-    #[inline]
     #[pyfunction]
     #[pyo3(signature = (url, **kwds))]
     pub fn options(
@@ -294,7 +277,6 @@ mod blocking {
     }
 
     /// Make a TRACE request with the given parameters (blocking).
-    #[inline]
     #[pyfunction]
     #[pyo3(signature = (url, **kwds))]
     pub fn trace(
@@ -306,7 +288,6 @@ mod blocking {
     }
 
     /// Make a request with the given parameters (blocking).
-    #[inline]
     #[pyfunction]
     #[pyo3(signature = (method, url, **kwds))]
     pub fn request(
@@ -319,7 +300,6 @@ mod blocking {
     }
 
     /// Make a WebSocket connection with the given parameters (blocking).
-    #[inline]
     #[pyfunction]
     #[pyo3(signature = (url, **kwds))]
     pub fn websocket(

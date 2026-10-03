@@ -141,7 +141,6 @@ impl HeaderMap {
     }
 
     /// Returns a list of read-only memoryviews for all keys.
-    #[inline]
     fn keys<'py>(&self, py: Python<'py>) -> Vec<PyBuffer> {
         py.detach(|| {
             self.0
@@ -153,7 +152,6 @@ impl HeaderMap {
     }
 
     /// Returns a list of read-only memoryviews for all values.
-    #[inline]
     fn values<'py>(&self, py: Python<'py>) -> Vec<PyBuffer> {
         py.detach(|| {
             self.0
@@ -169,7 +167,6 @@ impl HeaderMap {
     /// This number represents the total number of **values** stored in the map.
     /// This number can be greater than or equal to the number of **keys**
     /// stored given that a single key may have more than one associated value.
-    #[inline]
     fn len(&self) -> usize {
         self.0.len()
     }
@@ -178,19 +175,16 @@ impl HeaderMap {
     ///
     /// This number will be less than or equal to `len()` as each key may have
     /// more than one associated value.
-    #[inline]
     fn keys_len(&self) -> usize {
         self.0.keys_len()
     }
 
     /// Returns true if the map contains no elements.
-    #[inline]
     fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
     /// Clears the map, removing all key-value pairs. Keeps the allocated memory for reuse.
-    #[inline]
     fn clear(&mut self) {
         self.0.clear();
     }
@@ -198,27 +192,22 @@ impl HeaderMap {
 
 #[pymethods]
 impl HeaderMap {
-    #[inline]
     fn __getitem__<'py>(&self, py: Python<'py>, key: PyBackedStr) -> Option<PyBuffer> {
         self.get(py, key, None)
     }
 
-    #[inline]
     fn __setitem__(&mut self, py: Python, key: PyBackedStr, value: StrInput) {
         self.insert(py, key, value);
     }
 
-    #[inline]
     fn __delitem__(&mut self, py: Python, key: PyBackedStr) {
         self.remove(py, key);
     }
 
-    #[inline]
     fn __contains__(&self, py: Python, key: PyBackedStr) -> bool {
         self.contains_key(py, key)
     }
 
-    #[inline]
     fn __len__(&self) -> usize {
         self.0.len()
     }
@@ -305,13 +294,11 @@ impl OrigHeaderMap {
     /// of the list of values currently associated with the key. The key is not
     /// updated, though; this matters for types that can be `==` without being
     /// identical.
-    #[inline]
     pub fn insert(&mut self, value: StrInput) -> bool {
         self.0.insert(value.0)
     }
 
     /// Extends the map with all entries from another [`OrigHeaderMap`], preserving order.
-    #[inline]
     pub fn extend(&mut self, iter: &Bound<'_, OrigHeaderMap>) {
         self.0.extend(iter.borrow().0.clone());
     }
@@ -319,7 +306,6 @@ impl OrigHeaderMap {
 
 #[pymethods]
 impl OrigHeaderMap {
-    #[inline]
     fn __len__(&self) -> usize {
         self.0.len()
     }
