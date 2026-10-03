@@ -1,4 +1,4 @@
-use std::{fmt::Display, sync::Arc};
+use std::{fmt::Display, future::Future, sync::Arc};
 
 use arc_swap::ArcSwapOption;
 use bytes::Bytes;
@@ -8,15 +8,15 @@ use futures_util::{
 };
 use http::response::{Parts, Response as HttpResponse};
 use http_body_util::{BodyExt, Collected};
-use pyo3::{coroutine::CancelHandle, prelude::*, pybacked::PyBackedStr};
+use pyo3::{prelude::*, pybacked::PyBackedStr};
 use wreq::{self, Uri};
 
 use crate::{
+    aio::{self, Coroutine},
     buffer::PyBuffer,
     client::{
         SocketAddr,
         body::{Json, Streamer},
-        nogil::NoGIL,
         resp::ext::ResponseExt,
     },
     cookie::Cookie,
@@ -48,6 +48,9 @@ enum Body {
 /// A blocking response from a request.
 #[pyclass(name = "Response", subclass, frozen, str, skip_from_py_object)]
 pub struct BlockingResponse(Response);
+
+/// Forbids connection reuse unless disarmed by taking the response parts.
+struct RecycleGuard(Option<Parts>);
 
 // ===== impl Response =====
 
@@ -89,11 +92,15 @@ impl Response {
             match Arc::into_inner(arc) {
                 Some(Body::Streamable(stream)) => {
                     return Box::pin(async move {
+                        // A failed or cancelled read may leave a stalled HTTP/2
+                        // connection behind, so only a complete body keeps it reusable.
+                        let mut guard = RecycleGuard(Some(parts));
                         let bytes = stream
                             .collect()
                             .await
                             .map(Collected::to_bytes)
                             .map_err(Error::Library)?;
+                        let parts = guard.0.take().ok_or(Error::Memory)?;
 
                         body.store(Some(Arc::new(Body::Reusable(bytes.clone()))));
                         let response = HttpResponse::from_parts(parts, bytes);
@@ -120,6 +127,26 @@ impl Response {
             return Ok(self.build_response(body));
         }
         Err(Error::Memory)
+    }
+
+    /// Read the body on the runtime once awaited; the body is taken on first await.
+    fn read<'py, F, Fut, T>(
+        slf: Bound<'py, Self>,
+        qualname: &'static str,
+        read: F,
+    ) -> PyResult<Bound<'py, Coroutine>>
+    where
+        F: FnOnce(wreq::Response) -> Fut + Send + 'static,
+        Fut: Future<Output = Result<T, Error>> + Send + 'static,
+        T: for<'a> IntoPyObject<'a> + Send + 'static,
+    {
+        let py = slf.py();
+        let slf = slf.unbind();
+        aio::local(py, qualname, async move {
+            let this = slf.get();
+            let fut = this.cache_response().and_then(read).map_err(Into::into);
+            aio::run(this.runtime.clone(), fut).await
+        })
     }
 
     /// Forcefully destroys the response [`Body`], preventing any further reads.
@@ -225,62 +252,64 @@ impl Response {
 
     /// Get the text content with the response encoding, defaulting to utf-8 when unspecified.
     #[pyo3(signature = (encoding = None))]
-    pub async fn text(
-        &self,
-        #[pyo3(cancel_handle)] cancel: CancelHandle,
+    pub fn text(
+        slf: Bound<'_, Self>,
         encoding: Option<PyBackedStr>,
-    ) -> PyResult<String> {
-        let fut = self
-            .cache_response()
-            .and_then(|resp| ResponseExt::text(resp, encoding))
-            .map_err(Into::into);
-        NoGIL::with_cancel(&self.runtime, fut, cancel).await
+    ) -> PyResult<Bound<'_, Coroutine>> {
+        Self::read(slf, "Response.text", |resp| {
+            ResponseExt::text(resp, encoding)
+        })
     }
 
     /// Get the JSON content of the response.
-    pub async fn json(&self, #[pyo3(cancel_handle)] cancel: CancelHandle) -> PyResult<Json> {
-        let fut = self
-            .cache_response()
-            .and_then(ResponseExt::json::<Json>)
-            .map_err(Into::into);
-        NoGIL::with_cancel(&self.runtime, fut, cancel).await
+    pub fn json(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
+        Self::read(slf, "Response.json", ResponseExt::json::<Json>)
     }
 
     /// Read the body as a read-only memoryview, retaining its data after the response closes.
-    pub async fn bytes(&self, #[pyo3(cancel_handle)] cancel: CancelHandle) -> PyResult<PyBuffer> {
-        let fut = self
-            .cache_response()
-            .and_then(ResponseExt::bytes)
-            .map_ok(PyBuffer::from)
-            .map_err(Into::into);
-        NoGIL::with_cancel(&self.runtime, fut, cancel).await
+    pub fn bytes(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
+        Self::read(slf, "Response.bytes", |resp| {
+            ResponseExt::bytes(resp).map_ok(PyBuffer::from)
+        })
     }
 
     /// Discard the retained body and mark its connection as non-reusable.
     /// This does not guarantee an immediate socket shutdown or cancel an active read.
     /// Cancel and await any body-read task before closing. A body transferred to a
     /// Streamer is managed separately; previously returned memoryviews remain valid.
-    /// Prefer an async context manager (`async with`) for response cleanup.
-    pub async fn close(&self) {
-        Python::attach(|py| {
-            py.detach(|| {
-                self.empty_response().forbid_recycle();
-                self.destroy()
-            });
-        });
+    /// `async with` instead releases the body and keeps a fully read connection reusable.
+    pub fn close(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
+        let py = slf.py();
+        let slf = slf.unbind();
+        aio::local(py, "Response.close", async move {
+            let this = slf.get();
+            this.empty_response().forbid_recycle();
+            this.destroy();
+            Ok(())
+        })
     }
 }
 
 #[pymethods]
 impl Response {
-    #[inline]
-    async fn __aenter__(slf: Py<Self>) -> PyResult<Py<Self>> {
-        Ok(slf)
+    fn __aenter__(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
+        aio::ready("Response.__aenter__", slf)
     }
 
-    #[inline]
-    async fn __aexit__(&self, _exc_type: Py<PyAny>, _exc_val: Py<PyAny>, _traceback: Py<PyAny>) {
-        self.close().await
+    /// Release the body without forbidding reuse: a fully read connection returns
+    /// to the pool, while an unread HTTP/1 body drains or closes its connection.
+    fn __aexit__<'py>(
+        slf: Bound<'py, Self>,
+        _exc_type: Py<PyAny>,
+        _exc_val: Py<PyAny>,
+        _traceback: Py<PyAny>,
+    ) -> PyResult<Bound<'py, Coroutine>> {
+        let py = slf.py();
+        let slf = slf.unbind();
+        aio::local(py, "Response.__aexit__", async move {
+            slf.get().destroy();
+            Ok(())
+        })
     }
 }
 
@@ -300,6 +329,16 @@ impl Drop for Response {
     #[inline]
     fn drop(&mut self) {
         self.destroy();
+    }
+}
+
+// ===== impl RecycleGuard =====
+
+impl Drop for RecycleGuard {
+    fn drop(&mut self) {
+        if let Some(parts) = self.0.take() {
+            wreq::Response::from(HttpResponse::from_parts(parts, Bytes::new())).forbid_recycle();
+        }
     }
 }
 
@@ -368,13 +407,11 @@ impl BlockingResponse {
     }
 
     /// Turn a response into an error if the server returned an error.
-    #[inline]
     pub fn raise_for_status(&self) -> PyResult<()> {
         self.0.raise_for_status()
     }
 
     /// Stream read-only memoryviews and any trailing headers from the body.
-    #[inline]
     pub fn stream(&self) -> PyResult<Streamer> {
         self.0.stream()
     }
@@ -421,8 +458,7 @@ impl BlockingResponse {
     /// This does not guarantee an immediate socket shutdown or interrupt an active read.
     /// Do not close concurrently with a body read. A body transferred to a Streamer
     /// is managed separately; previously returned memoryviews remain valid.
-    /// Prefer a context manager (`with`) for response cleanup.
-    #[inline]
+    /// `with` instead releases the body and keeps a fully read connection reusable.
     pub fn close(&self, py: Python) {
         py.detach(|| {
             self.0.empty_response().forbid_recycle();
@@ -433,12 +469,10 @@ impl BlockingResponse {
 
 #[pymethods]
 impl BlockingResponse {
-    #[inline]
     fn __enter__(slf: PyRef<Self>) -> PyRef<Self> {
         slf
     }
 
-    #[inline]
     fn __exit__<'py>(
         &self,
         py: Python<'py>,
@@ -446,7 +480,8 @@ impl BlockingResponse {
         _exc_value: &Bound<'py, PyAny>,
         _traceback: &Bound<'py, PyAny>,
     ) {
-        self.close(py)
+        // Like `__aexit__`, release the body and leave reuse to the protocol.
+        py.detach(|| self.0.destroy())
     }
 }
 

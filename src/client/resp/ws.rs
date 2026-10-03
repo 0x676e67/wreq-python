@@ -4,7 +4,7 @@ pub mod msg;
 use std::{fmt::Display, time::Duration};
 
 use msg::Message;
-use pyo3::{coroutine::CancelHandle, prelude::*};
+use pyo3::prelude::*;
 use tokio::sync::mpsc;
 use wreq::{
     header::HeaderValue,
@@ -12,7 +12,8 @@ use wreq::{
 };
 
 use crate::{
-    client::{SocketAddr, nogil::NoGIL},
+    aio::{self, Coroutine},
+    client::SocketAddr,
     cookie::Cookie,
     error::Error,
     extractor::StrInput,
@@ -103,66 +104,81 @@ impl WebSocket {
 
     /// Receive a message from the WebSocket.
     #[pyo3(signature = (timeout=None))]
-    pub async fn recv(
+    pub fn recv<'py>(
         &self,
-        #[pyo3(cancel_handle)] cancel: CancelHandle,
+        py: Python<'py>,
         timeout: Option<Duration>,
-    ) -> PyResult<Option<Message>> {
-        let tx = self.cmd.clone();
-        NoGIL::with_cancel(&self.runtime, cmd::recv(tx, timeout), cancel).await
+    ) -> PyResult<Bound<'py, Coroutine>> {
+        aio::spawn(
+            py,
+            "WebSocket.recv",
+            &self.runtime,
+            cmd::recv(self.cmd.clone(), timeout),
+        )
     }
 
     /// Send a message to the WebSocket.
     #[pyo3(signature = (message))]
-    pub async fn send(
-        &self,
-        #[pyo3(cancel_handle)] cancel: CancelHandle,
-        message: Message,
-    ) -> PyResult<()> {
-        let tx = self.cmd.clone();
-        NoGIL::with_cancel(&self.runtime, cmd::send(tx, message), cancel).await
+    pub fn send<'py>(&self, py: Python<'py>, message: Message) -> PyResult<Bound<'py, Coroutine>> {
+        aio::spawn(
+            py,
+            "WebSocket.send",
+            &self.runtime,
+            cmd::send(self.cmd.clone(), message),
+        )
     }
 
     /// Send multiple messages to the WebSocket.
     #[pyo3(signature = (messages))]
-    pub async fn send_all(
+    pub fn send_all<'py>(
         &self,
-        #[pyo3(cancel_handle)] cancel: CancelHandle,
+        py: Python<'py>,
         messages: Vec<Message>,
-    ) -> PyResult<()> {
-        let tx = self.cmd.clone();
-        NoGIL::with_cancel(&self.runtime, cmd::send_all(tx, messages), cancel).await
+    ) -> PyResult<Bound<'py, Coroutine>> {
+        aio::spawn(
+            py,
+            "WebSocket.send_all",
+            &self.runtime,
+            cmd::send_all(self.cmd.clone(), messages),
+        )
     }
 
     /// Close the WebSocket connection.
     #[pyo3(signature = (code=None, reason=None))]
-    pub async fn close(
+    pub fn close<'py>(
         &self,
-        #[pyo3(cancel_handle)] cancel: CancelHandle,
+        py: Python<'py>,
         code: Option<u16>,
         reason: Option<StrInput>,
-    ) -> PyResult<()> {
-        let tx = self.cmd.clone();
-        NoGIL::with_cancel(&self.runtime, cmd::close(tx, code, reason), cancel).await
+    ) -> PyResult<Bound<'py, Coroutine>> {
+        aio::spawn(
+            py,
+            "WebSocket.close",
+            &self.runtime,
+            cmd::close(self.cmd.clone(), code, reason),
+        )
     }
 }
 
 #[pymethods]
 impl WebSocket {
-    #[inline]
-    async fn __aenter__(slf: Py<Self>) -> PyResult<Py<Self>> {
-        Ok(slf)
+    fn __aenter__(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
+        aio::ready("WebSocket.__aenter__", slf)
     }
 
-    #[inline]
-    async fn __aexit__(
+    fn __aexit__<'py>(
         &self,
+        py: Python<'py>,
         _exc_type: Py<PyAny>,
         _exc_val: Py<PyAny>,
         _traceback: Py<PyAny>,
-    ) -> PyResult<()> {
-        let tx = self.cmd.clone();
-        NoGIL::new(&self.runtime, cmd::close(tx, None, None)).await
+    ) -> PyResult<Bound<'py, Coroutine>> {
+        aio::spawn(
+            py,
+            "WebSocket.__aexit__",
+            &self.runtime,
+            cmd::close(self.cmd.clone(), None, None),
+        )
     }
 }
 
@@ -259,12 +275,10 @@ impl BlockingWebSocket {
 
 #[pymethods]
 impl BlockingWebSocket {
-    #[inline]
     fn __enter__(slf: PyRef<Self>) -> PyRef<Self> {
         slf
     }
 
-    #[inline]
     fn __exit__<'py>(
         &self,
         py: Python<'py>,

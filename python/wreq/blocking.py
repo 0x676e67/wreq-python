@@ -119,7 +119,7 @@ class Response:
         This does not guarantee an immediate socket shutdown or interrupt an active read.
         Do not close concurrently with a body read. A body transferred to a Streamer
         is managed separately; previously returned memoryviews remain valid.
-        Prefer a context manager (`with`) for response cleanup.
+        `with` instead releases the body and keeps a fully read connection reusable.
         """
 
     def __enter__(self) -> Any: ...

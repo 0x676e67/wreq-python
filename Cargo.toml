@@ -78,7 +78,8 @@ tikv-jemallocator = { version = "0.7.0", default-features = false, features = [
 # Keep the latest emulation profiles and their required TLS support in sync.
 [patch.crates-io]
 wreq-util = { git = "https://github.com/0x676e67/wreq-util", rev = "5715529002738f46eea86a7271f918f9374d3582" }
-wreq = { git = "https://github.com/0x676e67/wreq", rev = "4f2342aba1b33cc3534e8e2a853b21945edf6cef" }
+# demo/netty-migration
+wreq = { git = "https://github.com/0x676e67/wreq", rev = "54fdc7c9e0c1290e2f70f38d271ba954e3d86cc2" }
 # demo/tokio-btls-vectored-write
 btls = { git = "https://github.com/0x676e67/btls", rev = "ffaf0e8c23d455af4e306986ce81bb57ebd03bc2" }
 btls-sys = { git = "https://github.com/0x676e67/btls", rev = "ffaf0e8c23d455af4e306986ce81bb57ebd03bc2" }
