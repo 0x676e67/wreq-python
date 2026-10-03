@@ -195,13 +195,16 @@ async def test_stream_read_ahead_yields_and_closes_waiting_readers():
                     await asyncio.sleep(0)
 
             ticker = asyncio.create_task(tick())
-            with pytest.raises(TimeoutError):
-                async with asyncio.timeout(0.3), streamer:
-                    async for _ in streamer:
-                        # A consumer slower than the network must still yield to the loop.
-                        time.sleep(0.002)
+            async with asyncio.timeout(5), streamer:
+                frames = 0
+                async for _ in streamer:
+                    # A consumer slower than the network must still yield to the loop.
+                    time.sleep(0.002)
+                    frames += 1
+                    if frames == 64:
+                        break
             ticker.cancel()
-            assert ticks > 1
+            assert frames == 64 and ticks > 1
 
             response = await client.get(url)
             streamer = response.stream()

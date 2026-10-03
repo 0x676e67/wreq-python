@@ -316,6 +316,7 @@ jobs:
         run: cargo test --lib --locked
       - name: Event loop tests
         if: matrix.build_type.name == 'standard' && matrix.platform.target == 'x64'
+        timeout-minutes: 10
         shell: bash
         run: |
           python -m pip install --no-index --find-links dist wreq
@@ -362,6 +363,7 @@ jobs:
           sccache: "false"
       - name: Event loop tests
         if: matrix.build_type.name == 'standard' && matrix.platform.target == 'aarch64'
+        timeout-minutes: 10
         run: |
           python -m pip install --no-index --find-links dist wreq
           python -m pip install pytest pytest-asyncio uvloop
