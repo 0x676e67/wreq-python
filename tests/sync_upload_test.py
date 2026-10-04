@@ -251,11 +251,13 @@ async def test_blocking_upload_returns_on_early_response():
         await server.wait_closed()
 
 
-
 @pytest.mark.asyncio
 async def test_blocking_upload_does_not_wait_for_the_iterator():
     # A response or timeout must not wait for a `__next__` call that blocks.
+    writers = []
+
     async def accept(reader, writer):
+        writers.append(writer)
         try:
             head = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 5)
             if not head.startswith(b"POST /slow "):
@@ -297,6 +299,59 @@ async def test_blocking_upload_does_not_wait_for_the_iterator():
         assert outcome == ("timeout", pytest.approx(0, abs=2))
     finally:
         released.set()
+        client.close()
+        server.close()
+        # Pooled connections outlive the client; close them so the server can stop.
+        for writer in writers:
+            writer.close()
+        await server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_stalled_uploads_hold_no_blocking_threads():
+    # Uploads waiting on a server that stopped reading must not starve the blocking pool.
+    finished = asyncio.Event()
+
+    async def accept(reader, writer):
+        try:
+            head = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 5)
+            if head.startswith(b"POST /stall "):
+                await asyncio.wait_for(finished.wait(), 10)
+            else:
+                while await asyncio.wait_for(reader.readline(), 5) not in (
+                    b"0\r\n",
+                    b"",
+                ):
+                    pass
+                writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
+                await writer.drain()
+        except (asyncio.IncompleteReadError, asyncio.TimeoutError, ConnectionError):
+            pass
+        finally:
+            writer.close()
+
+    def endless():
+        while True:
+            yield b"x" * (1 << 20)
+
+    server = await asyncio.start_server(accept, "127.0.0.1", 0)
+    url = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}/"
+    runtime = wreq.Runtime(workers=1, max_blocking_threads=2)
+    client = wreq.Client(proxies=[], runtime=runtime)
+    stalled = [
+        asyncio.create_task(client.post(url + "stall", body=endless()))
+        for _ in range(4)
+    ]
+    try:
+        await asyncio.sleep(0.5)
+        response = await asyncio.wait_for(client.post(url, body=iter([b"hello"])), 3)
+        async with response:
+            assert await response.bytes() == b"ok"
+    finally:
+        finished.set()
+        for task in stalled:
+            task.cancel()
+        await asyncio.gather(*stalled, return_exceptions=True)
         client.close()
         server.close()
         await server.wait_closed()

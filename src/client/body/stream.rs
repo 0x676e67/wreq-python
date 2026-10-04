@@ -1,9 +1,10 @@
 //! Request bodies streamed from Python iterators and async generators.
 
 use std::{
-    mem,
     pin::Pin,
+    sync::{Arc, Mutex, MutexGuard, PoisonError},
     task::{Context, Poll},
+    time::Duration,
 };
 
 use bytes::Bytes;
@@ -15,7 +16,12 @@ use pyo3::{
     sync::PyOnceLock,
     types::{PyIterator, PyString},
 };
-use tokio::{runtime::Handle, sync::mpsc, task::spawn_blocking};
+use tokio::{
+    runtime::Handle,
+    sync::mpsc::{self, error::TrySendError},
+    task::spawn_blocking,
+    time,
+};
 
 use crate::{
     aio::{self, Coroutine},
@@ -41,14 +47,23 @@ enum Source {
     Async(PyAsyncStream),
 }
 
-/// A request body from a Python iterator, advanced by a task on Tokio's blocking pool.
+/// A request body from a Python iterator, read on Tokio's blocking pool.
 ///
 /// Neither a Tokio worker nor a blocked caller runs the iterator, so a slow `__next__`
-/// cannot delay the response, a timeout or cancellation. The task reads an item only once
-/// the previous one is taken, staying at most one item ahead of the upload.
-enum SyncStream {
-    Idle(Py<PyAny>),
-    Pumping(mpsc::Receiver<Item>),
+/// cannot delay the response, a timeout or cancellation. A pump task reads an item only
+/// once the channel has room, staying at most one item ahead of the upload. When the
+/// upload stalls, it parks the iterator and frees its thread; the next item taken restarts it.
+struct SyncStream {
+    rx: mpsc::Receiver<Item>,
+    /// The iterator and sender while no pump runs: before the first poll, or once a pump
+    /// parked at a full channel.
+    parked: Arc<Mutex<Option<Pump>>>,
+}
+
+/// What a pump task needs to read the iterator into the body.
+struct Pump {
+    iter: Py<PyAny>,
+    tx: mpsc::Sender<Item>,
 }
 
 /// A request body from a Python async generator, forwarded with one chunk of buffering
@@ -98,7 +113,7 @@ impl FromPyObject<'_, '_> for PyStream {
         let source = if ob.cast::<PyIterator>().is_err() && ob.hasattr(intern!(ob.py(), "asend"))? {
             Source::Async(PyAsyncStream::new(ob.to_owned())?)
         } else {
-            Source::Sync(SyncStream::Idle(ob.to_owned().unbind()))
+            Source::Sync(SyncStream::new(ob.to_owned().unbind()))
         };
         Ok(PyStream(source))
     }
@@ -118,36 +133,81 @@ impl Stream for PyStream {
 // ===== impl SyncStream =====
 
 impl SyncStream {
-    fn poll_next(&mut self, cx: &mut Context<'_>) -> Poll<Option<Item>> {
-        if let SyncStream::Idle(_) = self {
-            let (tx, rx) = mpsc::channel(1);
-            if let SyncStream::Idle(iter) = mem::replace(self, SyncStream::Pumping(rx)) {
-                spawn_blocking(move || Self::pump(iter, tx));
-            }
-        }
-        match self {
-            SyncStream::Pumping(rx) => rx.poll_recv(cx),
-            SyncStream::Idle(_) => Poll::Ready(None),
+    fn new(iter: Py<PyAny>) -> Self {
+        let (tx, rx) = mpsc::channel(1);
+        SyncStream {
+            rx,
+            parked: Arc::new(Mutex::new(Some(Pump { iter, tx }))),
         }
     }
 
-    /// Send items until the iterator ends or raises, or the body is dropped.
-    fn pump(iter: Py<PyAny>, tx: mpsc::Sender<Item>) {
-        let handle = Handle::current();
-        // Read an item only once the body has room for it.
-        while let Ok(permit) = handle.block_on(tx.reserve()) {
-            // Once Python is unavailable, stop reading without creating a PyErr that
-            // could require another attachment to format.
-            let Some(Some(item)) = Python::try_attach(|py| next_item(py, &iter)) else {
-                return;
-            };
-            let failed = item.is_err();
-            permit.send(item);
-            if failed {
-                return;
-            }
+    fn poll_next(&mut self, cx: &mut Context<'_>) -> Poll<Option<Item>> {
+        let poll = self.rx.poll_recv(cx);
+        // A parked pump waits for room, which the first poll or a taken item makes. The
+        // check follows the take, so a pump parking concurrently is seen here.
+        let parked = lock(&self.parked).take();
+        if let Some(pump) = parked {
+            let parked = self.parked.clone();
+            spawn_blocking(move || pump.run(&parked));
         }
+        poll
     }
+}
+
+// ===== impl Pump =====
+
+impl Pump {
+    /// How long a pump waits for room before parking to free its thread.
+    const PARK_AFTER: Duration = Duration::from_millis(10);
+
+    /// Send items until the iterator ends or raises, the body is dropped, or the channel
+    /// stays full past [`PARK_AFTER`](Self::PARK_AFTER).
+    fn run(self, parked: &Mutex<Option<Pump>>) {
+        let handle = Handle::current();
+        // Once Python is unavailable, stop reading without creating a PyErr that could
+        // require another attachment to format.
+        Python::try_attach(|py| {
+            loop {
+                let permit = match self.tx.clone().try_reserve_owned() {
+                    Ok(permit) => permit,
+                    Err(TrySendError::Closed(_)) => return,
+                    Err(TrySendError::Full(tx)) => {
+                        let wait = time::timeout(Self::PARK_AFTER, tx.reserve_owned());
+                        match py.detach(|| handle.block_on(wait)) {
+                            Ok(Ok(permit)) => permit,
+                            Ok(Err(_)) => return,
+                            Err(_) => {
+                                // Park under the lock the body takes after receiving, so
+                                // either it sees the pump parked or the pump sees room.
+                                let mut slot = lock(parked);
+                                match self.tx.clone().try_reserve_owned() {
+                                    Ok(permit) => permit,
+                                    Err(TrySendError::Closed(_)) => return,
+                                    Err(TrySendError::Full(_)) => {
+                                        *slot = Some(self);
+                                        return;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                };
+                let Some(item) = next_item(py, &self.iter) else {
+                    return;
+                };
+                let failed = item.is_err();
+                permit.send(item);
+                if failed {
+                    return;
+                }
+            }
+        });
+    }
+}
+
+#[inline]
+fn lock(parked: &Mutex<Option<Pump>>) -> MutexGuard<'_, Option<Pump>> {
+    parked.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// Call `__next__`, ending the stream at StopIteration.
