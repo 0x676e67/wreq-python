@@ -10,7 +10,7 @@ use pyo3::{PyResult, exceptions::asyncio::CancelledError, prelude::*, pybacked::
 use crate::{
     client::{
         Client,
-        body::{Body, Form, Json, multipart::Multipart},
+        body::{Body, Form, Json, Pull, multipart::Multipart},
         query::Query,
         resp::{Response, WebSocket},
     },
@@ -210,6 +210,13 @@ pub struct WebSocketRequest {
 }
 
 // ===== impl Request =====
+
+impl Request {
+    /// See [`Body::feed`].
+    pub fn feed(&mut self, py: Python<'_>) -> Option<tokio::sync::mpsc::UnboundedReceiver<Pull>> {
+        self.body.as_mut()?.feed(py)
+    }
+}
 
 impl FromPyObject<'_, '_> for Request {
     type Error = PyErr;

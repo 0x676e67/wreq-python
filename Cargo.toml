@@ -45,6 +45,7 @@ indexmap = { version = "2.13.0", features = ["serde"] }
 bytes = "1.12.1"
 arc-swap = "1.9.2"
 http = "1.4.2"
+http-body = "1.1.0"
 http-body-util = "0.1.4"
 wreq = { version = "0.16.1", default-features = false, features = [
     "webpki-roots",
@@ -79,10 +80,10 @@ tikv-jemallocator = { version = "0.7.0", default-features = false, features = [
 wreq-util = { git = "https://github.com/0x676e67/wreq-util", rev = "5715529002738f46eea86a7271f918f9374d3582" }
 # demo/netty-migration
 wreq = { git = "https://github.com/0x676e67/wreq", rev = "54fdc7c9e0c1290e2f70f38d271ba954e3d86cc2" }
-# demo/tokio-btls-vectored-write
-btls = { git = "https://github.com/0x676e67/btls", rev = "ffaf0e8c23d455af4e306986ce81bb57ebd03bc2" }
-btls-sys = { git = "https://github.com/0x676e67/btls", rev = "ffaf0e8c23d455af4e306986ce81bb57ebd03bc2" }
-tokio-btls = { git = "https://github.com/0x676e67/btls", rev = "ffaf0e8c23d455af4e306986ce81bb57ebd03bc2" }
+# demo/tokio-btls-read-records
+btls = { git = "https://github.com/0x676e67/btls", rev = "0a23537f963f2de3fca63f8ac40f5923c9fbbccd" }
+btls-sys = { git = "https://github.com/0x676e67/btls", rev = "0a23537f963f2de3fca63f8ac40f5923c9fbbccd" }
+tokio-btls = { git = "https://github.com/0x676e67/btls", rev = "0a23537f963f2de3fca63f8ac40f5923c9fbbccd" }
 # main (0x676e67/netty#145)
 netty = { git = "https://github.com/0x676e67/netty", rev = "f8652ddf5e386d66b7f03cceedbc6b319d849762" }
 

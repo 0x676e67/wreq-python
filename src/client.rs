@@ -812,11 +812,15 @@ impl BlockingClient {
         url: PyBackedStr,
         kwds: Option<Request>,
     ) -> PyResult<BlockingResponse> {
+        // A synchronous body is read ahead here, and any rest is pulled here while waiting.
+        let mut kwds = kwds;
+        let pulls = kwds.as_mut().and_then(|request| request.feed(py));
         py.detach(|| {
-            nogil::block_on(
-                &self.0.runtime,
-                execute_request(self.0.clone(), method, url, kwds),
-            )
+            let fut = execute_request(self.0.clone(), method, url, kwds);
+            match pulls {
+                Some(pulls) => nogil::block_on_feeding(&self.0.runtime, fut, pulls),
+                None => nogil::block_on(&self.0.runtime, fut),
+            }
             .map(Into::into)
         })
     }

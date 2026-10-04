@@ -1,6 +1,24 @@
+use pyo3::{
+    prelude::*,
+    types::{PyDict, PyString},
+};
+
+/// Look up an optional keyword; a dict answers a missing key without raising KeyError.
+pub(crate) fn lookup<'py>(
+    ob: &Bound<'py, PyAny>,
+    key: &Bound<'py, PyString>,
+) -> Option<Bound<'py, PyAny>> {
+    match ob.cast::<PyDict>() {
+        Ok(dict) => dict.get_item(key).ok().flatten(),
+        Err(_) => ob.get_item(key).ok(),
+    }
+}
+
 macro_rules! extract_option {
     ($ob:expr, $params:expr, $field:ident) => {
-        if let Ok(value) = $ob.get_item(pyo3::intern!($ob.py(), stringify!($field))) {
+        if let Some(value) =
+            $crate::macros::lookup(&$ob, pyo3::intern!($ob.py(), stringify!($field)))
+        {
             $params.$field = value.extract()?;
         }
     };

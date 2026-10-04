@@ -419,39 +419,33 @@ impl BlockingResponse {
     /// Get the text content with the response encoding, defaulting to utf-8 when unspecified.
     #[pyo3(signature = (encoding = None))]
     pub fn text(&self, py: Python, encoding: Option<PyBackedStr>) -> PyResult<String> {
-        py.detach(|| {
-            let fut = self
-                .0
-                .cache_response()
-                .and_then(|resp| ResponseExt::text(resp, encoding))
-                .map_err(Into::into);
-            crate::client::nogil::block_on(&self.0.runtime, fut)
-        })
+        let fut = self
+            .0
+            .cache_response()
+            .and_then(|resp| ResponseExt::text(resp, encoding))
+            .map_err(Into::into);
+        crate::client::nogil::run(py, &self.0.runtime, fut)
     }
 
     /// Get the JSON content of the response.
     pub fn json(&self, py: Python) -> PyResult<Json> {
-        py.detach(|| {
-            let fut = self
-                .0
-                .cache_response()
-                .and_then(ResponseExt::json::<Json>)
-                .map_err(Into::into);
-            crate::client::nogil::block_on(&self.0.runtime, fut)
-        })
+        let fut = self
+            .0
+            .cache_response()
+            .and_then(ResponseExt::json::<Json>)
+            .map_err(Into::into);
+        crate::client::nogil::run(py, &self.0.runtime, fut)
     }
 
     /// Read the body as a read-only memoryview, retaining its data after the response closes.
     pub fn bytes(&self, py: Python) -> PyResult<PyBuffer> {
-        py.detach(|| {
-            let fut = self
-                .0
-                .cache_response()
-                .and_then(ResponseExt::bytes)
-                .map_ok(PyBuffer::from)
-                .map_err(Into::into);
-            crate::client::nogil::block_on(&self.0.runtime, fut)
-        })
+        let fut = self
+            .0
+            .cache_response()
+            .and_then(ResponseExt::bytes)
+            .map_ok(PyBuffer::from)
+            .map_err(Into::into);
+        crate::client::nogil::run(py, &self.0.runtime, fut)
     }
 
     /// Discard the retained body and mark its connection as non-reusable.
@@ -459,11 +453,9 @@ impl BlockingResponse {
     /// Do not close concurrently with a body read. A body transferred to a Streamer
     /// is managed separately; previously returned memoryviews remain valid.
     /// `with` instead releases the body and keeps a fully read connection reusable.
-    pub fn close(&self, py: Python) {
-        py.detach(|| {
-            self.0.empty_response().forbid_recycle();
-            self.0.destroy();
-        });
+    pub fn close(&self) {
+        self.0.empty_response().forbid_recycle();
+        self.0.destroy();
     }
 }
 
@@ -477,12 +469,11 @@ impl BlockingResponse {
     /// to the pool, while an unread HTTP/1 body drains or closes its connection.
     fn __exit__<'py>(
         &self,
-        py: Python<'py>,
         _exc_type: &Bound<'py, PyAny>,
         _exc_value: &Bound<'py, PyAny>,
         _traceback: &Bound<'py, PyAny>,
     ) {
-        py.detach(|| self.0.destroy())
+        self.0.destroy();
     }
 }
 

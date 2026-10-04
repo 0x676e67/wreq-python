@@ -5,23 +5,64 @@ mod json;
 pub mod multipart;
 mod stream;
 
-use pyo3::{FromPyObject, PyResult, prelude::*};
+use pyo3::{
+    FromPyObject, PyResult, intern,
+    prelude::*,
+    types::{PyByteArray, PyBytes, PyDict, PyIterator, PyList, PyString, PyTuple},
+};
 
 pub use self::{
     form::Form,
     json::Json,
-    stream::{PyStream, Streamer},
+    stream::{Pull, PyStream, Streamer},
 };
 use crate::extractor::{BytesInput, StrInput};
 
 /// Represents the body of an HTTP request.
-#[derive(FromPyObject)]
 pub enum Body {
     Text(StrInput),
     Bytes(BytesInput),
     Form(Form),
     Json(Json),
     Stream(PyStream),
+}
+
+impl FromPyObject<'_, '_> for Body {
+    type Error = PyErr;
+
+    fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
+        // Match common bodies by type: each failed attempt builds an exception, and
+        // normalizing one releases and reacquires the GIL.
+        if ob.is_instance_of::<PyString>() {
+            return ob.extract().map(Body::Text);
+        }
+        if ob.is_instance_of::<PyBytes>() || ob.is_instance_of::<PyByteArray>() {
+            return ob.extract().map(Body::Bytes);
+        }
+        if ob.cast::<PyIterator>().is_ok() {
+            return ob.extract().map(Body::Stream);
+        }
+        let container = ob.is_instance_of::<PyDict>()
+            || ob.is_instance_of::<PyList>()
+            || ob.is_instance_of::<PyTuple>();
+        if !container && ob.hasattr(intern!(ob.py(), "asend"))? {
+            return ob.extract().map(Body::Stream);
+        }
+        ob.extract()
+            .map(Body::Form)
+            .or_else(|_| ob.extract().map(Body::Json))
+            .or_else(|_| ob.extract().map(Body::Stream))
+    }
+}
+
+impl Body {
+    /// See [`PyStream::feed`].
+    pub fn feed(&mut self, py: Python<'_>) -> Option<tokio::sync::mpsc::UnboundedReceiver<Pull>> {
+        match self {
+            Body::Stream(stream) => stream.feed(py),
+            _ => None,
+        }
+    }
 }
 
 impl TryFrom<Body> for wreq::Body {

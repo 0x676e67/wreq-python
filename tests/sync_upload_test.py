@@ -117,3 +117,29 @@ async def test_sync_upload_iterator_errors(blocking, multipart):
                 assert finalized.is_set()
     finally:
         client.close()
+
+
+@pytest.mark.asyncio
+async def test_blocking_upload_iterator_can_send_requests():
+    # Past the read-ahead, the waiting caller pulls the iterator, which may itself block on requests.
+    client = wreq.blocking.Client(proxies=[])
+    try:
+        async with upload_server() as (url, bodies):
+            chunk = b"x" * 16384
+
+            def chunks():
+                for i in range(16):
+                    if i == 8:
+                        with client.post(url, body=iter([b"inner"])) as response:
+                            assert response.bytes() == b"ok"
+                    yield chunk
+
+            def send():
+                with client.post(url, body=chunks()) as response:
+                    return response.bytes()
+
+            assert await asyncio.wait_for(asyncio.to_thread(send), 5) == b"ok"
+            assert await asyncio.wait_for(bodies.get(), 5) == b"inner"
+            assert await asyncio.wait_for(bodies.get(), 5) == chunk * 16
+    finally:
+        client.close()
