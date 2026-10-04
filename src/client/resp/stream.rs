@@ -60,9 +60,10 @@ enum State {
     /// Unread, or read only by [`Streamer::ready_frame`] on the caller.
     Idle(Box<wreq::Response>),
     /// Held by the read-ahead task, whose frames arrive on `rx`; dropping `_task` aborts it.
+    /// Without a task, `rx` holds only a final error.
     Reading {
         rx: mpsc::Receiver<PyResult<Frame>>,
-        _task: AbortOnDropHandle<()>,
+        _task: Option<AbortOnDropHandle<()>>,
     },
     /// Ended, failed or closed; reads return the end-of-iteration error.
     Closed,
@@ -156,21 +157,59 @@ impl Streamer {
         let State::Idle(resp) = &mut *state else {
             return None;
         };
+        let _runtime = self.runtime.handle().enter();
+        let Some(frame) = Self::poll_ready(resp)? else {
+            *state = State::Closed;
+            return Some(Err(Error::StopIteration.into()));
+        };
+        if frame.is_err() {
+            *state = State::Closed;
+            return Some(frame);
+        }
+        // Confirm the end before returning: an unpolled body's read timeout keeps running
+        // while the caller works on this frame. Remaining frames go to the read-ahead task,
+        // so a stalled caller does not stall the network read.
+        match Self::poll_ready(resp) {
+            Some(None) => *state = State::Closed,
+            next => {
+                if let State::Idle(resp) = mem::replace(&mut *state, State::Closed) {
+                    *state = self.read_ahead_from(*resp, next.flatten());
+                }
+            }
+        }
+        Some(frame)
+    }
+
+    /// Poll the body once: `None` if it must wait, `Some(None)` at its end.
+    fn poll_ready(resp: &mut wreq::Response) -> Option<Option<PyResult<Frame>>> {
         loop {
-            let frame = {
-                let _runtime = self.runtime.handle().enter();
-                resp.frame().now_or_never()?
-            };
-            let Some(frame) = frame else {
-                *state = State::Closed;
-                return Some(Err(Error::StopIteration.into()));
+            let Some(frame) = resp.frame().now_or_never()? else {
+                return Some(None);
             };
             if let Some(frame) = Self::convert(frame, resp) {
-                if frame.is_err() {
-                    *state = State::Closed;
-                }
-                return Some(frame);
+                return Some(Some(frame));
             }
+        }
+    }
+
+    /// Start the read-ahead task after `first`, a frame already read from `resp`.
+    fn read_ahead_from(&self, resp: wreq::Response, first: Option<PyResult<Frame>>) -> State {
+        let (tx, rx) = mpsc::channel(Self::READ_AHEAD);
+        if let Some(first) = first {
+            let failed = first.is_err();
+            // The channel is new, so it has room.
+            let _ = tx.try_send(first);
+            if failed {
+                return State::Reading { rx, _task: None };
+            }
+        }
+        let task =
+            self.runtime
+                .handle()
+                .spawn(Self::read_ahead(resp, tx, self.reader.arrived.clone()));
+        State::Reading {
+            rx,
+            _task: Some(AbortOnDropHandle::new(task)),
         }
     }
 
@@ -181,16 +220,7 @@ impl Streamer {
         if let State::Idle(_) = *state
             && let State::Idle(resp) = mem::replace(&mut *state, State::Closed)
         {
-            let (tx, rx) = mpsc::channel(Self::READ_AHEAD);
-            let task = self.runtime.handle().spawn(Self::read_ahead(
-                *resp,
-                tx,
-                self.reader.arrived.clone(),
-            ));
-            *state = State::Reading {
-                rx,
-                _task: AbortOnDropHandle::new(task),
-            };
+            *state = self.read_ahead_from(*resp, None);
         }
         let State::Reading { rx, .. } = &mut *state else {
             return Some(Err(end().into()));

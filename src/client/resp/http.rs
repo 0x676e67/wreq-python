@@ -191,10 +191,14 @@ impl Response {
     }
 
     /// Whether the body is small enough for a blocking read to finish without first
-    /// releasing the GIL; an unknown length counts as small.
+    /// releasing the GIL. An unknown length, as of a chunked or decompressed body, is not:
+    /// decoding everything already buffered could hold the GIL for long.
     fn read_attached(&self) -> bool {
         match &*self.slot() {
-            Body::Unread(body) => body.size_hint().lower() <= Self::READ_ATTACHED,
+            Body::Unread(body) => body
+                .size_hint()
+                .exact()
+                .is_some_and(|len| len <= Self::READ_ATTACHED),
             Body::Cached(bytes) => bytes.len() as u64 <= Self::READ_ATTACHED,
             Body::Taken | Body::Released => true,
         }
