@@ -129,6 +129,11 @@ async def local_server():
     writers = []
 
     async def accept(reader, writer):
+        # A connection accepted as teardown starts would otherwise keep
+        # `wait_closed` waiting on Python 3.12.1+.
+        if not server.is_serving():
+            writer.close()
+            return
         writers.append(writer)
         await reader.readuntil(b"\r\n\r\n")
         connections.put_nowait((reader, writer))
@@ -183,7 +188,9 @@ async def test_cancellation_after_rust_completion(operation):
             assert caught.value is error
             # Keeping the finished coroutine alive must not retain its exception.
             del caught, error
-            gc.collect()
+            # PyPy may need several passes to release it.
+            for _ in range(3):
+                gc.collect()
             assert error_ref() is None
         finally:
             coroutine.close()

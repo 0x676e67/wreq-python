@@ -16,6 +16,9 @@ async def upload_server():
     errors = []
 
     async def accept(reader, writer):
+        if not server.is_serving():
+            writer.close()
+            return
         task = asyncio.current_task()
         handlers.add(task)
         writers.append(writer)
@@ -257,6 +260,9 @@ async def test_blocking_upload_does_not_wait_for_the_iterator():
     writers = []
 
     async def accept(reader, writer):
+        if not server.is_serving():
+            writer.close()
+            return
         writers.append(writer)
         try:
             head = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 5)

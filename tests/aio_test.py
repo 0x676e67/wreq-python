@@ -171,6 +171,9 @@ async def test_request_coroutine_enters_its_result():
     writers = []
 
     async def serve(reader, writer):
+        if not server.is_serving():
+            writer.close()
+            return
         writers.append(writer)
         try:
             while True:
@@ -249,6 +252,9 @@ async def test_entering_rejects_a_second_driver():
     writers = []
 
     async def serve(reader, writer):
+        if not server.is_serving():
+            writer.close()
+            return
         writers.append(writer)
         try:
             while True:
