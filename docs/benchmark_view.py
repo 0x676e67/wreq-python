@@ -41,16 +41,9 @@ def render_explorer(document, catalog, asset_prefix="assets/benchmark/charts"):
         f'<button type="button" data-chart-payload="{size}" aria-pressed="{str(size == first["payload_bytes"]).lower()}">{payload_label(size)}</button>'
         for size in payloads
     )
-    assets = first["assets"]["light"]
+    assets = first["assets"]["dark"]
     image = safe_data_link(f'{asset_prefix}/{assets["desktop"]}')
     mobile = safe_data_link(f'{asset_prefix}/{assets["mobile"]}')
-    rows = "".join(
-        f'<tr><td>{escape(row["label"])}</td><td>{row["rps"]:,.1f}</td></tr>'
-        for row in first["rows"]
-    ) + "".join(
-        f"<tr><td>{escape(label)}</td><td>N/A</td></tr>"
-        for label in first["unsupported"]
-    )
     # This is inert JSON, not script. Escape HTML delimiters so metadata cannot end the tag.
     data = json.dumps(catalog, ensure_ascii=True, separators=(",", ":"))
     data = data.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
@@ -62,9 +55,14 @@ def render_explorer(document, catalog, asset_prefix="assets/benchmark/charts"):
         if first["unsupported"]
         else "All shown clients support this case."
     )
+    values = "; ".join(
+        [f'{row["label"]}: {row["rps"]:,.1f}' for row in first["rows"]]
+        + [f"{label}: N/A" for label in first["unsupported"]]
+    )
+    alt = f"{first['title']}. Throughput in requests per second. {values}."
     return f"""<section class="wreq-bench" data-bench-explorer aria-label="Benchmark chart explorer">
 <p class="wreq-bench-provenance">Measured <a href="{REPOSITORY}/commit/{source['commit']}">{source['commit'][:12]}</a> · {date:%Y-%m-%d %H:%M UTC}{dirty}</p>
-<div class="wreq-bench-heading"><div><p class="wreq-bench-eyebrow">THROUGHPUT BY WORKLOAD</p><h3>Compare clients</h3></div><a href="assets/benchmark/latest.json">Raw JSON</a></div>
+<div class="wreq-bench-heading"><p class="wreq-bench-eyebrow">THROUGHPUT BY WORKLOAD</p><h3>Compare clients</h3></div>
 <p class="wreq-bench-intro">Pick a body size, then adjust the filters to compare clients. Full and Stream refer to the upload; we read every response to the end.</p>
 <div class="wreq-bench-body-controls" data-chart-controls hidden>
 <button type="button" data-chart-previous aria-label="Previous body size">←</button>
@@ -74,11 +72,10 @@ def render_explorer(document, catalog, asset_prefix="assets/benchmark/charts"):
 <div class="wreq-bench-filters" data-chart-controls hidden>{''.join(controls)}</div>
 <p class="wreq-bench-selection" data-chart-caption aria-live="polite">{escape(first['title'])}</p>
 <figure class="wreq-bench-figure">
-<picture><source media="(max-width: 600px)" data-chart-mobile srcset="{mobile}"><img data-chart-image src="{image}" alt="{escape(first['title'])}. Throughput in requests per second; values in the table below." width="900" decoding="async"></picture>
-<figcaption><span data-chart-unsupported>{escape(unsupported)}</span><a data-chart-download href="{image}" download>Download SVG</a></figcaption>
+<picture><source media="(max-width: 600px)" data-chart-mobile srcset="{mobile}"><img data-chart-image src="{image}" alt="{escape(alt)}" width="900" decoding="async"></picture>
+<figcaption data-chart-unsupported>{escape(unsupported)}</figcaption>
 </figure>
 <p class="wreq-bench-note">Unit: requests/s (RPS). Higher is better. Each chart uses its own zero-based linear scale; compare the numbers, not bar lengths across different charts.</p>
-<details class="wreq-bench-values"><summary>Values for this chart</summary><table><thead><tr><th>Client / runtime</th><th>Requests/s</th></tr></thead><tbody data-chart-values>{rows}</tbody></table></details>
-<noscript><p>Chart switching needs JavaScript. The default chart and complete tables below remain available.</p></noscript>
+<noscript><p>Chart switching needs JavaScript. The default chart and measurement details remain available.</p></noscript>
 <script type="application/json" data-chart-catalog>{data}</script>
 </section>"""

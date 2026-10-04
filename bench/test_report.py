@@ -55,9 +55,9 @@ def test_report_aggregation_and_metadata_escaping():
     assert "`x`" not in text and "&#124;" in text
     assert report.escape("CPU's name") == "CPU's name"
     assert "javascript:source-repository" not in text
+    assert "Adapter settings" not in text and "<details" not in text
     assert (
-        '<details markdown="1">' in text
-        and "<summary>Adapter settings</summary>" in text
+        "Read chunking, buffering and connection pools differ between adapters" in text
     )
     assert f"{report.REPOSITORY}/commit/{document['source']['commit']}" in text
     for link in (
@@ -250,11 +250,21 @@ def test_prepare_tracked_input_and_local_snapshot_override(tmp_path, monkeypatch
     snapshot = root / "docs/source/assets/benchmark/latest.json"
     page = root / "docs/source/benchmark.md"
     assert json.loads(snapshot.read_text(encoding="utf-8")) == document
-    assert "{{BENCHMARK_RESULTS}}" not in page.read_text(encoding="utf-8")
-    assert "{{BENCHMARK_CHARTS}}" not in page.read_text(encoding="utf-8")
+    content = page.read_text(encoding="utf-8")
+    assert "{{BENCHMARK_RESULTS}}" not in content
+    assert "{{BENCHMARK_CHARTS}}" not in content
+    assert "<details" not in content and "<summary>" not in content
+    assert report.render_markdown(document, environment_only=True) in content
+    assert "### Throughput comparison" not in content
+    assert "| Upload / echo payload | Concurrency" not in content
+    assert "### Measurement environment" in content
+    assert "### Client versions and runtimes" not in content
+    assert "### Body cases" not in content
+    assert "## Runtime and client differences" in content
     charts = root / "docs/source/assets/benchmark/charts"
     assert len(list(charts.glob("*.svg"))) == 16
-    assert "assets/benchmark/latest.json" in page.read_text(encoding="utf-8")
+    assert "Download this build's raw JSON" not in content
+    assert "Raw JSON</a>" not in content and "Download SVG" not in content
     assert build.prepare(data=snapshot, root=root) == document
     override = root / "override.json"
     alternate = make_document(commit="d" * 40)
@@ -318,8 +328,17 @@ def test_chart_explorer_controls_fallback_and_inert_metadata(tmp_path):
     assert 'value="h1" selected' in content and 'value="h2"' not in content
     assert content.count("data-chart-payload=") == 1
     assert content.count("data-chart-controls hidden") == 2
-    assert "<noscript>" in content and "Values for this chart" in content
+    assert "<noscript>" in content and "measurement details remain available" in content
+    assert "Values for this chart" not in content and "data-chart-values" not in content
+    assert "<table" not in content and "<details" not in content
+    assert "data-chart-download" not in content and "Download SVG" not in content
+    assert "Raw JSON</a>" not in content
+    assets = catalog["cases"][0]["assets"]["dark"]
+    assert f'src="assets/benchmark/charts/{assets["desktop"]}"' in content
+    assert f'srcset="assets/benchmark/charts/{assets["mobile"]}"' in content
     assert "zero-based linear scale" in content and "requests/s (RPS)" in content
+    alt = re.search(r'<img data-chart-image[^>]* alt="([^"]*)"', content).group(1)
+    assert f': {catalog["cases"][0]["rows"][0]["rps"]:,.1f}' in alt
     assert '<img src=x onerror="alert(1)">' not in content
     assert "&lt;img src=x" in content
     data = re.search(

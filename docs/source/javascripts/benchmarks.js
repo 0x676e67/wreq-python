@@ -1,14 +1,7 @@
 (() => {
   const initialized = new WeakSet();
-  const observers = new Map();
 
   function initialize() {
-    observers.forEach((observer, section) => {
-      if (!section.isConnected) {
-        observer.disconnect();
-        observers.delete(section);
-      }
-    });
     document.querySelectorAll("[data-bench-explorer]").forEach((section) => {
       if (initialized.has(section)) return;
       initialized.add(section);
@@ -28,28 +21,16 @@
           && item.api === values.api && item.protocol === values.protocol
           && item.body_kind === values.body_kind && item.concurrency === Number(values.concurrency));
         if (!current) return;
-        const theme = document.body.getAttribute("data-md-color-scheme") === "slate" ? "dark" : "light";
-        const assets = current.assets[theme];
+        const assets = current.assets.dark;
         image.src = `${prefix}${assets.desktop}`;
-        image.alt = `${current.title}. Throughput in requests per second; values in the table below.`;
+        const description = [...current.rows.map((row) => `${row.label}: ${number.format(row.rps)}`),
+          ...current.unsupported.map((label) => `${label}: N/A`)].join("; ");
+        image.alt = `${current.title}. Throughput in requests per second. ${description}.`;
         mobile.srcset = `${prefix}${assets.mobile}`;
-        const download = section.querySelector("[data-chart-download]");
-        download.href = image.src;
         section.querySelector("[data-chart-caption]").textContent = current.title;
         section.querySelector("[data-chart-unsupported]").textContent = current.unsupported.length
           ? `N/A: ${current.unsupported.join(", ")}` : "All shown clients support this case.";
         payloadButtons.forEach((button) => button.setAttribute("aria-pressed", String(Number(button.dataset.chartPayload) === payload)));
-        const rows = [...current.rows.map((row) => [row.label, number.format(row.rps)]),
-          ...current.unsupported.map((label) => [label, "N/A"])];
-        section.querySelector("[data-chart-values]").replaceChildren(...rows.map((values) => {
-          const row = document.createElement("tr");
-          values.forEach((value) => {
-            const cell = document.createElement("td");
-            cell.textContent = value;
-            row.append(cell);
-          });
-          return row;
-        }));
       }
 
       function move(direction) {
@@ -76,15 +57,6 @@
       section.querySelector("[data-chart-previous]").addEventListener("click", () => move(-1));
       section.querySelector("[data-chart-next]").addEventListener("click", () => move(1));
       selects.forEach((select) => select.addEventListener("change", update));
-      const observer = new MutationObserver(() => {
-        if (!section.isConnected) {
-          observer.disconnect();
-          return;
-        }
-        update();
-      });
-      observer.observe(document.body, { attributes: true, attributeFilter: ["data-md-color-scheme"] });
-      observers.set(section, observer);
       section.querySelectorAll("[data-chart-controls]").forEach((controls) => { controls.hidden = false; });
       update();
     });

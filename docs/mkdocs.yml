@@ -9,6 +9,7 @@ repo_url: https://github.com/0x676e67/wreq-python
 docs_dir: source
 
 extra_css:
+  - stylesheets/theme.css
   - stylesheets/home.css
   - stylesheets/benchmarks.css
 
@@ -22,21 +23,13 @@ extra:
 
 theme:
   name: material
+  custom_dir: overrides
   font:
     code: Roboto Mono
   palette:
-    - scheme: slate
-      primary: black
-      accent: indigo
-      toggle:
-        icon: material/toggle-switch-off
-        name: Switch to light mode
-    - scheme: default
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/toggle-switch
-        name: Switch to dark mode
+    scheme: slate
+    primary: black
+    accent: indigo
   features:
     - search.highlight
     - search.share

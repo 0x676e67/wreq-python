@@ -31,6 +31,9 @@ keywords = ["http", "client", "websocket", "ja3", "ja4"]
 [tool.maturin]
 python-source = "python"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [project.urls]
 Documentation = "https://python.wreq.org"
 Homepage = "https://github.com/0x676e67/wreq-python"

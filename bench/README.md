@@ -85,8 +85,11 @@ uv run --no-sync python bench/run.py \
   --server bench/server/target/release/wreq-benchmark-server \
   --sizes 10240,1048576 --concurrency 2 --requests 4 \
   --rounds 1 --warmup 0 --samples 1 --output bench/data/smoke/RUN.json
-uv run --no-sync python -m pytest bench/test_*.py
+uv run --no-sync python -m pytest bench
 ```
+
+Default `pytest` runs only `tests/`. The explicit command above checks the
+benchmark tools without running a performance measurement.
 
 ## Results and interpretation
 
@@ -154,8 +157,8 @@ runner doesn't commit, push or enable benchmarks in CI.
 
 `python docs/build.py` reads and validates the checked-in `bench/data/latest.json`.
 It generates responsive light/dark SVG charts and fills
-`docs/templates/benchmark.md` with body-size controls and expandable tables.
-The built site includes a frozen raw JSON download. The build won't fetch
+`docs/templates/benchmark.md` with body-size controls and measurement details.
+The built site includes a frozen raw JSON copy. The build won't fetch
 measurements or start a benchmark, and missing or invalid data stops it.
 Read the Docs uses this same entry point.
 

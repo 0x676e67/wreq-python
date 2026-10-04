@@ -87,7 +87,12 @@ def safe_data_link(link: str) -> str:
     return link
 
 
-def render_markdown(document: dict, data_link: str | None = None) -> str:
+def render_markdown(
+    document: dict,
+    data_link: str | None = None,
+    *,
+    environment_only: bool = False,
+) -> str:
     validate_document(document)
     config = document["configuration"]
     source = document["source"]
@@ -128,13 +133,19 @@ def render_markdown(document: dict, data_link: str | None = None) -> str:
         f"requests/batch: {config['requests']}; warm-up batches/round: {config['warmup']} |",
         "| Stream upload chunk | "
         + (
-            "Varies by payload; see body cases below"
+            (
+                "Varies by payload; recorded in raw JSON"
+                if environment_only
+                else "Varies by payload; see body cases below"
+            )
             if "stream_chunk_bytes_by_payload" in config
             else payload_label(config["stream_chunk_bytes"])
         )
         + " |",
         "",
     ]
+    if environment_only:
+        return "\n".join(lines)
     if "stream_chunk_bytes_by_payload" in config:
         lines += [
             "### Body cases",
@@ -168,27 +179,6 @@ def render_markdown(document: dict, data_link: str | None = None) -> str:
             f"{', '.join('HTTP/1.1' if p == 'h1' else 'HTTP/2' for p in capability['protocols'])} | "
             f"{', '.join(k.title() for k in capability['body_kinds'])} |"
         )
-    if any(
-        "response_read" in document["clients"][client] for client in ordered_clients
-    ):
-        lines += [
-            "",
-            '<details markdown="1">',
-            "<summary>Adapter settings</summary>",
-            "",
-            "| Client | Response consumption | Connection pool |",
-            "| --- | --- | --- |",
-        ]
-        for client in ordered_clients:
-            metadata = document["clients"][client]
-            pool = json.dumps(
-                metadata.get("pool", {"kind": "not recorded"}), sort_keys=True
-            )
-            lines.append(
-                f"| {escape(LABELS.get(client, client))} | "
-                f"{escape(metadata.get('response_read', 'Not recorded'))} | {escape(pool)} |"
-            )
-        lines += ["", "</details>"]
     lines += [
         "",
         "### Throughput comparison",
@@ -196,7 +186,9 @@ def render_markdown(document: dict, data_link: str | None = None) -> str:
         "Each value is total measured requests divided by total measured time "
         "across all rounds, in requests per second (RPS). All timed samples count. "
         "The raw JSON keeps individual timings, per-round results, response-payload "
-        "MB/s and native artifact SHA-256 hashes.",
+        "MB/s and native artifact SHA-256 hashes. Read chunking, buffering and "
+        "connection pools differ between adapters; their configurations are "
+        "recorded in the raw JSON.",
         "",
     ]
     results = {

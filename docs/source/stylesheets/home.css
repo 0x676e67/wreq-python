@@ -1,11 +1,6 @@
 .wreq-home {
-  --wreq-accent: #157f70;
   --wreq-border: var(--md-default-fg-color--lightest);
   --wreq-muted: var(--md-default-fg-color--light);
-}
-
-[data-md-color-scheme="slate"] .wreq-home {
-  --wreq-accent: #7ed6bc;
 }
 
 .wreq-home .wreq-eyebrow {
@@ -196,8 +191,16 @@
   text-decoration: none;
 }
 
-.wreq-feature:hover {
-  border-color: var(--wreq-accent);
+@media (hover: hover) and (pointer: fine) {
+  .wreq-home .wreq-feature:hover {
+    border-color: var(--wreq-accent);
+    box-shadow: var(--wreq-control-shadow);
+  }
+
+  .wreq-home .wreq-sponsor:hover {
+    border-color: var(--wreq-control-border);
+    box-shadow: var(--wreq-control-shadow);
+  }
 }
 
 .wreq-feature-label {
