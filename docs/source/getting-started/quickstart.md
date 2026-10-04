@@ -67,8 +67,9 @@ async with client.get("https://httpbin.org/get") as response:
 ### Text
 
 ```python
-text = await response.text()
-print(text)
+async with client.get("https://httpbin.org/get") as response:
+    text = await response.text()
+    print(text)
 ```
 
 ### JSON
@@ -88,7 +89,7 @@ async with client.get("https://httpbin.org/json") as response:
 ```python
 import hashlib
 
-async with response:
+async with client.get("https://httpbin.org/bytes/16") as response:
     view = await response.bytes()
 print(view.readonly)  # True; releasing the response does not invalidate the view
 print(hashlib.sha256(view).hexdigest())  # Reads the buffer directly

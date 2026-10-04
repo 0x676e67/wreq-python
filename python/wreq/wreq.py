@@ -15,7 +15,6 @@ from typing import (
     TypeVar,
     Unpack,
     final,
-    type_check_only,
 )
 from collections.abc import Coroutine
 
@@ -1128,7 +1127,6 @@ class WebSocketRequest(TypedDict):
 _T = TypeVar("_T")
 
 
-@type_check_only
 class _RequestCoroutine(Coroutine[Any, Any, _T]):
     r"""
     A request coroutine. Await it for the result, or use `async with` to enter the
