@@ -1,4 +1,4 @@
-# :hourglass: Blocking/Sync API
+# Blocking/Sync API
 
 !!! info "On this page"
     - Blocking GET

@@ -68,7 +68,7 @@ def prepare(
         )
     document = decode_document(raw)
     try:
-        content = render_markdown(document, data_link="assets/benchmark/latest.json")
+        content = render_markdown(document, environment_only=True)
         catalog = write_charts(document, root / "docs/source/assets/benchmark/charts")
         charts = render_explorer(document, catalog)
         write_atomic(snapshot, document)

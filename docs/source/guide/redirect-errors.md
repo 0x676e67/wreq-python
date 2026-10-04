@@ -1,4 +1,4 @@
-# :repeat: Redirects & Error Handling
+# Redirects & Error Handling
 
 !!! info "On this page"
     - Custom redirect policy

@@ -111,7 +111,7 @@ Choose a body size, protocol and concurrency level to see the results for your w
 
 ## Documentation and community
 
-[Install wreq](getting-started/installation.md) · [Read the guides](guide/basic.md) · [Browse the API](api/wreq.md) · [Join the community](https://discord.gg/rfbvyFkgq3)
+[Install wreq](getting-started/installation.md) · [Read the guides](guide/basic.md) · [Browse the API](api/wreq.md) · [Join the Discord](https://discord.gg/rfbvyFkgq3)
 
 Browser profiles configure network behavior. They do not execute JavaScript or guarantee access to a protected website.
 { .wreq-fine-print }

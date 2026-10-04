@@ -6,7 +6,7 @@ with Full or Stream uploads and every response streamed to EOF.
 
 The results compare the recorded `wreq` revision with pinned versions of `ry`,
 `pyreqwest`, `httpx`, `aiohttp`, `niquests`, `curl_cffi`, `requests`, and `pycurl`.
-Async and blocking clients have separate charts and tables.
+Async and blocking clients have separate charts.
 
 ## Latest measurements
 
@@ -18,16 +18,11 @@ the chart: it identifies the code tested, which may differ from the docs revisio
 !!! note "Reading settings affect throughput"
 
     Larger read chunks and buffering can make a big difference to large-body
-    HTTP/2 throughput. These charts use the configurations recorded below;
+    HTTP/2 throughput. These charts use the configurations saved in the raw JSON;
     they don't show every library's fastest possible configuration. Check the
     [reading settings](#runtime-and-client-differences) when comparing clients.
 
-<details markdown="1">
-<summary>Complete tables, environment and client configurations</summary>
-
 {{BENCHMARK_RESULTS}}
-
-</details>
 
 ## What is measured
 
@@ -42,20 +37,11 @@ the chart: it identifies the code tested, which may differ from the docs revisio
 | Validation | HTTP status, actual HTTP protocol, and echoed body length are checked |
 | Repetition | Case order is shuffled; warm-up batches are excluded from all reported rates |
 
-The default suite tests all seven payloads below with Full and Stream uploads
-at concurrency 10, 50, 100, and 150. Each batch has 300 requests, and each case
-runs for three rounds. Earlier snapshots may cover fewer cases. The tables and
-raw JSON show the cases actually measured.
-
-| Upload / echo payload | Stream upload chunk |
-| --- | --- |
-| 1 KiB | 1 KiB |
-| 10 KiB | 10 KiB |
-| 64 KiB | 16 KiB |
-| 128 KiB | 32 KiB |
-| 1 MiB | 64 KiB |
-| 2 MiB | 128 KiB |
-| 4 MiB | 256 KiB |
+The default suite tests seven body sizes from 1 KiB to 4 MiB, with Full and
+Stream uploads at concurrency 10, 50, 100, and 150. Each batch has 300 requests,
+and each case runs for three rounds. Earlier snapshots may cover fewer cases.
+The charts and raw JSON show the cases actually measured, including the upload
+chunk sizes recorded in the JSON.
 
 The echo server collects the upload before returning the same payload. The
 timer therefore measures the complete HTTPS exchange, including response
@@ -122,7 +108,7 @@ After reviewing a complete run, use `--input RUN.json --publish` to build the
 docs and select it as `latest.json`. This processes the saved data without
 running the measurements again.
 
-Docs builds validate the checked-in dataset and generate the charts, tables
-and a frozen raw JSON download from it. They don't fetch data from another
+Docs builds validate the checked-in dataset and generate the charts, metadata
+and a frozen raw JSON copy from it. They don't fetch data from another
 branch. Missing or invalid data stops the build, so an old generated page can't
 silently take its place.
