@@ -10,7 +10,7 @@ use pyo3::{
     prelude::*,
 };
 
-use super::{Coroutine, Step, ensure_done};
+use super::awaitable::{Coroutine, Step, ensure_done};
 
 /// The `async with` state of a coroutine.
 pub(super) enum Scope {
@@ -309,7 +309,7 @@ impl Delegate {
 
     fn close(&self, py: Python<'_>) -> PyResult<()> {
         match self {
-            Delegate::Native(coroutine) => coroutine.bind(py).try_borrow_mut()?.close(py),
+            Delegate::Native(coroutine) => coroutine.bind(py).try_borrow_mut()?.stop(py),
             Delegate::Foreign(iter) => match iter.bind(py).getattr(intern!(py, "close")) {
                 Ok(close) => close.call0().map(drop),
                 Err(_) => Ok(()),

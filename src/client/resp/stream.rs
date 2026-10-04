@@ -22,9 +22,9 @@ use tokio::sync::{
 use tokio_util::task::AbortOnDropHandle;
 
 use crate::{
-    aio::{self, Coroutine},
     buffer::PyBuffer,
     client::nogil,
+    coroutine::{self, Coroutine},
     error::Error,
     header::HeaderMap,
     runtime::Runtime,
@@ -295,20 +295,20 @@ impl Streamer {
     fn __anext__(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
         let py = slf.py();
         let slf = slf.unbind();
-        aio::local(py, "Streamer.__anext__", async move {
+        coroutine::local(py, "Streamer.__anext__", async move {
             let this = slf.get();
             // Buffered frames complete without suspending; yield to the event loop
             // periodically so timeouts, cancellation and other tasks run.
             if this.reader.since_yield.fetch_add(1, Ordering::Relaxed) >= Self::YIELD_EVERY {
                 this.reader.since_yield.store(0, Ordering::Relaxed);
-                aio::yield_now().await;
+                coroutine::yield_now().await;
             }
             this.next(|| Error::StopAsyncIteration).await
         })
     }
 
     fn __aenter__(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
-        aio::ready("Streamer.__aenter__", slf)
+        coroutine::ready("Streamer.__aenter__", slf)
     }
 
     /// Release the body and end any pending read; returned views stay valid.
@@ -320,7 +320,7 @@ impl Streamer {
         _traceback: Py<PyAny>,
     ) -> PyResult<Bound<'py, Coroutine>> {
         let reader = self.reader.clone();
-        aio::local(py, "Streamer.__aexit__", async move {
+        coroutine::local(py, "Streamer.__aexit__", async move {
             reader.close();
             Ok(())
         })

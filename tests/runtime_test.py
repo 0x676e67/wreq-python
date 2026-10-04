@@ -35,16 +35,17 @@ def test_runtime_configuration():
             max_blocking_threads=3,
             thread_keep_alive=duration,
         )
+        for factory in (wreq.Client, wreq.blocking.Client):
+            client = factory(runtime=runtime)
+            alias = client.runtime
+            with pytest.raises(AttributeError):
+                client.runtime = runtime
+            client.close()
+            del client
+            # Releasing a client does not close a shared runtime.
+            other = factory(runtime=alias)
+            other.close()
     for factory in (wreq.Client, wreq.blocking.Client):
-        client = factory(runtime=runtime)
-        alias = client.runtime
-        with pytest.raises(AttributeError):
-            client.runtime = runtime
-        client.close()
-        del client
-        # Releasing a client does not close a shared runtime.
-        other = factory(runtime=alias)
-        other.close()
         client = factory(runtime=None)
         assert isinstance(client.runtime, Runtime)
         client.close()

@@ -18,10 +18,10 @@ use wreq::Uri;
 
 use super::{ext::ResponseExt, stream::Streamer};
 use crate::{
-    aio::{self, Coroutine},
     buffer::PyBuffer,
     client::{SocketAddr, body::Json, nogil},
     cookie::Cookie,
+    coroutine::{self, Coroutine},
     error::Error,
     header::HeaderMap,
     http::{StatusCode, Version},
@@ -185,9 +185,9 @@ impl Response {
     {
         let py = slf.py();
         let slf = slf.unbind();
-        aio::local(py, qualname, async move {
+        coroutine::local(py, qualname, async move {
             let this = slf.get();
-            aio::run(this.runtime.clone(), this.read_body(read)).await
+            coroutine::run(this.runtime.clone(), this.read_body(read)).await
         })
     }
 
@@ -353,7 +353,7 @@ impl Response {
     pub fn close(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
         let py = slf.py();
         let slf = slf.unbind();
-        aio::local(py, "Response.close", async move {
+        coroutine::local(py, "Response.close", async move {
             slf.get().discard();
             Ok(())
         })
@@ -363,7 +363,7 @@ impl Response {
 #[pymethods]
 impl Response {
     fn __aenter__(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
-        aio::ready("Response.__aenter__", slf)
+        coroutine::ready("Response.__aenter__", slf)
     }
 
     /// Release the body without forbidding reuse: a fully read connection returns
@@ -376,7 +376,7 @@ impl Response {
     ) -> PyResult<Bound<'py, Coroutine>> {
         let py = slf.py();
         let slf = slf.unbind();
-        aio::local(py, "Response.__aexit__", async move {
+        coroutine::local(py, "Response.__aexit__", async move {
             slf.get().destroy();
             Ok(())
         })

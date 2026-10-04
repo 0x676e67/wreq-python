@@ -145,3 +145,55 @@ async def test_upload_cancellation(action):
         with pytest.raises(asyncio.CancelledError):
             await asyncio.wait_for(task, 5)
         await asyncio.wait_for(closed.wait(), 5)
+
+
+@pytest.mark.asyncio
+async def test_cancelled_forwarding_fails_the_upload():
+    # Cancelling the task that forwards an async generator body must fail the request,
+    # not leave it waiting or send the partial body as complete.
+    first = asyncio.Event()
+    complete = asyncio.Queue()
+
+    async def serve(reader, writer):
+        if not server.is_serving():
+            writer.close()
+            return
+        ended = False
+        try:
+            await reader.readuntil(b"\r\n\r\n")
+            while size := int((await reader.readuntil(b"\r\n")).strip(), 16):
+                await reader.readexactly(size + 2)
+                first.set()
+            await reader.readuntil(b"\r\n")
+            ended = True
+            writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+            await writer.drain()
+        except (asyncio.IncompleteReadError, ConnectionError):
+            pass
+        finally:
+            complete.put_nowait(ended)
+            writer.close()
+
+    async def body():
+        yield b"part"
+        await asyncio.Event().wait()
+        yield b"rest"
+
+    server = await asyncio.start_server(serve, "127.0.0.1", 0)
+    url = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}/"
+    try:
+        async with wreq.Client(proxies=[]) as client:
+            request = asyncio.ensure_future(client.post(url, body=body()))
+            await asyncio.wait_for(first.wait(), 5)
+            (forward,) = [
+                task
+                for task in asyncio.all_tasks()
+                if task.get_coro().__qualname__ == "forward"
+            ]
+            forward.cancel()
+            with pytest.raises(wreq.exceptions.RequestError):
+                await asyncio.wait_for(request, 5)
+            assert await asyncio.wait_for(complete.get(), 5) is False
+    finally:
+        server.close()
+        await server.wait_closed()

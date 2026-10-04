@@ -5,10 +5,10 @@
 
 #[macro_use]
 mod macros;
-mod aio;
 mod buffer;
 mod client;
 mod cookie;
+mod coroutine;
 mod dns;
 mod emulate;
 mod error;
@@ -65,8 +65,8 @@ mod r#async {
     use pyo3::{prelude::*, pybacked::PyBackedStr, types::PyDict};
 
     use crate::{
-        aio::{self, Coroutine},
         client::Client,
+        coroutine::{self, Coroutine},
         http::Method,
     };
 
@@ -179,7 +179,7 @@ mod r#async {
         kwds: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, Coroutine>> {
         let kwds = kwds.map(Bound::unbind);
-        aio::managed(py, "websocket", async move {
+        coroutine::managed(py, "websocket", async move {
             Client::default().connect(url, kwds).await
         })
     }
@@ -194,7 +194,7 @@ mod r#async {
         kwds: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, Coroutine>> {
         let kwds = kwds.map(Bound::unbind);
-        aio::managed(py, qualname, async move {
+        coroutine::managed(py, qualname, async move {
             Client::default().execute(method, url, kwds).await
         })
     }

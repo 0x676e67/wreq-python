@@ -1,4 +1,7 @@
-//! Awaitables that drive Rust futures from asyncio tasks.
+//! Awaitables that drive Rust futures from Python coroutines.
+//!
+//! `awaitable` implements the coroutine protocol, `scope` adds `async with` to request
+//! coroutines, and `asyncio` holds what is specific to asyncio event loops.
 //!
 //! A [`Coroutine`] polls its future on the event loop thread, and [`spawn`] moves
 //! the work to Tokio. A wake marks the coroutine ready and queues it on the [`Port`]
@@ -7,8 +10,9 @@
 //! socket is woken with `call_soon_threadsafe`, which does attach the waking thread.
 //! The loop thread then resolves every queued asyncio future in one batch.
 
-mod coroutine;
-mod port;
+mod asyncio;
+mod awaitable;
+mod scope;
 
 use std::{
     future::{Future, poll_fn},
@@ -19,8 +23,8 @@ use std::{
 use pyo3::{IntoPyObjectExt, exceptions::PyRuntimeError, prelude::*};
 use tokio_util::task::AbortOnDropHandle;
 
-pub use self::coroutine::Coroutine;
-use self::port::Port;
+use self::asyncio::Port;
+pub use self::awaitable::Coroutine;
 use crate::runtime::Runtime;
 
 /// Run `fut` on the runtime once the coroutine named `qualname` is first awaited.

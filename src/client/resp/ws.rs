@@ -8,13 +8,12 @@ use std::{
 
 use msg::Message;
 use pyo3::prelude::*;
-use tokio::sync::mpsc;
 use wreq::{header::HeaderValue, ws::WebSocketResponse};
 
 use crate::{
-    aio::{self, Coroutine},
     client::{SocketAddr, nogil},
     cookie::Cookie,
+    coroutine::{self, Coroutine},
     extractor::Text,
     header::HeaderMap,
     http::{StatusCode, Version},
@@ -44,7 +43,7 @@ pub struct WebSocket {
     #[pyo3(get)]
     headers: HeaderMap,
     protocol: Option<HeaderValue>,
-    cmd: mpsc::UnboundedSender<cmd::Command>,
+    cmd: cmd::Handle,
     runtime: Runtime,
 }
 
@@ -66,8 +65,7 @@ impl WebSocket {
         );
         let websocket = response.into_websocket().await?;
         let protocol = websocket.protocol().cloned();
-        let (cmd, rx) = mpsc::unbounded_channel();
-        tokio::spawn(cmd::task(websocket, rx));
+        let cmd = cmd::spawn(websocket);
 
         Ok(WebSocket {
             runtime,
@@ -108,7 +106,7 @@ impl WebSocket {
         py: Python<'py>,
         timeout: Option<Duration>,
     ) -> PyResult<Bound<'py, Coroutine>> {
-        aio::spawn(
+        coroutine::spawn(
             py,
             "WebSocket.recv",
             &self.runtime,
@@ -119,7 +117,7 @@ impl WebSocket {
     /// Send a message to the WebSocket.
     #[pyo3(signature = (message))]
     pub fn send<'py>(&self, py: Python<'py>, message: Message) -> PyResult<Bound<'py, Coroutine>> {
-        aio::spawn(
+        coroutine::spawn(
             py,
             "WebSocket.send",
             &self.runtime,
@@ -134,7 +132,7 @@ impl WebSocket {
         py: Python<'py>,
         messages: Vec<Message>,
     ) -> PyResult<Bound<'py, Coroutine>> {
-        aio::spawn(
+        coroutine::spawn(
             py,
             "WebSocket.send_all",
             &self.runtime,
@@ -150,7 +148,7 @@ impl WebSocket {
         code: Option<u16>,
         reason: Option<Text>,
     ) -> PyResult<Bound<'py, Coroutine>> {
-        aio::spawn(
+        coroutine::spawn(
             py,
             "WebSocket.close",
             &self.runtime,
@@ -162,7 +160,7 @@ impl WebSocket {
 #[pymethods]
 impl WebSocket {
     fn __aenter__(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
-        aio::ready("WebSocket.__aenter__", slf)
+        coroutine::ready("WebSocket.__aenter__", slf)
     }
 
     /// Close the WebSocket connection without a close code or reason, unless already closed.
@@ -173,7 +171,7 @@ impl WebSocket {
         _exc_val: Py<PyAny>,
         _traceback: Py<PyAny>,
     ) -> PyResult<Bound<'py, Coroutine>> {
-        aio::spawn(
+        coroutine::spawn(
             py,
             "WebSocket.__aexit__",
             &self.runtime,

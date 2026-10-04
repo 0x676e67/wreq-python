@@ -21,8 +21,8 @@ use self::{
     resp::{BlockingResponse, BlockingWebSocket, Response, WebSocket},
 };
 use crate::{
-    aio::{self, Coroutine},
     cookie::Jar,
+    coroutine::{self, Coroutine},
     dns::{DnsOptions, HickoryResolver, LookupIpStrategy},
     emulate::EmulationLike,
     error::Error,
@@ -265,7 +265,7 @@ impl Client {
         kwds: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, Coroutine>> {
         let kwds = kwds.map(Bound::unbind);
-        aio::managed(py, qualname, self.clone().execute(method, url, kwds))
+        coroutine::managed(py, qualname, self.clone().execute(method, url, kwds))
     }
 
     /// Send a request on the client's runtime, extracting options on first await so an
@@ -277,7 +277,7 @@ impl Client {
         kwds: Option<Py<PyDict>>,
     ) -> PyResult<Response> {
         let kwds = Python::attach(|py| kwds.map(|kwds| kwds.bind(py).extract()).transpose())?;
-        aio::run(
+        coroutine::run(
             self.runtime.clone(),
             execute_request(self, method, url, kwds),
         )
@@ -291,7 +291,7 @@ impl Client {
         kwds: Option<Py<PyDict>>,
     ) -> PyResult<WebSocket> {
         let kwds = Python::attach(|py| kwds.map(|kwds| kwds.bind(py).extract()).transpose())?;
-        aio::run(
+        coroutine::run(
             self.runtime.clone(),
             execute_websocket_request(self, url, kwds),
         )
@@ -663,14 +663,14 @@ impl Client {
         kwds: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, Coroutine>> {
         let kwds = kwds.map(Bound::unbind);
-        aio::managed(py, "Client.websocket", self.clone().connect(url, kwds))
+        coroutine::managed(py, "Client.websocket", self.clone().connect(url, kwds))
     }
 }
 
 #[pymethods]
 impl Client {
     fn __aenter__(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
-        aio::ready("Client.__aenter__", slf)
+        coroutine::ready("Client.__aenter__", slf)
     }
 
     /// Close the client like `close()`: cancel pending requests and reject new ones.
@@ -682,7 +682,7 @@ impl Client {
         _traceback: Py<PyAny>,
     ) -> PyResult<Bound<'py, Coroutine>> {
         let cancel = self.cancel.clone();
-        aio::local(py, "Client.__aexit__", async move {
+        coroutine::local(py, "Client.__aexit__", async move {
             cancel.cancel();
             Ok(())
         })
