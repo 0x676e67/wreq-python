@@ -39,13 +39,9 @@ from wreq import Client, Emulation
 
 
 async def main():
-    async with Client(
-        emulation=Emulation.Chrome154,
-    ) as client:
-        async with client.get(
-            "https://example.com"
-        ) as response:
-            print(await response.text())
+    async with Client(emulation=Emulation.Chrome154) as c:
+        async with c.get("https://example.com") as r:
+            print(await r.text())
 
 
 asyncio.run(main())

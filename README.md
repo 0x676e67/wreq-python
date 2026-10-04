@@ -47,14 +47,13 @@ from wreq import Client, Emulation
 
 
 async def main():
-    async with Client(emulation=Emulation.Chrome154) as client:
-        async with client.get("https://pingly.us.kg/api/all") as response:
-            print(await response.text())
+    async with Client(emulation=Emulation.Chrome154) as c:
+        async with c.get("https://pingly.us.kg/api/all") as r:
+            print(await r.text())
 
 
 if __name__ == "__main__":
     asyncio.run(main())
-
 ```
 
 Additional learning resources include:
