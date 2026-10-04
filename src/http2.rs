@@ -244,7 +244,7 @@ impl_print_str!(Display, Priority);
 
 #[pymethods]
 impl Priorities {
-    /// Creates an empty `Priorities` collection.
+    /// Creates a `Priorities` collection from the given priorities.
     #[new]
     #[pyo3(signature = (*iter))]
     fn new(iter: Vec<Priority>) -> Self {
@@ -262,7 +262,7 @@ impl_print_str!(Display, Priorities);
 
 #[pymethods]
 impl PseudoOrder {
-    /// Creates an empty `PseudoOrder` collection.
+    /// Creates a `PseudoOrder` from the given pseudo-header IDs.
     #[new]
     #[pyo3(signature = (*iter))]
     fn new(iter: Vec<PseudoId>) -> Self {
@@ -280,7 +280,7 @@ impl_print_str!(Display, PseudoOrder);
 
 #[pymethods]
 impl SettingsOrder {
-    /// Creates an empty `PseudoOrder` collection.
+    /// Creates a `SettingsOrder` from the given setting IDs.
     #[new]
     #[pyo3(signature = (*iter))]
     fn new(iter: Vec<SettingId>) -> Self {

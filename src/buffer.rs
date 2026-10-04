@@ -24,6 +24,7 @@ use wreq::header::{HeaderCaseName, HeaderName, HeaderValue};
 /// Exposes owned Rust bytes as a read-only Python memoryview without copying.
 pub struct PyBuffer(BufferView);
 
+/// The exporter behind each memoryview; views keep it, and so its bytes, alive.
 #[pyclass(frozen, skip_from_py_object)]
 struct BufferView(Bytes);
 

@@ -12,6 +12,7 @@ mod port;
 
 use std::{
     future::{Future, poll_fn},
+    mem,
     task::Poll,
 };
 
@@ -73,7 +74,7 @@ pub fn ready<'py, T>(
 pub async fn yield_now() {
     let mut yielded = false;
     poll_fn(|cx| {
-        if std::mem::replace(&mut yielded, true) {
+        if mem::replace(&mut yielded, true) {
             return Poll::Ready(());
         }
         // A wake during the poll makes the coroutine yield without a future.

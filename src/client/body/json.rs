@@ -16,10 +16,8 @@ pub enum Json {
     Array(Vec<Json>),
 }
 
-/// A string type that can represent either a Python-backed string
-/// or a standard Rust `String`. This allows for zero-copy deserialization
-/// of strings originating from Python, improving performance when handling
-/// JSON data that includes string values.
+/// A JSON string: borrowed from Python when serializing a request body, owned when
+/// deserializing a response.
 #[derive(IntoPyObject, PartialEq, Eq, Hash)]
 pub enum JsonString {
     PyString(PyBackedStr),

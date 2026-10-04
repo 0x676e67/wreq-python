@@ -1,6 +1,7 @@
 use std::{
     cell::RefCell,
-    io::{Read, Write},
+    io::{self, ErrorKind, Read, Write},
+    iter, mem,
     sync::{
         Arc, Mutex, MutexGuard, PoisonError, Weak,
         atomic::{AtomicBool, Ordering},
@@ -164,7 +165,7 @@ impl Port {
             // queue non-empty, so later pushes never ring: retry interrupted writes.
             Bell::Socket { tx, .. } => loop {
                 match (&*tx).write(&[1]) {
-                    Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+                    Err(err) if err.kind() == ErrorKind::Interrupted => continue,
                     _ => break,
                 }
             },
@@ -188,7 +189,7 @@ impl Port {
         let queue = {
             let mut queue = self.lock();
             self.open.store(false, Ordering::Release);
-            std::mem::take(&mut *queue)
+            mem::take(&mut *queue)
         };
         drop(queue);
     }
@@ -214,7 +215,7 @@ impl Drain {
             while matches!((&*rx).read(&mut buf), Ok(n) if n == buf.len()) {}
         }
 
-        let mut slots = std::mem::take(&mut *port.lock()).into_iter();
+        let mut slots = mem::take(&mut *port.lock()).into_iter();
         while let Some(slot) = slots.next() {
             let Some(waiter) = slot.take_waiter() else {
                 continue;
@@ -235,7 +236,7 @@ impl Drain {
                 // A raising callback, such as a signal handler, ends this drain. Requeue
                 // this wake and the rest; the next drain skips futures already done.
                 slot.set_waiter(waiter);
-                port.lock().splice(..0, std::iter::once(slot).chain(slots));
+                port.lock().splice(..0, iter::once(slot).chain(slots));
                 port.ring();
                 return Err(err);
             }
@@ -306,7 +307,7 @@ impl Drop for Keeper {
 }
 
 #[cfg(unix)]
-fn socket_pair() -> std::io::Result<(Socket, Socket)> {
+fn socket_pair() -> io::Result<(Socket, Socket)> {
     let (tx, rx) = Socket::pair()?;
     tx.set_nonblocking(true)?;
     rx.set_nonblocking(true)?;
@@ -315,7 +316,7 @@ fn socket_pair() -> std::io::Result<(Socket, Socket)> {
 
 /// Connect a loopback pair, accepting only the connection made here.
 #[cfg(windows)]
-fn socket_pair() -> std::io::Result<(Socket, Socket)> {
+fn socket_pair() -> io::Result<(Socket, Socket)> {
     use std::net::{Ipv4Addr, TcpListener};
 
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
