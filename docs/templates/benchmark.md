@@ -13,6 +13,8 @@ Async and blocking clients have separate charts.
 We keep the local measurements in the repository. Check the revision beside
 the chart: it identifies the code tested, which may differ from the docs revision.
 
+{{BENCHMARK_RESULTS}}
+
 {{BENCHMARK_CHARTS}}
 
 !!! note "Reading settings affect throughput"
@@ -21,8 +23,6 @@ the chart: it identifies the code tested, which may differ from the docs revisio
     HTTP/2 throughput. These charts use the configurations saved in the raw JSON;
     they don't show every library's fastest possible configuration. Check the
     [reading settings](#runtime-and-client-differences) when comparing clients.
-
-{{BENCHMARK_RESULTS}}
 
 ## What is measured
 
@@ -104,11 +104,12 @@ The [local runner](https://github.com/0x676e67/wreq-python/blob/main/bench/run.p
 automatically saves raw JSON, logs and an English report. Completed runs keep
 their JSON under
 [`bench/data`](https://github.com/0x676e67/wreq-python/tree/main/bench/data).
-After reviewing a complete run, use `--input RUN.json --publish` to build the
-docs and select it as `latest.json`. This processes the saved data without
-running the measurements again.
+After reviewing a complete suite, use `--input RUN.json --publish`. For a
+complete blocking run, use `--input RUN.json --publish-blocking`. Both build
+the docs before selecting the saved snapshot, without measuring again.
 
 Docs builds validate the checked-in dataset and generate the charts, metadata
-and a frozen raw JSON copy from it. They don't fetch data from another
-branch. Missing or invalid data stops the build, so an old generated page can't
-silently take its place.
+and frozen JSON copies from it. When a separate `latest-blocking.json` exists,
+blocking charts use that run while async charts keep their original measurements.
+Each group shows its own revision and collection date. The build doesn't fetch
+data from another branch; invalid data stops it rather than reusing an old page.

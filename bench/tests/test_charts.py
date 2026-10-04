@@ -12,7 +12,7 @@ import pytest
 from bench.charts import write_charts
 from bench.clients import CAPABILITIES
 from bench.report import LABELS
-from bench.test_benchmark import make_document
+from bench.tests.test_benchmark import make_document
 from bench.workloads import BODY_CASES
 
 SVG = {"svg": "http://www.w3.org/2000/svg"}
@@ -280,3 +280,25 @@ def test_full_chart_matrix_generates_four_unique_assets_per_case(tmp_path):
     assert set(filenames) == {path.name for path in tmp_path.glob("*.svg")}
     for filename in filenames:
         assert ET.parse(tmp_path / filename).getroot().tag == f"{{{SVG['svg']}}}svg"
+
+
+def test_api_filter_keeps_snapshot_and_asset_metadata(tmp_path, small_document):
+    original = copy.deepcopy(small_document)
+    filenames = set()
+    for api in ("async", "blocking"):
+        catalog = write_charts(small_document, tmp_path, api=api)
+        assert {case["api"] for case in catalog["cases"]} == {api}
+        selected = set(asset_files(catalog))
+        assert not filenames.intersection(selected)
+        filenames.update(selected)
+        metadata = (
+            ET.parse(tmp_path / next(iter(selected)))
+            .getroot()
+            .find("svg:metadata", SVG)
+        )
+        assert json.loads(metadata.text)["source"] == original["source"]
+    assert small_document == original
+    assert filenames == {path.name for path in tmp_path.glob("*.svg")}
+    with pytest.raises(ValueError, match="Chart API"):
+        write_charts(small_document, tmp_path / "invalid", api="other")
+    assert not (tmp_path / "invalid").exists()

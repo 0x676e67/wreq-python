@@ -11,8 +11,8 @@ import pytest
 
 from bench import clients, compare, report, results
 from bench import async_clients, blocking_clients
-from bench.test_benchmark import make_document
-from bench.workloads import BODY_CASES
+from bench.tests.test_benchmark import make_document
+from bench.workloads import BODY_CASES, CONCURRENCY_CASES
 from docs import build
 from docs.benchmark_view import render_explorer
 
@@ -142,6 +142,25 @@ def test_revision_comparison_and_mismatch_rejection():
     incomplete["results"].pop()
     with pytest.raises(ValueError, match="Incomplete benchmark matrix"):
         compare.render_comparison(before, incomplete)
+    blocking = copy.deepcopy(after)
+    blocking["configuration"]["clients"] = ["wreq_blocking"]
+    blocking["clients"] = {"wreq_blocking": blocking["clients"]["wreq_blocking"]}
+    blocking["results"] = [
+        cell for cell in blocking["results"] if cell["client"] == "wreq_blocking"
+    ]
+    original = copy.deepcopy(before)
+    with pytest.raises(ValueError, match="configurations do not match"):
+        compare.render_comparison(before, blocking)
+    text = compare.render_comparison(before, blocking, api="blocking")
+    assert text.count("| +100.0 |") == 4 and "Asynchronous clients" not in text
+    assert "Comparison scope: blocking clients only" in text and before == original
+    with pytest.raises(ValueError, match="contains no async clients"):
+        compare.render_comparison(before, blocking, api="async")
+    with pytest.raises(ValueError, match="Incomplete benchmark matrix"):
+        compare.render_comparison(incomplete, blocking, api="blocking")
+    blocking["configuration"]["seed"] += 1
+    with pytest.raises(ValueError, match="configurations do not match"):
+        compare.render_comparison(before, blocking, api="blocking")
 
 
 def test_markdown_cli_exports_preserve_existing_files(tmp_path, capsys):
@@ -328,6 +347,7 @@ def test_chart_explorer_controls_fallback_and_inert_metadata(tmp_path):
     assert 'value="h1" selected' in content and 'value="h2"' not in content
     assert content.count("data-chart-payload=") == 1
     assert content.count("data-chart-controls hidden") == 2
+    assert "data-chart-previous" not in content and "data-chart-next" not in content
     assert "<noscript>" in content and "measurement details remain available" in content
     assert "Values for this chart" not in content and "data-chart-values" not in content
     assert "<table" not in content and "<details" not in content
@@ -346,3 +366,184 @@ def test_chart_explorer_controls_fallback_and_inert_metadata(tmp_path):
     ).group(1)
     assert "</script>" not in data
     assert json.loads(data) == catalog
+
+
+def blocking_documents():
+    configuration = {
+        "payload_bytes": list(BODY_CASES),
+        "concurrency": list(CONCURRENCY_CASES),
+        "rounds": 3,
+        "samples": 1,
+        "requests": 300,
+        "stream_chunk_bytes_by_payload": {
+            str(size): chunk for size, chunk in BODY_CASES.items()
+        },
+    }
+    baseline = make_document({**configuration, "clients": ["wreq", "wreq_blocking"]})
+    blocking = make_document(
+        {**configuration, "clients": list(blocking_clients.CLIENTS)}, commit="d" * 40
+    )
+    blocking["generated_at"] = "2026-10-05T12:34:00+00:00"
+    for cell in blocking["results"]:
+        for sample in cell["samples"]:
+            sample["seconds"] /= 2
+        for rate in (cell, *cell["rounds"]):
+            rate["total_seconds"] /= 2
+            rate["rps"] *= 2
+            rate["mbps"] *= 2
+    return baseline, blocking
+
+
+def test_prepare_independent_blocking_source_and_shared_environment(tmp_path):
+    root = docs_root(tmp_path)
+    baseline, blocking = blocking_documents()
+    # Different load samples must not duplicate an otherwise identical table.
+    baseline["environment"]["load_average"] = [1, 2, 3]
+    blocking["environment"]["load_average"] = [4, 5, 6]
+    latest = root / "bench/data/latest.json"
+    latest.parent.mkdir(parents=True)
+    latest_blocking = latest.with_name("latest-blocking.json")
+    baseline_raw = json.dumps(baseline, indent=1).encode() + b"\n\n"
+    blocking_raw = json.dumps(blocking, indent=3).encode() + b"\n"
+    latest.write_bytes(baseline_raw)
+    latest_blocking.write_bytes(blocking_raw)
+
+    assert build.prepare(root=root) == baseline
+    snapshot = root / "docs/source/assets/benchmark/latest.json"
+    blocking_snapshot = snapshot.with_name("latest-blocking.json")
+    assert snapshot.read_bytes() == latest.read_bytes() == baseline_raw
+    assert (
+        blocking_snapshot.read_bytes() == latest_blocking.read_bytes() == blocking_raw
+    )
+    content = (root / "docs/source/benchmark.md").read_text(encoding="utf-8")
+    assert content.count('class="wreq-bench-provenance"') == 2
+    assert "Async clients · Measured" in content
+    assert "Blocking clients · Measured" in content
+    assert "2026-10-03 00:00 UTC" in content and "2026-10-05 12:34 UTC" in content
+    assert content.count("### Measurement environment") == 1
+    catalog = json.loads(
+        re.search(r"data-chart-catalog>(.*?)</script>", content).group(1)
+    )
+    assert "source" not in catalog and "generated_at" not in catalog
+    assert catalog["measurements"]["async"]["source"] == baseline["source"]
+    assert catalog["measurements"]["blocking"]["source"] == blocking["source"]
+    charts = root / "docs/source/assets/benchmark/charts"
+    for api, document in (("async", baseline), ("blocking", blocking)):
+        case = next(case for case in catalog["cases"] if case["api"] == api)
+        client = "wreq" if api == "async" else "wreq_blocking"
+        row = next(row for row in case["rows"] if row["client"] == client)
+        measured = next(
+            cell
+            for cell in document["results"]
+            if cell["client"] == client
+            and all(
+                cell[key] == case[key]
+                for key in (
+                    "protocol",
+                    "body_kind",
+                    "payload_bytes",
+                    "concurrency",
+                )
+            )
+        )
+        assert row["rps"] == measured["rps"]
+        svg = (charts / case["assets"]["dark"]["desktop"]).read_text(encoding="utf-8")
+        assert f"Revision {document['source']['commit'][:12]}" in svg
+        assert document["generated_at"][:10] in svg
+    # Generated copies can themselves be inputs; both must be read before cleanup.
+    assert (
+        build.prepare(data=snapshot, blocking_data=blocking_snapshot, root=root)
+        == baseline
+    )
+    assert snapshot.read_bytes() == baseline_raw
+    assert blocking_snapshot.read_bytes() == blocking_raw
+    blocking["environment"]["cpu"] = "another CPU"
+    distinct = build.measurement_environments(baseline, blocking)
+    assert "### Async measurement environment" in distinct
+    assert "### Blocking measurement environment" in distinct
+    assert "another CPU" in distinct and "test CPU" in distinct
+
+
+def test_prepare_rejects_invalid_blocking_overlay_and_clears_both_snapshots(tmp_path):
+    root = docs_root(tmp_path)
+    baseline, blocking = blocking_documents()
+    latest = root / "bench/data/latest.json"
+    latest.parent.mkdir(parents=True)
+    overlay = latest.with_name("latest-blocking.json")
+    page = root / "docs/source/benchmark.md"
+    snapshot = root / "docs/source/assets/benchmark/latest.json"
+    blocking_snapshot = snapshot.with_name("latest-blocking.json")
+    charts = snapshot.parent / "charts"
+    charts.mkdir(parents=True)
+    for failure in ("json", "subset", "explicit_missing", "axes"):
+        latest.write_text(json.dumps(baseline))
+        overlay.write_text(json.dumps(blocking))
+        page.write_text("stale page")
+        snapshot.write_bytes(b"stale async data")
+        blocking_snapshot.write_bytes(b"stale blocking data")
+        (charts / "stale.svg").write_text("stale chart")
+        candidate = None
+        if failure == "json":
+            overlay.write_text("{broken")
+        elif failure == "subset":
+            overlay.write_text(
+                json.dumps(
+                    make_document(
+                        {
+                            **blocking["configuration"],
+                            "payload_bytes": [10240],
+                        }
+                    )
+                )
+            )
+        elif failure == "explicit_missing":
+            candidate = root / "missing.json"
+        else:
+            latest.write_text(
+                json.dumps(
+                    make_document(
+                        {
+                            **baseline["configuration"],
+                            "protocols": ["h1"],
+                        }
+                    )
+                )
+            )
+        with pytest.raises((FileNotFoundError, ValueError)):
+            build.prepare(root=root, blocking_data=candidate)
+        assert not page.exists() and not snapshot.exists()
+        assert not blocking_snapshot.exists() and not list(charts.glob("*.svg"))
+
+
+def test_explicit_data_preview_does_not_select_default_blocking_overlay(tmp_path):
+    root = docs_root(tmp_path)
+    baseline, blocking = blocking_documents()
+    latest = root / "bench/data/latest.json"
+    latest.parent.mkdir(parents=True)
+    overlay = latest.with_name("latest-blocking.json")
+    baseline_raw = json.dumps(baseline).encode()
+    blocking_raw = json.dumps(blocking).encode()
+    latest.write_bytes(baseline_raw)
+    overlay.write_bytes(blocking_raw)
+    smaller = make_document({"protocols": ["h1"], "body_kinds": ["full"]})
+    candidate = root / "smaller.json"
+    candidate_raw = json.dumps(smaller).encode()
+    candidate.write_bytes(candidate_raw)
+
+    assert build.prepare(data=candidate, root=root) == smaller
+    page = root / "docs/source/benchmark.md"
+    snapshot = root / "docs/source/assets/benchmark/latest.json"
+    blocking_snapshot = snapshot.with_name("latest-blocking.json")
+    charts = snapshot.parent / "charts"
+    assert snapshot.read_bytes() == candidate_raw and not blocking_snapshot.exists()
+    content = page.read_text(encoding="utf-8")
+    assert content.count('class="wreq-bench-provenance"') == 1
+    assert len(list(charts.glob("*.svg"))) == 4
+
+    with pytest.raises(ValueError, match="Async and blocking chart axes do not match"):
+        build.prepare(data=candidate, blocking_data=overlay, root=root)
+    assert (
+        not page.exists() and not snapshot.exists() and not blocking_snapshot.exists()
+    )
+    assert not list(charts.glob("*.svg"))
+    assert latest.read_bytes() == baseline_raw and overlay.read_bytes() == blocking_raw

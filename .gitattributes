@@ -1,3 +1,5 @@
 # Preserve raw benchmark snapshots across platform-specific newline settings.
 /bench/data/**/*.json -text
 /bench/data/**/*.log -text
+/bench/data/**/*.txt -text
+/bench/data/**/*.report.md -text

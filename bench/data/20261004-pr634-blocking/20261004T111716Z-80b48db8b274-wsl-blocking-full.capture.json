@@ -1,0 +1,448 @@
+{
+  "artifact_kind": "build_environment_capture_not_benchmark_results",
+  "captured_at": "2026-10-04T11:17:16.656989+00:00",
+  "capture_phase": "pre_run",
+  "source": {
+    "root": "/home/gngpp/.cache/wreq-python/bench-18/after",
+    "repository": "https://github.com/0x676e67/wreq-python.git",
+    "commit": "80b48db8b2741b60b41ba6f0966bd5f52c3f5185",
+    "dirty": false,
+    "status_porcelain_z": "",
+    "git_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "dirty_files": {},
+    "manifest_sha256": "a8827d30fc51c4fc86eecff1f6d33c64e036e806dbfa28607b39631974965f43",
+    "lock_sha256": "dfdf08744aac8961f85978bb21601e12d1a23dac051efcf2f61b8a694beb6591"
+  },
+  "temporary_overlay": null,
+  "environment": {
+    "root": "/home/gngpp/.cache/wreq-python/bench-18/after/.venv",
+    "python": "3.14.6 (main, Jul 23 2026, 14:45:24) [Clang 22.1.3 ]",
+    "implementation": "CPython",
+    "base_root": "/home/gngpp/.local/share/uv/python/cpython-3.14.6-linux-x86_64-gnu",
+    "base_executable": "/home/gngpp/.local/share/uv/python/cpython-3.14.6-linux-x86_64-gnu/bin/python3.14",
+    "base_executable_sha256": "1e9b4c71f4ece5e87e45e05df0d63482d8eb54633484542d42db20462db4514d",
+    "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "cpu_count": 32,
+    "cpu": "x86_64",
+    "cpu_affinity": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+    ],
+    "load_average": [
+      0.5244140625,
+      2.771484375,
+      2.25
+    ],
+    "process_fd_limits": [
+      65536,
+      65536
+    ]
+  },
+  "wreq": {
+    "version": "0.12.3",
+    "native_path": "/home/gngpp/.cache/wreq-python/bench-18/after/python/wreq/wreq.abi3.so",
+    "native_sha256": "84dcf6b05a38abdb9b39c61184e00eac324df7f8722953017a59cf1ebfdf437f",
+    "wheel_metadata": "Wheel-Version: 1.0\nGenerator: maturin (1.14.1)\nRoot-Is-Purelib: false\nTag: cp311-abi3-linux_x86_64\n",
+    "direct_url": {
+      "dir_info": {
+        "editable": true
+      },
+      "url": "file:///home/gngpp/.cache/wreq-python/bench-18/after"
+    }
+  },
+  "peers": {
+    "aiohappyeyeballs": {
+      "version": "2.7.1",
+      "native_files": []
+    },
+    "aiohttp": {
+      "version": "3.14.3",
+      "native_files": [
+        {
+          "path": "aiohttp/_http_parser.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "312a495cdd59f9c43ca9b6b7778d817ff883d9693c697735649fad8ade2afdf7"
+        },
+        {
+          "path": "aiohttp/_http_writer.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "d652a9c8be37d92e787bd48971d11ae9063aba6c9b837c5f55fbedb1b01eaad9"
+        },
+        {
+          "path": "aiohttp/_websocket/mask.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "4091ca3d76bc123a84a553299957fe091f32aab6d78d1290e32c9863f776479f"
+        },
+        {
+          "path": "aiohttp/_websocket/reader_c.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "cb42722f26ded4c7b59843a2c68f261ee8e1af006fafbe0c496e4cb6ea50cf60"
+        }
+      ]
+    },
+    "aiosignal": {
+      "version": "1.4.0",
+      "native_files": []
+    },
+    "anyio": {
+      "version": "4.15.1",
+      "native_files": []
+    },
+    "attrs": {
+      "version": "26.1.0",
+      "native_files": []
+    },
+    "certifi": {
+      "version": "2026.7.22",
+      "native_files": []
+    },
+    "cffi": {
+      "version": "2.1.1",
+      "native_files": [
+        {
+          "path": "_cffi_backend.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "7d1eff7fbb874ee72228fd426103da2b9eef528979156077bdec736d5b4f61a2"
+        }
+      ]
+    },
+    "charset-normalizer": {
+      "version": "3.5.2",
+      "native_files": [
+        {
+          "path": "charset_normalizer/cd.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "4ca0b03cc9e0d6a206c33433c2d62fbd43dc0eca43015c8532635ee66ea60818"
+        },
+        {
+          "path": "charset_normalizer/md.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "a92bc8c547c9fdc8b6f1d4d20a6500bdaf3622893202b206ce7b6c516a5f8be9"
+        }
+      ]
+    },
+    "curl-cffi": {
+      "version": "0.16.3",
+      "native_files": [
+        {
+          "path": "curl_cffi/_wrapper.abi3.so",
+          "sha256": "79c9faa1630b25a5c0b7bd3d8fd19356fb3e98aa7ebf594a8fe3809ac65b75f0"
+        }
+      ]
+    },
+    "frozenlist": {
+      "version": "1.8.0",
+      "native_files": [
+        {
+          "path": "frozenlist/_frozenlist.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "59e7b44dbf18210a85031319361cd367465b9070123e7fc5361d3c1188301284"
+        }
+      ]
+    },
+    "h11": {
+      "version": "0.16.0",
+      "native_files": []
+    },
+    "h2": {
+      "version": "4.4.1",
+      "native_files": []
+    },
+    "hpack": {
+      "version": "4.2.0",
+      "native_files": []
+    },
+    "httpcore": {
+      "version": "1.0.9",
+      "native_files": []
+    },
+    "httpx": {
+      "version": "0.28.1",
+      "native_files": []
+    },
+    "hyperframe": {
+      "version": "6.1.0",
+      "native_files": []
+    },
+    "idna": {
+      "version": "3.20",
+      "native_files": []
+    },
+    "iniconfig": {
+      "version": "2.3.0",
+      "native_files": []
+    },
+    "jh2": {
+      "version": "5.0.15",
+      "native_files": [
+        {
+          "path": "jh2/_hazmat.abi3.so",
+          "sha256": "cf06b31d5864407cace27b4ed537e27195ce678c409cb9b8778e71282562bca0"
+        }
+      ]
+    },
+    "maturin": {
+      "version": "1.14.1",
+      "native_files": []
+    },
+    "multidict": {
+      "version": "6.9.1",
+      "native_files": [
+        {
+          "path": "multidict/_multidict.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "28fafad7f2080b104125cff166a83e1d0621d12077b4bb8af96e2d04127142c0"
+        }
+      ]
+    },
+    "niquests": {
+      "version": "3.21.2",
+      "native_files": []
+    },
+    "packaging": {
+      "version": "26.3",
+      "native_files": []
+    },
+    "pluggy": {
+      "version": "1.6.0",
+      "native_files": []
+    },
+    "propcache": {
+      "version": "0.5.4",
+      "native_files": [
+        {
+          "path": "propcache/_helpers_c.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "5597b4d70b86e3d96f0a4791b67b09f4b3cb6c1ddd61e18227f31bcb7aeb39d9"
+        }
+      ]
+    },
+    "pycparser": {
+      "version": "3.0",
+      "native_files": []
+    },
+    "pycurl": {
+      "version": "7.48.0",
+      "native_files": [
+        {
+          "path": "pycurl.libs/libbrotlicommon-779a354d.so.1.2.0",
+          "sha256": "bc4c7a9603a34c6eecfdf9c7eb57df6cad38dcdf057d9e08f0c27c38f97b02c9"
+        },
+        {
+          "path": "pycurl.libs/libbrotlidec-d7d1c77e.so.1.2.0",
+          "sha256": "69f842cb7eff0ac6066f76e363cbf1924bcf9f97a960666aae521f7e1c1fa3eb"
+        },
+        {
+          "path": "pycurl.libs/libcom_err-04a6d4a9.so.3.0",
+          "sha256": "82cc48c7458608fea2de563f666accd7ec3e3751ecde9bc8a5044b1340afde58"
+        },
+        {
+          "path": "pycurl.libs/libcrypto-9e1a983b.so.3",
+          "sha256": "b3fcb679724733e99909468ca8f85fefeddc2833a1feded82fd3d66e267d23a9"
+        },
+        {
+          "path": "pycurl.libs/libcurl-1f5c7cda.so.4.8.0",
+          "sha256": "907ab596295c9656fa09228d6f3bceb16726cc3f0dabf03d716d68a66b09d09a"
+        },
+        {
+          "path": "pycurl.libs/libgssapi_krb5-a4ee9013.so.2.2",
+          "sha256": "f7aab9b89468df331ed3e95664d4bbe254413bab6b75c3c2dfb60202673c96d1"
+        },
+        {
+          "path": "pycurl.libs/libidn2-4b35c59c.so.0.4.0",
+          "sha256": "d54460d79d61b353700d3052448d88a9b3c791c4bde75394be4f47100fd2751b"
+        },
+        {
+          "path": "pycurl.libs/libk5crypto-b981dde7.so.3.1",
+          "sha256": "0d032d9f70298ed1a84c3738f796b93d42a1802750482b099a41647afeeea8d7"
+        },
+        {
+          "path": "pycurl.libs/libkrb5-d2bd9c2b.so.3.3",
+          "sha256": "10f426cc31d7ffc4b14b4d8c0e4ffbe1142c2c53886b1f465427d21007a999d4"
+        },
+        {
+          "path": "pycurl.libs/libkrb5support-4c5795d1.so.0.1",
+          "sha256": "7a6f2f0dd42ad1086ed1c03de178e2f29b55ead17b0145f0abbdc3b865f3e579"
+        },
+        {
+          "path": "pycurl.libs/libnghttp2-3dab5618.so.14.29.5",
+          "sha256": "d6c3606eeabad7ded9c487f90c978c27a932ca8185951f480d0b357a0f72a526"
+        },
+        {
+          "path": "pycurl.libs/libnghttp3-d4b9d539.so.9.9.0",
+          "sha256": "0dc8c5776251bac5574576526440898c8e18473a7891d7ed087e304856908eeb"
+        },
+        {
+          "path": "pycurl.libs/libngtcp2-23491f47.so.16.11.0",
+          "sha256": "bdfc0191d39944e87db3657c5865749ac703abd224316bdc3ba83bfc48f83589"
+        },
+        {
+          "path": "pycurl.libs/libngtcp2_crypto_ossl-741c35a5.so.0.3.1",
+          "sha256": "fc2c8867af3d28502ac8b3ee34b3010e0c9d20d60f0dc0f8e2b34365b92b99a8"
+        },
+        {
+          "path": "pycurl.libs/libpsl-8d3f0618.so.5.3.5",
+          "sha256": "d3cefb10f87f28f8d8ac25368dc1db7976ca0745470b16ad7c78775a4d1f816b"
+        },
+        {
+          "path": "pycurl.libs/libsfparse-e1f35c00.so",
+          "sha256": "898e3da243ea996947db0d213f3ee59c4fc80278d4f899b5738d3aebde2ca84e"
+        },
+        {
+          "path": "pycurl.libs/libssh2-c5c93677.so.1.0.1",
+          "sha256": "e83692ca1970437d2d400060df6afa788f702f87339c9449cc297d8297bf41ca"
+        },
+        {
+          "path": "pycurl.libs/libssl-e79d478f.so.3",
+          "sha256": "77081a88f0cb3f3769dc101a7a5cb068d678651da2887543aacb4dd79929b893"
+        },
+        {
+          "path": "pycurl.libs/libunistring-dfbe0280.so.5.1.0",
+          "sha256": "9763d0912975120767addd2384dfc29f52ca16a2fc1e4d48ea0d7df4edeb71d4"
+        },
+        {
+          "path": "pycurl/_pycurl.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "4530f71bedea83fee913a133a9bebca5c8230a318b25f51c42fb76cbcb4b6262"
+        }
+      ]
+    },
+    "pygments": {
+      "version": "2.21.0",
+      "native_files": []
+    },
+    "pyreqwest": {
+      "version": "0.14.0",
+      "native_files": [
+        {
+          "path": "pyreqwest/_pyreqwest.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "1de448b2fe278113dde2cfa65072d6e485c8492adccff39a238d1a268ad62639"
+        }
+      ]
+    },
+    "pytest": {
+      "version": "9.1.1",
+      "native_files": []
+    },
+    "pytest-asyncio": {
+      "version": "1.4.0",
+      "native_files": []
+    },
+    "pytest-rerunfailures": {
+      "version": "16.7",
+      "native_files": []
+    },
+    "qh3": {
+      "version": "2.0.4",
+      "native_files": [
+        {
+          "path": "qh3/_hazmat.abi3.so",
+          "sha256": "4a4b5dc59616e5539014b22252f56362902dfc345093ce8584e0d2a8dc8a84ea"
+        }
+      ]
+    },
+    "requests": {
+      "version": "2.34.2",
+      "native_files": []
+    },
+    "ry": {
+      "version": "0.0.101",
+      "native_files": [
+        {
+          "path": "ry/ryo3.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "c6129e81f61cc96355dfabade960b33eaabcab62777614189c845f274a2fe826"
+        }
+      ]
+    },
+    "typing-extensions": {
+      "version": "4.16.0",
+      "native_files": []
+    },
+    "urllib3": {
+      "version": "2.8.0",
+      "native_files": []
+    },
+    "urllib3-future": {
+      "version": "2.25.901",
+      "native_files": []
+    },
+    "wassima": {
+      "version": "2.1.4",
+      "native_files": []
+    },
+    "yarl": {
+      "version": "1.25.1",
+      "native_files": [
+        {
+          "path": "yarl/_quoting_c.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "72ed9594427686b8c0aae3c168772255aeb5d28ca85c8688023ffa3a0ba57a6d"
+        }
+      ]
+    }
+  },
+  "harness_sha256": {
+    "benchmark.py": "a07e8241a7c2dcc4a333e034fa023fdb0467a59190d8863036173bdaac00d062",
+    "clients.py": "edde2911328ca169a0e468a330847c6c92a47cd5b9b240c4304b56e9c81e991e",
+    "async_clients.py": "371a6d486e07a0fbdb33e4d8d59df44d7aabf9b9228fbee6abb5dfa07c60138b",
+    "blocking_clients.py": "4874e6911c8b1253890a8c201407e160761aa6b10c4b6c701591f309bd505617",
+    "results.py": "82b799967168818d0e0e82525d4fe5eb918d0f5e1d7562ddf5ba6139c124cb47",
+    "workloads.py": "daa650fda5203d6440323c17a34967ba4a59b67024ce4a150109d7f85aee9457",
+    "run.py": "4b375bfa66b1bfefd870a5399ecedf80f28e52dc99361f3053f373affe122257"
+  },
+  "build": {
+    "allocator": "jemalloc",
+    "cargo_profile": "release",
+    "requested_features": [
+      "jemalloc"
+    ],
+    "default_features": [
+      "abi3-py311"
+    ],
+    "build_command": "maturin develop --release --uv --locked --features jemalloc",
+    "build_log": {
+      "file": "after-build.log",
+      "sha256": "a8f128eaaaaa8865b1517fd196ba8a4022e932bc04855c23980e37ee8e1cc902"
+    },
+    "evidence_source": "preserved_build_log",
+    "cargo_cached_feature_configurations": [
+      {
+        "file": "/home/gngpp/.cache/wreq-python/bench-16/target-91f1956/release/.fingerprint/wreq-python-e65f5221e5f6e115/lib-wreq.json",
+        "sha256": "fe416b14f9e1f8933f37ebc6618225ad65011241dcee8e192a71921126e869dd",
+        "features": [
+          "abi3-py311",
+          "default",
+          "jemalloc"
+        ]
+      }
+    ],
+    "cargo_release_library": {
+      "file": "/home/gngpp/.cache/wreq-python/bench-16/target-91f1956/release/libwreq.so",
+      "sha256": "84dcf6b05a38abdb9b39c61184e00eac324df7f8722953017a59cf1ebfdf437f"
+    },
+    "rustc_observed": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+    "cargo_observed": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+    "maturin_observed": "maturin 1.14.1",
+    "evidence_note": "Requested features come from the executed command supplied by the agent. Cargo fingerprints describe cached feature configurations, not independently proven binary flags. A missing build log was not recreated with a cache-only build."
+  },
+  "provenance_script_sha256": "26239e3149b4064ba33d512a4e2651d1f65e03b3b5fd0502cd62cc550d8e2def"
+}

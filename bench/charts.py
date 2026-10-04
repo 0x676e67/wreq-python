@@ -248,9 +248,12 @@ def _render_svg(document, case, rows, theme, mobile):
     return "\n".join(parts) + "\n"
 
 
-def write_charts(document: dict, directory: Path) -> dict:
+def write_charts(document: dict, directory: Path, *, api: str | None = None) -> dict:
     """Write four SVG variants per configured case, without deleting any files."""
     validate_document(document)
+    if api not in (None, "async", "blocking"):
+        raise ValueError("Chart API must be async or blocking")
+    apis = (api,) if api is not None else ("async", "blocking")
     config = document["configuration"]
     ordered = [client for client in LABELS if client in config["clients"]]
     ordered += [client for client in config["clients"] if client not in LABELS]
@@ -267,7 +270,7 @@ def write_charts(document: dict, directory: Path) -> dict:
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     cases = []
-    for api in ("async", "blocking"):
+    for api in apis:
         clients = [client for client in ordered if CAPABILITIES[client]["api"] == api]
         if not clients:
             continue

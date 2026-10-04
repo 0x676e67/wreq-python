@@ -1,0 +1,14 @@
+📦 Including license file `LICENSE`
+🍹 Building a mixed python/rust project
+🐍 Found CPython 3.14 at /home/gngpp/.cache/wreq-python/bench-18/before/.venv/bin/python
+🔗 Found pyo3 bindings with abi3-py3.11 support
+Checked 16 packages in 0.80ms
+   Compiling wreq-python v0.12.3 (/home/gngpp/.cache/wreq-python/bench-18/before)
+    Finished `release` profile [optimized] target(s) in 37.18s
+⚠️ Warning: Failed to set rpath for /home/gngpp/.cache/wreq-python/bench-16/target-91f1956/maturin/libwreq.so: Failed to execute 'patchelf', did you install it? Hint: Try `pip install maturin[patchelf]` (or just `pip install patchelf`)
+📦 Built wheel for abi3 Python ≥ 3.11 to /tmp/.tmp2c4Eob/wreq-0.12.3-cp311-abi3-linux_x86_64.whl
+✏️ Setting installed package as editable
+🛠 Installed wreq-0.12.3
+real 38.77
+user 34.69
+sys 2.48

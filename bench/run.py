@@ -15,35 +15,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from bench import benchmark
-from bench.clients import CLIENTS, supports
+from bench.clients import supports
 from bench.report import render_markdown
-from bench.workloads import BODY_CASES, CONCURRENCY_CASES
+from bench.results import BLOCKING_CLIENTS, require_publish
 from docs.build import MAX_DATA_BYTES, decode_document
 
 LATEST = ROOT / "bench/data/latest.json"
-
-
-def require_publish(config):
-    """Only the complete default matrix can become the public snapshot."""
-    axes = {
-        "clients": CLIENTS,
-        "protocols": ("h1", "h2"),
-        "body_kinds": ("full", "stream"),
-        "payload_bytes": BODY_CASES,
-        "concurrency": CONCURRENCY_CASES,
-    }
-    if any(set(config[key]) != set(values) for key, values in axes.items()) or any(
-        config[key] < minimum
-        for key, minimum in (
-            ("requests", 300),
-            ("rounds", 3),
-            ("warmup", 1),
-            ("samples", 1),
-        )
-    ):
-        raise ValueError(
-            "Publishing requires the full default matrix, >=300 requests, >=3 rounds, >=1 warm-up and timed sample"
-        )
+LATEST_BLOCKING = ROOT / "bench/data/latest-blocking.json"
 
 
 def describe(config):
@@ -77,17 +55,17 @@ def preserve_report(path, content):
         handle.write(raw)
 
 
-def publish(raw):
-    """Replace only latest.json, preserving the candidate's original bytes."""
-    LATEST.parent.mkdir(parents=True, exist_ok=True)
-    handle = tempfile.NamedTemporaryFile(dir=LATEST.parent, delete=False)
+def publish(raw, target):
+    """Atomically select a snapshot without reserializing its original bytes."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    handle = tempfile.NamedTemporaryFile(dir=target.parent, delete=False)
     temporary = Path(handle.name)
     try:
         with handle:
             handle.write(raw)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, LATEST)
+        os.replace(temporary, target)
     finally:
         temporary.unlink(missing_ok=True)
 
@@ -109,10 +87,16 @@ def main(argv=None):
     parser.add_argument(
         "--build-docs", action="store_true", help="Preview docs using this candidate"
     )
-    parser.add_argument(
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument(
         "--publish",
         action="store_true",
         help="Build docs, then explicitly select this full matrix as latest",
+    )
+    selection.add_argument(
+        "--publish-blocking",
+        action="store_true",
+        help="Build docs, then select the complete blocking matrix without changing async data",
     )
     parser.add_argument(
         "--docs-python",
@@ -121,6 +105,9 @@ def main(argv=None):
     )
     options, forwarded = parser.parse_known_args(argv)
     try:
+        selecting = options.publish or options.publish_blocking
+        latest = LATEST_BLOCKING if options.publish_blocking else LATEST
+        protected = {LATEST.resolve(), LATEST_BLOCKING.resolve()}
         if options.input is not None:
             if forwarded:
                 raise ValueError(
@@ -132,22 +119,22 @@ def main(argv=None):
             if args.worker is not None:
                 raise ValueError("Worker mode is internal to benchmark.py")
             config = {**vars(args), "payload_bytes": args.sizes}
-            if options.publish:
-                require_publish(config)
+            if selecting:
+                require_publish(config, blocking=options.publish_blocking)
             describe(config)
             stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
             name = f"{stamp}-{benchmark.source_info()['commit'][:12]}-{uuid.uuid4().hex[:8]}"
             output = (args.output or ROOT / "bench/data" / f"{name}.json").resolve()
-            if output == LATEST.resolve() or output.exists():
+            if output in protected or output.exists():
                 raise FileExistsError(
-                    f"Choose a new historical snapshot, not latest.json: {output}"
+                    f"Choose a new historical snapshot, not a latest file: {output}"
                 )
         report = (options.report or output.with_suffix(".report.md")).resolve()
         logs = [
             output.with_name(f"{output.stem}-{stream}.log")
             for stream in ("stdout", "stderr")
         ]
-        if report in {output, LATEST.resolve(), *logs}:
+        if report in {output, *protected, *logs}:
             raise ValueError("Report path must be separate from JSON and logs")
         if options.input is None:
             if report.exists():
@@ -179,13 +166,15 @@ def main(argv=None):
         with output.open("rb") as handle:
             raw = handle.read(MAX_DATA_BYTES + 1)
         document = decode_document(raw)
-        if options.publish:
-            require_publish(document["configuration"])
+        if selecting:
+            require_publish(
+                document["configuration"], blocking=options.publish_blocking
+            )
         if options.input is not None:
             describe(document["configuration"])
         preserve_report(report, render_markdown(document))
         print(f"Report: {report}", flush=True)
-        if options.build_docs or options.publish:
+        if options.build_docs or selecting:
             docs_python = Path(options.docs_python)
             docs_python = (
                 str(docs_python.resolve())
@@ -197,23 +186,43 @@ def main(argv=None):
             ) as directory:
                 frozen = Path(directory) / "candidate.json"
                 frozen.write_bytes(raw)
+                command = [docs_python, str(ROOT / "docs/build.py")]
+                if all(client in BLOCKING_CLIENTS for client in document["clients"]):
+                    companion = LATEST
+                    full = Path(directory) / "full.json"
+                    with companion.open("rb") as handle:
+                        companion_raw = handle.read(MAX_DATA_BYTES + 1)
+                    decode_document(companion_raw)
+                    full.write_bytes(companion_raw)
+                    command.extend(
+                        ["--data", str(full), "--blocking-data", str(frozen)]
+                    )
+                else:
+                    command.extend(["--data", str(frozen)])
+                    if options.publish and (
+                        LATEST_BLOCKING.exists() or LATEST_BLOCKING.is_symlink()
+                    ):
+                        companion = Path(directory) / "blocking.json"
+                        with LATEST_BLOCKING.open("rb") as handle:
+                            companion_raw = handle.read(MAX_DATA_BYTES + 1)
+                        companion_document = decode_document(companion_raw)
+                        require_publish(
+                            companion_document["configuration"], blocking=True
+                        )
+                        companion.write_bytes(companion_raw)
+                        command.extend(["--blocking-data", str(companion)])
                 result = subprocess.run(
-                    [
-                        docs_python,
-                        str(ROOT / "docs/build.py"),
-                        "--data",
-                        str(frozen),
-                    ],
+                    command,
                     cwd=ROOT,
                     check=False,
                 )
             if result.returncode:
                 raise RuntimeError(
-                    f"Documentation build failed ({result.returncode}); latest.json was not changed"
+                    f"Documentation build failed ({result.returncode}); {latest.name} was not changed"
                 )
-        if options.publish:
-            publish(raw)
-            print(f"Selected latest: {LATEST}", flush=True)
+        if selecting:
+            publish(raw, latest)
+            print(f"Selected latest: {latest}", flush=True)
         return 0
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"Benchmark pipeline failed: {exc}", file=sys.stderr)
