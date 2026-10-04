@@ -15,7 +15,7 @@ build:
       - python -m pip install -r docs/requirements.txt
     build:
       html:
-        - python -m zensical build -f docs/mkdocs.yml
+        - python docs/build.py
     post_build:
       - mkdir -p $READTHEDOCS_OUTPUT/html/
       - cp --recursive docs/site/* $READTHEDOCS_OUTPUT/html/

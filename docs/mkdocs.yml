@@ -1,12 +1,21 @@
 site_name: wreq-python
-site_description: Ergonomic Python HTTP Client with TLS Fingerprint
+site_description: Python HTTP, powered by Rust. Browser profiles, async and blocking clients, and streaming transfers.
 site_author: "0x676e67"
-site_url: https://0x676e67.github.io/wreq-python
+site_url: !ENV [READTHEDOCS_CANONICAL_URL, "https://python.wreq.org"]
 
 repo_name: "0x676e67/wreq-python"
 repo_url: https://github.com/0x676e67/wreq-python
 
 docs_dir: source
+
+extra_css:
+  - stylesheets/theme.css
+  - stylesheets/home.css
+  - stylesheets/benchmarks.css
+
+extra_javascript:
+  - javascripts/sponsors.js
+  - javascripts/benchmarks.js
 
 extra:
   version:
@@ -14,39 +23,26 @@ extra:
 
 theme:
   name: material
+  custom_dir: overrides
   font:
     code: Roboto Mono
   palette:
-    - media: "(prefers-color-scheme)"
-      toggle:
-        icon: material/link
-        name: Switch to light mode
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/toggle-switch
-        name: Switch to dark mode
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-      primary: black
-      accent: indigo
-      toggle:
-        icon: material/toggle-switch-off
-        name: Switch to system preference
+    scheme: slate
+    primary: black
+    accent: indigo
   features:
     - search.highlight
     - search.share
     - content.code.copy
     - content.code.annotate
+    - content.tabs.link
     - header.autohide
     - toc.follow
-    - toc.integrate
     - navigation.path
     - navigation.tabs
     - navigation.sections
     - navigation.top
+    - navigation.footer
     - navigation.tracking
     - navigation.indexes
     - navigation.instant
@@ -95,6 +91,7 @@ markdown_extensions:
   - pymdownx.tilde
 
 nav:
+  - Home: index.md
   - Getting Started:
       - Introduction: getting-started/introduction.md
       - Installation: getting-started/installation.md
@@ -124,4 +121,5 @@ nav:
           - wreq.dns: api/dns.md
           - wreq.proxy: api/proxy.md
           - wreq.redirect: api/redirect.md
+  - Benchmarks: benchmark.md
   - Sponsors: sponsors.md

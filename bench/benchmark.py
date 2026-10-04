@@ -1,589 +1,577 @@
-"""pyperf-based HTTP client benchmark suite.
-
-Each benchmark measures *concurrent* HTTP throughput: the reported value is
-wall-clock time per request (after normalising by --http-requests), so lower
-is better.  req/s ≈ 1 / mean_seconds.
-
-Usage::
-
-    python benchmark.py                          # 3 processes, 3 values, 1 warmup
-    python benchmark.py --fast                   # quick estimate (~1 process)
-    python benchmark.py --rigorous               # more accurate (6 processes)
-    python benchmark.py -o results.json          # save JSON for later comparison
-    python benchmark.py --http-requests=200 --http-workers=16
-    python benchmark.py -v                       # verbose: show each value as it lands
-"""
+"""HTTPS echo throughput with Full/Stream uploads and streamed responses."""
 
 from __future__ import annotations
 
+import argparse
 import asyncio
-import inspect
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack, asynccontextmanager
+from datetime import datetime, timezone
+import hashlib
+import json
+import os
+from pathlib import Path
+import platform
+import random
+import subprocess
 import sys
 import threading
-import urllib.error
-import urllib.request
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
-from importlib.metadata import PackageNotFoundError, version
-from io import BytesIO
-from typing import Any, Awaitable, Callable
+import time
+import traceback
+from urllib.parse import urlsplit
 
-import pyperf
-
-# Import all HTTP clients
-import pycurl
-import aiohttp
-import httpx
-import niquests
-import requests
-import curl_cffi
-import curl_cffi.requests
-import wreq
-import wreq.blocking
-import ry
-
-try:
-    import uvloop  # type: ignore
-except ImportError:
-    uvloop = None
+if __package__:
+    from .clients import (
+        CAPABILITIES,
+        CLIENTS,
+        blocking_operations,
+        metadata,
+        operations,
+        supports,
+    )
+    from .results import aggregate, validate_document, write_atomic
+    from .workloads import (
+        BODY_CASES,
+        CONCURRENCY_CASES,
+        STREAM_CHUNK_BYTES,
+        prepare_chunks,
+        upload_chunk_bytes,
+    )
 else:
-    uvloop.install()
-
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-PAYLOAD_SIZES = ("20k", "50k", "200k")
-
-
-# ---------------------------------------------------------------------------
-# Dataclasses
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class BenchmarkCase:
-    id: str
-    runner: Callable[..., None]
+    from clients import (
+        CAPABILITIES,
+        CLIENTS,
+        blocking_operations,
+        metadata,
+        operations,
+        supports,
+    )
+    from results import aggregate, validate_document, write_atomic
+    from workloads import (
+        BODY_CASES,
+        CONCURRENCY_CASES,
+        STREAM_CHUNK_BYTES,
+        prepare_chunks,
+        upload_chunk_bytes,
+    )
 
 
-@dataclass(frozen=True)
-class AsyncBenchmarkCase:
-    id: str
-    runner: Callable[[str, int], Awaitable[None]]
+def csv_choices(value, choices):
+    values = value.split(",")
+    if (
+        not values
+        or len(values) != len(set(values))
+        or any(v not in choices for v in values)
+    ):
+        raise argparse.ArgumentTypeError(
+            f"Use unique comma-separated values from {', '.join(choices)}"
+        )
+    return values
 
 
-class PycurlSession:
-    def __init__(self):
-        self.c = pycurl.Curl()
-        self.content = None
-
-    def close(self):
-        self.c.close()
-
-    def __del__(self):
-        self.close()
-
-    def get(self, url):
-        buffer = BytesIO()
-        self.c.setopt(pycurl.URL, url)
-        self.c.setopt(pycurl.WRITEDATA, buffer)
-        self.c.perform()
-        self.content = buffer.getvalue()
-        return self
-
-    @property
-    def text(self) -> bytes | None:
-        return self.content
+def csv_positive(value):
+    try:
+        values = [int(v) for v in value.split(",")]
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            "Use comma-separated positive integers"
+        ) from exc
+    if not values or min(values) < 1 or len(values) != len(set(values)):
+        raise argparse.ArgumentTypeError("Use unique positive integers")
+    return values
 
 
-# ---------------------------------------------------------------------------
-# Utility helpers
-# ---------------------------------------------------------------------------
+def positive(value):
+    value = int(value)
+    if value < 1:
+        raise argparse.ArgumentTypeError("Must be positive")
+    return value
 
 
-def add_package_version(packages: list[tuple[str, Any]]) -> list[tuple[str, Any]]:
-    results = []
-    for name, target in packages:
-        try:
-            label = f"{name} {version(name)}"
-        except PackageNotFoundError:
-            label = name
-        results.append((label, target))
-    return results
+def nonnegative(value):
+    value = int(value)
+    if value < 0:
+        raise argparse.ArgumentTypeError("Must not be negative")
+    return value
 
 
-def maybe_close(resource: Any) -> None:
-    close = getattr(resource, "close", None)
-    if callable(close):
-        close()
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--server", type=Path, help="Built bench/server TLS echo executable"
+    )
+    parser.add_argument(
+        "--clients", type=lambda v: csv_choices(v, CLIENTS), default=list(CLIENTS)
+    )
+    parser.add_argument(
+        "--protocols", type=lambda v: csv_choices(v, ("h1", "h2")), default=["h1", "h2"]
+    )
+    parser.add_argument(
+        "--sizes",
+        type=csv_positive,
+        default=list(BODY_CASES),
+        metavar="BYTES,...",
+    )
+    parser.add_argument("--concurrency", type=csv_positive, default=CONCURRENCY_CASES)
+    parser.add_argument(
+        "--body-kinds",
+        type=lambda v: csv_choices(v, ("full", "stream")),
+        default=["full", "stream"],
+    )
+    parser.add_argument("--rounds", type=positive, default=3)
+    parser.add_argument("--warmup", type=nonnegative, default=1)
+    parser.add_argument("--samples", type=positive, default=1)
+    parser.add_argument("--requests", type=positive, default=300)
+    parser.add_argument("--server-workers", type=positive, default=4)
+    parser.add_argument(
+        "--case-timeout",
+        type=positive,
+        default=120,
+        help="Seconds allowed for each client case",
+    )
+    parser.add_argument("--seed", type=int, default=160130)
+    parser.add_argument(
+        "--output", type=Path, help="New JSON snapshot path; must not exist"
+    )
+    parser.add_argument("--worker", choices=CLIENTS, help=argparse.SUPPRESS)
+    args = parser.parse_args(argv)
+    if args.worker is None:
+        if args.server is None:
+            parser.error("--server is required")
+        if args.requests < max(args.concurrency):
+            parser.error("--requests must be at least the largest --concurrency")
+        if not any(
+            supports(client, protocol, kind)
+            for client in args.clients
+            for protocol in args.protocols
+            for kind in args.body_kinds
+        ):
+            parser.error("Selected clients do not support the requested workload")
+    return args
 
 
-async def maybe_aclose(resource: Any) -> None:
-    close = getattr(resource, "close", None)
-    if not callable(close):
+async def closed_loop(operation, requests, concurrency):
+    """Keep a fixed number of workers; each starts its next request after EOF."""
+    worker_count = min(concurrency, requests)
+    per_worker, remainder = divmod(requests, worker_count)
+
+    async def run(count):
+        for _ in range(count):
+            await operation()
+
+    async with asyncio.TaskGroup() as group:
+        for index in range(worker_count):
+            group.create_task(run(per_worker + (index < remainder)))
+
+
+async def run_case(client, request):
+    if CAPABILITIES[client]["api"] == "blocking":
+        return await asyncio.to_thread(run_blocking_case, client, request)
+    body = b"x" * request["payload_bytes"]
+    async with operations(
+        client, request["protocol"], request["url"], body, request["body_kind"]
+    ) as post:
+        # The untimed request validates status, protocol, EOF and echoed length.
+        validation = await post()
+
+        async def batch():
+            cpu_start = time.process_time()
+            start = time.perf_counter()
+            await closed_loop(post, request["requests"], request["concurrency"])
+            return {
+                "seconds": time.perf_counter() - start,
+                "cpu_seconds": time.process_time() - cpu_start,
+            }
+
+        warmup = [await batch() for _ in range(request["warmup"])]
+        samples = [await batch() for _ in range(request["samples"])]
+    return {"warmup": warmup, "samples": samples, "validation": validation}
+
+
+def run_blocking_case(client, request):
+    """Reuse one client per logical worker, submitting whole closed-loop batches."""
+    body = b"x" * request["payload_bytes"]
+    chunks = prepare_chunks(body, request["body_kind"])
+    workers = min(request["concurrency"], request["requests"])
+    quotient, remainder = divmod(request["requests"], workers)
+    with ExitStack() as stack:
+        posts = [
+            stack.enter_context(
+                blocking_operations(
+                    client,
+                    request["protocol"],
+                    request["url"],
+                    body,
+                    request["body_kind"],
+                    chunks=chunks,
+                )
+            )
+            for _ in range(workers)
+        ]
+        # Establish each worker's reusable connection before any timing.
+        validation = posts[0]()
+        if any(post() != validation for post in posts[1:]):
+            raise RuntimeError("Blocking workers returned inconsistent validations")
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+
+            def batch():
+                stopped = threading.Event()
+
+                def run(post, count):
+                    try:
+                        for _ in range(count):
+                            if stopped.is_set():
+                                break
+                            post()
+                    except BaseException:
+                        stopped.set()
+                        raise
+
+                cpu_start = time.process_time()
+                start = time.perf_counter()
+                futures = [
+                    executor.submit(run, post, quotient + (i < remainder))
+                    for i, post in enumerate(posts)
+                ]
+                try:
+                    for future in futures:
+                        future.result()
+                finally:
+                    stopped.set()
+                    # No client is closed while another thread is still using it.
+                    for future in futures:
+                        future.cancel()
+                    for future in futures:
+                        if not future.cancelled():
+                            try:
+                                future.result()
+                            except BaseException:
+                                pass
+                return {
+                    "seconds": time.perf_counter() - start,
+                    "cpu_seconds": time.process_time() - cpu_start,
+                }
+
+            warmup = [batch() for _ in range(request["warmup"])]
+            samples = [batch() for _ in range(request["samples"])]
+    return {"warmup": warmup, "samples": samples, "validation": validation}
+
+
+async def worker(client):
+    # This happens before importing libraries, including those without no_proxy().
+    for name in list(os.environ):
+        if name.lower() in {"http_proxy", "https_proxy", "all_proxy", "no_proxy"}:
+            del os.environ[name]
+    os.environ["NO_PROXY"] = "*"
+    os.environ["no_proxy"] = "*"
+    try:
+        print(json.dumps({"ok": True, "metadata": metadata(client)}), flush=True)
+        while line := await asyncio.to_thread(sys.stdin.readline):
+            request = json.loads(line)
+            if request.get("stop"):
+                return
+            async with asyncio.timeout(request["case_timeout"]):
+                result = await run_case(client, request)
+            print(json.dumps({"ok": True, "result": result}), flush=True)
+    except Exception:
+        print(json.dumps({"ok": False, "error": traceback.format_exc()}), flush=True)
+        raise SystemExit(1)
+
+
+async def stop_process(process, command=None):
+    if process.returncode is not None:
         return
-    result = close()
-    if inspect.isawaitable(result):
-        await result
-
-
-# ---------------------------------------------------------------------------
-# Concurrency helpers
-# ---------------------------------------------------------------------------
-
-
-def _run_concurrent_requests(
-    fetch_fn: Callable[[], None], count: int, workers: int
-) -> None:
-    """Run *fetch_fn* concurrently *count* times using at most *workers* threads."""
-    with ThreadPoolExecutor(max_workers=min(workers, count)) as executor:
-        futures = [executor.submit(fetch_fn) for _ in range(count)]
-        for future in as_completed(futures):
-            future.result()
-
-
-def run_parallel_non_session_case(
-    runner_fn: Callable[[str], None], url: str, count: int, workers: int
-) -> None:
-    """Parallel non-session: each worker creates its own client."""
-    _run_concurrent_requests(lambda: runner_fn(url), count, workers)
-
-
-# ---------------------------------------------------------------------------
-# Sync session benchmarks  (shared client, concurrent requests)
-# ---------------------------------------------------------------------------
-
-
-def requests_session_test(url: str, count: int, workers: int) -> None:
-    with requests.Session() as s:
-        _run_concurrent_requests(lambda: s.get(url).content, count, workers)
-        s.close()
-
-
-def httpx_session_test(url: str, count: int, workers: int) -> None:
-    with httpx.Client() as s:
-        _run_concurrent_requests(lambda: s.get(url).content, count, workers)
-        s.close()
-
-
-def niquests_session_test(url: str, count: int, workers: int) -> None:
-    with niquests.Session() as s:
-        _run_concurrent_requests(lambda: s.get(url).content, count, workers)
-        s.close()
-
-
-def curl_cffi_session_test(url: str, count: int, workers: int) -> None:
-    with curl_cffi.requests.Session() as s:
-        _run_concurrent_requests(lambda: s.get(url).content, count, workers)
-        s.close()
-
-
-def wreq_blocking_session_test(url: str, count: int, workers: int) -> None:
-    with wreq.blocking.Client() as s:
-        _run_concurrent_requests(lambda: s.get(url).bytes(), count, workers)
-        s.close()
-
-
-def pycurl_session_test(url: str, count: int, workers: int) -> None:
-    # pycurl Curl handles are not thread-safe; use thread-local storage so each
-    # worker thread gets its own handle that persists across its assigned requests.
-    _local = threading.local()
-
-    def _fetch() -> None:
-        if not hasattr(_local, "curl"):
-            _local.curl = pycurl.Curl()
-        buf = BytesIO()
-        _local.curl.setopt(pycurl.URL, url)
-        _local.curl.setopt(pycurl.WRITEDATA, buf)
-        _local.curl.perform()
-
-    _run_concurrent_requests(_fetch, count, workers)
-
-
-def ry_blocking_session_test(url: str, count: int, workers: int) -> None:
-    s = ry.BlockingClient()
     try:
-        _run_concurrent_requests(lambda: s.get(url).bytes(), count, workers)
-    finally:
-        maybe_close(s)
-
-
-# ---------------------------------------------------------------------------
-# Sync non-session benchmarks  (one request per call; parallelism is external)
-# ---------------------------------------------------------------------------
-
-
-def requests_non_session_test(url: str) -> None:
-    with requests.get(url) as resp:
-        resp.content
-        resp.close()
-
-
-def httpx_non_session_test(url: str) -> None:
-    resp = httpx.get(url)
-    _ = resp.content
-    resp.close()
-
-
-def niquests_non_session_test(url: str) -> None:
-    with niquests.get(url) as resp:
-        _ = resp.content
-        resp.close()
-
-
-def curl_cffi_non_session_test(url: str) -> None:
-    resp = curl_cffi.requests.get(url)
-    _ = resp.content
-    resp.close()
-
-
-def wreq_blocking_non_session_test(url: str) -> None:
-    with wreq.blocking.get(url) as resp:
-        resp.bytes()
-        resp.close()
-
-
-def pycurl_non_session_test(url: str) -> None:
-    s = PycurlSession()
-    try:
-        s.get(url).content
-    finally:
-        maybe_close(s)
-
-
-def ry_blocking_non_session_test(url: str) -> None:
-    s = ry.BlockingClient()
-    try:
-        s.get(url).bytes()
-    finally:
-        maybe_close(s)
-
-
-# ---------------------------------------------------------------------------
-# Async session benchmarks  (shared client, asyncio.gather)
-# ---------------------------------------------------------------------------
-
-
-async def httpx_async_session_test(url: str, count: int) -> None:
-    async with httpx.AsyncClient() as s:
-        await asyncio.gather(*[s.get(url) for _ in range(count)])
-
-
-async def aiohttp_async_session_test(url: str, count: int) -> None:
-    async with aiohttp.ClientSession() as s:
-
-        async def _fetch() -> None:
-            async with await s.get(url) as resp:
-                await resp.read()
-
-        await asyncio.gather(*[_fetch() for _ in range(count)])
-
-
-async def niquests_async_session_test(url: str, count: int) -> None:
-    s = niquests.AsyncSession()
-    try:
-
-        async def _fetch() -> None:
-            resp = await s.get(url)
-            _ = resp.content
-
-        await asyncio.gather(*[_fetch() for _ in range(count)])
-    finally:
-        await maybe_aclose(s)
-
-
-async def wreq_async_session_test(url: str, count: int) -> None:
-    s = wreq.Client()
-    try:
-
-        async def _fetch() -> None:
-            resp = await s.get(url)
-            await resp.bytes()
-
-        await asyncio.gather(*[_fetch() for _ in range(count)])
-    finally:
-        await maybe_aclose(s)
-
-
-async def curl_cffi_async_session_test(url: str, count: int) -> None:
-    s = curl_cffi.requests.AsyncSession()
-    try:
-
-        async def _fetch() -> None:
-            resp = await s.get(url)
-            _ = resp.text
-
-        await asyncio.gather(*[_fetch() for _ in range(count)])
-    finally:
-        await s.close()
-
-
-async def ry_async_session_test(url: str, count: int) -> None:
-    s = ry.HttpClient()
-    try:
-
-        async def _fetch():
-            resp = await s.get(url)
-            return await resp.bytes()
-
-        await asyncio.gather(*[_fetch() for _ in range(count)])
-    finally:
-        await maybe_aclose(s)
-
-
-# ---------------------------------------------------------------------------
-# Async non-session benchmarks  (one request per call; parallelism is external)
-# ---------------------------------------------------------------------------
-
-
-async def httpx_async_non_session_test(url: str, count: int) -> None:
-    async def _fetch() -> None:
-        async with httpx.AsyncClient() as s:
-            await s.get(url)
-
-    await asyncio.gather(*[_fetch() for _ in range(count)])
-
-
-async def aiohttp_async_non_session_test(url: str, count: int) -> None:
-    async def _fetch() -> None:
-        async with aiohttp.ClientSession() as s:
-            async with await s.get(url) as resp:
-                await resp.read()
-
-    await asyncio.gather(*[_fetch() for _ in range(count)])
-
-
-async def niquests_async_non_session_test(url: str, count: int) -> None:
-    async def _fetch() -> None:
-        async with niquests.AsyncSession() as s:
-            resp = await s.get(url)
-            _ = resp.content
-
-    await asyncio.gather(*[_fetch() for _ in range(count)])
-
-
-async def wreq_async_non_session_test(url: str, count: int) -> None:
-    async def _fetch() -> None:
-        async with wreq.Client() as s:
-            resp = await s.get(url)
-            await resp.bytes()
-
-    await asyncio.gather(*[_fetch() for _ in range(count)])
-
-
-async def curl_cffi_async_non_session_test(url: str, count: int) -> None:
-    async def _fetch() -> None:
-        async with curl_cffi.requests.AsyncSession() as s:
-            resp = await s.get(url)
-            _ = resp.text
-
-    await asyncio.gather(*[_fetch() for _ in range(count)])
-
-
-async def ry_async_non_session_test(url: str, count: int) -> None:
-    async def _fetch() -> None:
-        s = ry.HttpClient()
+        if command is not None:
+            process.stdin.write(command)
+            await process.stdin.drain()
+        process.stdin.close()
+        async with asyncio.timeout(10):
+            await process.wait()
+        return
+    except (TimeoutError, OSError, ConnectionError):
+        pass
+    if process.returncode is None:
         try:
-            resp = await s.get(url)
-            await resp.bytes()
-        finally:
-            await maybe_aclose(s)
-
-    await asyncio.gather(*[_fetch() for _ in range(count)])
-
-
-# ---------------------------------------------------------------------------
-# Benchmark case builders
-# ---------------------------------------------------------------------------
-
-
-def build_sync_session_cases() -> list[BenchmarkCase]:
-    cases = []
-    if httpx is not None:
-        cases.append(("httpx", httpx_session_test))
-    if requests is not None:
-        cases.append(("requests", requests_session_test))
-    if niquests is not None:
-        cases.append(("niquests", niquests_session_test))
-    if curl_cffi.requests is not None:
-        cases.append(("curl_cffi", curl_cffi_session_test))
-    if pycurl is not None:
-        cases.append(("pycurl", pycurl_session_test))
-    if ry is not None:
-        cases.append(("ry", ry_blocking_session_test))
-    if wreq.blocking is not None:
-        cases.append(("wreq", wreq_blocking_session_test))
-    return [BenchmarkCase(name, runner) for name, runner in add_package_version(cases)]
-
-
-def build_sync_non_session_cases() -> list[BenchmarkCase]:
-    cases = []
-    if httpx is not None:
-        cases.append(("httpx", httpx_non_session_test))
-    if requests is not None:
-        cases.append(("requests", requests_non_session_test))
-    if niquests is not None:
-        cases.append(("niquests", niquests_non_session_test))
-    if curl_cffi.requests is not None:
-        cases.append(("curl_cffi", curl_cffi_non_session_test))
-    if pycurl is not None:
-        cases.append(("pycurl", pycurl_non_session_test))
-    if ry is not None:
-        cases.append(("ry", ry_blocking_non_session_test))
-    if wreq.blocking is not None:
-        cases.append(("wreq", wreq_blocking_non_session_test))
-    return [BenchmarkCase(name, runner) for name, runner in add_package_version(cases)]
-
-
-def build_async_session_cases() -> list[AsyncBenchmarkCase]:
-    cases = []
-    if httpx is not None:
-        cases.append(("httpx", httpx_async_session_test))
-    if niquests is not None:
-        cases.append(("niquests", niquests_async_session_test))
-    if curl_cffi.requests is not None:
-        cases.append(("curl_cffi", curl_cffi_async_session_test))
-    if aiohttp is not None:
-        cases.append(("aiohttp", aiohttp_async_session_test))
-    if ry is not None:
-        cases.append(("ry", ry_async_session_test))
-    if wreq is not None:
-        cases.append(("wreq", wreq_async_session_test))
-    return [
-        AsyncBenchmarkCase(name, runner) for name, runner in add_package_version(cases)
-    ]
-
-
-def build_async_non_session_cases() -> list[AsyncBenchmarkCase]:
-    cases = []
-    if httpx is not None:
-        cases.append(("httpx", httpx_async_non_session_test))
-    if niquests is not None:
-        cases.append(("niquests", niquests_async_non_session_test))
-    if curl_cffi.requests is not None:
-        cases.append(("curl_cffi", curl_cffi_async_non_session_test))
-    if aiohttp is not None:
-        cases.append(("aiohttp", aiohttp_async_non_session_test))
-    if ry is not None:
-        cases.append(("ry", ry_async_non_session_test))
-    if wreq is not None:
-        cases.append(("wreq", wreq_async_non_session_test))
-    return [
-        AsyncBenchmarkCase(name, runner) for name, runner in add_package_version(cases)
-    ]
-
-
-SYNC_SESSION_CASES = build_sync_session_cases()
-SYNC_NON_SESSION_CASES = build_sync_non_session_cases()
-ASYNC_SESSION_CASES = build_async_session_cases()
-ASYNC_NON_SESSION_CASES = build_async_non_session_cases()
-
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
-
-
-def main() -> int:
-    # Quick server probe before spawning any subprocesses.
-    if "--worker" not in sys.argv:
-        base_url_probe = "http://127.0.0.1:8000"
-        for arg in sys.argv[1:]:
-            if arg.startswith("--http-base-url="):
-                base_url_probe = arg.split("=", 1)[1]
-                break
-        probe_url = f"{base_url_probe.rstrip('/')}/20k"
+            process.terminate()
+        except ProcessLookupError:
+            return
         try:
-            with urllib.request.urlopen(probe_url, timeout=2) as resp:
-                resp.read(1)
-        except (OSError, urllib.error.URLError) as exc:
-            print(
-                f"ERROR: benchmark server unavailable at {probe_url}: {exc}",
-                file=sys.stderr,
-            )
-            print("Start bench/server.py before running benchmarks.", file=sys.stderr)
-            return 1
+            async with asyncio.timeout(5):
+                await process.wait()
+        except TimeoutError:
+            if process.returncode is None:
+                try:
+                    process.kill()
+                except ProcessLookupError:
+                    pass
+                await process.wait()
 
-    # 3 processes × 3 values × 1 warmup = 9 measurements per benchmark.
-    # Pass --fast for a quick estimate or --rigorous for higher confidence.
-    runner = pyperf.Runner(processes=3, values=3, warmups=1)
-    runner.argparser.add_argument(
-        "--http-base-url",
-        default="http://127.0.0.1:8000",
-        metavar="URL",
-        help="Base URL for the benchmark server. (default: %(default)s)",
+
+async def receive(process, timeout, label):
+    async with asyncio.timeout(timeout):
+        line = await process.stdout.readline()
+    if not line:
+        raise RuntimeError(
+            f"{label} closed stdout before returning a result (exit {process.returncode})"
+        )
+    try:
+        answer = json.loads(line)
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise RuntimeError(f"Invalid JSON from {label}: {line!r}") from exc
+    if not isinstance(answer, dict):
+        raise RuntimeError(f"Invalid response from {label}: {answer!r}")
+    return answer
+
+
+@asynccontextmanager
+async def benchmark_server(executable, protocol, workers):
+    process = await asyncio.create_subprocess_exec(
+        str(executable),
+        "--protocol",
+        protocol,
+        "--workers",
+        str(workers),
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
     )
-    runner.argparser.add_argument(
-        "--http-requests",
-        type=int,
-        default=100,
-        metavar="N",
-        help="Concurrent HTTP requests per benchmark call. (default: %(default)s)",
-    )
-    runner.argparser.add_argument(
-        "--http-workers",
-        type=int,
-        default=32,
-        metavar="N",
-        help="Thread pool size for sync benchmarks. (default: %(default)s)",
-    )
+    try:
+        info = await receive(process, 30, "TLS server")
+        url = urlsplit(info.get("url", ""))
+        if (
+            url.scheme != "https"
+            or url.hostname not in {"127.0.0.1", "localhost", "::1"}
+            or url.port is None
+            or url.path not in {"", "/"}
+            or url.query
+            or url.fragment
+            or url.username is not None
+            or info.get("protocol") != protocol
+            or info.get("workers") != workers
+        ):
+            raise RuntimeError(f"Unexpected TLS server configuration: {info!r}")
+        yield info
+    finally:
+        await stop_process(process)
 
-    args = runner.parse_args()
-    base_url: str = args.http_base_url.rstrip("/")
-    http_requests: int = args.http_requests
-    workers: int = args.http_workers
 
-    # Register all benchmarks.  pyperf assigns each a task ID in order;
-    # worker subprocesses run only the specific task they are assigned.
-    # inner_loops=http_requests normalises the reported time to per-request,
-    # so the reported mean is time/request and req/s = http_requests / mean.
+def source_info():
+    root = Path(__file__).resolve().parent.parent
 
-    for size in PAYLOAD_SIZES:
-        for case in SYNC_NON_SESSION_CASES:
-            runner.bench_func(
-                f"sync-non-session/{size}/{case.id}",
-                run_parallel_non_session_case,
-                case.runner,
-                f"{base_url}/{size}",
-                http_requests,
-                workers,
-                inner_loops=http_requests,
+    def git(*args):
+        return subprocess.check_output(
+            ["git", "-C", str(root), *args], text=True
+        ).strip()
+
+    return {
+        "repository": git("remote", "get-url", "origin"),
+        "commit": git("rev-parse", "HEAD"),
+        "dirty": bool(git("status", "--porcelain")),
+    }
+
+
+def environment_info():
+    cpu = platform.processor() or platform.machine()
+    system = platform.system()
+    try:
+        if system == "Linux":
+            cpuinfo = Path("/proc/cpuinfo")
+            if cpuinfo.exists():
+                for line in cpuinfo.read_text().splitlines():
+                    if line.startswith("model name"):
+                        cpu = line.split(":", 1)[1].strip() or cpu
+                        break
+        elif system == "Darwin":
+            cpu = (
+                subprocess.check_output(
+                    ["sysctl", "-n", "machdep.cpu.brand_string"], text=True, timeout=5
+                ).strip()
+                or cpu
             )
-
-    for size in PAYLOAD_SIZES:
-        for case in SYNC_SESSION_CASES:
-            runner.bench_func(
-                f"sync-session/{size}/{case.id}",
-                case.runner,
-                f"{base_url}/{size}",
-                http_requests,
-                workers,
-                inner_loops=http_requests,
+        elif system == "Windows":
+            cpu = (
+                subprocess.check_output(
+                    [
+                        "powershell.exe",
+                        "-NoProfile",
+                        "-NonInteractive",
+                        "-Command",
+                        "(Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1).Name",
+                    ],
+                    text=True,
+                    timeout=5,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                ).strip()
+                or cpu
             )
+    except (OSError, subprocess.SubprocessError):
+        # Restricted containers and hosts without these utilities keep the
+        # platform-provided processor/architecture fallback.
+        pass
+    info = {
+        "python": sys.version,
+        "implementation": platform.python_implementation(),
+        "platform": platform.platform(),
+        "machine": platform.machine(),
+        "cpu": cpu,
+        "cpu_count": os.cpu_count(),
+        "event_loop": "asyncio",
+    }
+    if hasattr(os, "sched_getaffinity"):
+        info["affinity"] = sorted(os.sched_getaffinity(0))
+    if hasattr(os, "getloadavg"):
+        info["load_average"] = list(os.getloadavg())
+    return info
 
-    for size in PAYLOAD_SIZES:
-        for case in ASYNC_NON_SESSION_CASES:
-            runner.bench_async_func(
-                f"async-non-session/{size}/{case.id}",
-                case.runner,
-                f"{base_url}/{size}",
-                http_requests,
-                inner_loops=http_requests,
+
+async def orchestrate(args):
+    executable = args.server.resolve(strict=True)
+    source = source_info()
+    if args.output is None:
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        args.output = (
+            Path(__file__).resolve().parent
+            / "data"
+            / f"{stamp}-{source['commit'][:12]}.json"
+        )
+    if args.output.exists():
+        raise ValueError(f"Refusing to overwrite benchmark snapshot: {args.output}")
+    configuration = {
+        "clients": args.clients,
+        "protocols": args.protocols,
+        "payload_bytes": args.sizes,
+        "concurrency": args.concurrency,
+        "body_kinds": args.body_kinds,
+        "rounds": args.rounds,
+        "warmup": args.warmup,
+        "samples": args.samples,
+        "requests": args.requests,
+        "stream_chunk_bytes": STREAM_CHUNK_BYTES,
+        "stream_chunk_bytes_by_payload": {
+            str(size): upload_chunk_bytes(size) for size in args.sizes
+        },
+        "server_workers": args.server_workers,
+        "seed": args.seed,
+        "case_timeout": args.case_timeout,
+        "tls_version": "1.3",
+        "tls_verification": False,
+        "response_consumption": "streamed chunks to EOF; adapter read sizes recorded per client",
+        "throughput_unit": "MB/s (decimal, response payload only)",
+        "timing": "upload and complete streamed response consumption; preparation excluded",
+        "concurrency_model": "evenly preallocated closed-loop workers",
+        "client_scope": {
+            "async": "one shared client per case",
+            "blocking": "one client per logical worker; persistent thread pool per case",
+        },
+    }
+    document = {
+        "schema_version": 1,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "source": source,
+        "environment": environment_info(),
+        "configuration": configuration,
+        "clients": {},
+        "server": {
+            "kind": "rust-tls-echo",
+            "executable": str(executable),
+            "sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),
+            "workers": args.server_workers,
+            "protocols": [],
+        },
+        "results": [],
+    }
+    rng = random.Random(args.seed)
+    workers, rows = {}, []
+    try:
+        for client in args.clients:
+            process = await asyncio.create_subprocess_exec(
+                sys.executable,
+                str(Path(__file__).resolve()),
+                "--worker",
+                client,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
             )
+            workers[client] = process
+            answer = await receive(process, 30, client)
+            if not answer.get("ok"):
+                raise RuntimeError(f"{client}: {answer.get('error')}")
+            document["clients"][client] = answer["metadata"]
+        for protocol in args.protocols:
+            async with benchmark_server(
+                executable, protocol, args.server_workers
+            ) as server:
+                document["server"]["protocols"].append(server)
+                cases = [
+                    (client, kind, size, concurrency)
+                    for client in args.clients
+                    for kind in args.body_kinds
+                    for size in args.sizes
+                    for concurrency in args.concurrency
+                    if supports(client, protocol, kind)
+                ]
+                for round_id in range(1, args.rounds + 1):
+                    order = list(cases)
+                    rng.shuffle(order)
+                    for client, kind, size, concurrency in order:
+                        request = {
+                            "url": server["url"].rstrip("/") + "/echo",
+                            "protocol": protocol,
+                            "body_kind": kind,
+                            "payload_bytes": size,
+                            "concurrency": concurrency,
+                            "requests": args.requests,
+                            "warmup": args.warmup,
+                            "samples": args.samples,
+                            "case_timeout": args.case_timeout,
+                        }
+                        process = workers[client]
+                        process.stdin.write((json.dumps(request) + "\n").encode())
+                        await process.stdin.drain()
+                        answer = await receive(process, args.case_timeout + 15, client)
+                        if not answer.get("ok"):
+                            raise RuntimeError(f"{client}: {answer.get('error')}")
+                        result = answer["result"]
+                        rows.append(
+                            {
+                                "client": client,
+                                "protocol": protocol,
+                                "body_kind": kind,
+                                "payload_bytes": size,
+                                "concurrency": concurrency,
+                                "round": round_id,
+                                **result,
+                            }
+                        )
+                        rps = (
+                            args.requests
+                            * len(result["samples"])
+                            / sum(s["seconds"] for s in result["samples"])
+                        )
+                        print(
+                            f"{protocol} {kind:6s} {client:14s} {size:8d} B c={concurrency:3d} "
+                            f"round={round_id}/{args.rounds} {rps:9.1f} req/s",
+                            flush=True,
+                        )
+    finally:
+        for process in workers.values():
+            await stop_process(process, b'{"stop":true}\n')
+    document["results"] = aggregate(rows, args.requests)
+    document["generated_at"] = datetime.now(timezone.utc).isoformat()
+    validate_document(document)
+    write_atomic(args.output, document, overwrite=False)
+    print(f"Saved complete benchmark: {args.output}")
 
-    for size in PAYLOAD_SIZES:
-        for case in ASYNC_SESSION_CASES:
-            runner.bench_async_func(
-                f"async-session/{size}/{case.id}",
-                case.runner,
-                f"{base_url}/{size}",
-                http_requests,
-                inner_loops=http_requests,
-            )
 
+def main(argv=None):
+    args = parse_args(argv)
+    try:
+        asyncio.run(worker(args.worker) if args.worker else orchestrate(args))
+    except (Exception, KeyboardInterrupt) as exc:
+        print(f"Benchmark failed; no complete result written: {exc}", file=sys.stderr)
+        return 1
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

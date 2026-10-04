@@ -1,4 +1,4 @@
-# :rocket: Basic Usage
+# Basic Usage
 
 !!! info "On this page"
     - GET/POST requests
