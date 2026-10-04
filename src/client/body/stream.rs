@@ -10,7 +10,7 @@ use std::{
 use bytes::Bytes;
 use futures_util::Stream;
 use pyo3::{
-    exceptions::PyStopIteration,
+    exceptions::{PyRuntimeError, PyStopIteration},
     intern,
     prelude::*,
     sync::PyOnceLock,
@@ -74,9 +74,9 @@ struct PyAsyncStream {
 }
 
 /// The channel end given to the forwarding coroutine; awaiting `send` applies upload
-/// backpressure.
+/// backpressure. Closing it without `finish` fails the body.
 #[pyclass(frozen)]
-struct Sender(mpsc::Sender<Option<Item>>);
+struct Sender(Mutex<Option<mpsc::Sender<Option<Item>>>>);
 
 // ===== impl PyBytesLike =====
 
@@ -243,8 +243,11 @@ async def forward(gen, sender):
             if close is not None:
                 await close()
     except asyncio.CancelledError as error:
-        # Task cancellation must not wait for space in a retained body.
-        if not asyncio.current_task().cancelling():
+        # Task cancellation must not wait for space in a retained body, and must not leave
+        # the body waiting while a traceback keeps this frame and its sender alive.
+        if asyncio.current_task().cancelling():
+            sender.close()
+        else:
             await sender.send(error, True)
         raise
     except BaseException as error:
@@ -259,7 +262,9 @@ async def forward(gen, sender):
             .map(Bound::unbind)
         })?;
         let (tx, rx) = mpsc::channel(1);
-        let coroutine = forward.bind(py).call1((generator, Sender(tx)))?;
+        let coroutine = forward
+            .bind(py)
+            .call1((generator, Sender(Mutex::new(Some(tx)))))?;
         // create_task captures the caller's contextvars on the running loop.
         let task = match event_loop.call_method1("create_task", (&coroutine,)) {
             Ok(task) => task,
@@ -287,10 +292,12 @@ impl Stream for PyAsyncStream {
                 this.task.take();
                 Poll::Ready(None)
             }
-            Poll::Ready(_) => {
-                this.rx.close();
-                Poll::Ready(None)
-            }
+            // Every sender is gone without `finish`: the forwarding task was cancelled or
+            // destroyed, so the body is incomplete.
+            Poll::Ready(None) if this.task.take().is_some() => Poll::Ready(Some(Err(
+                PyRuntimeError::new_err("async body generator stopped before it finished"),
+            ))),
+            Poll::Ready(None) => Poll::Ready(None),
             Poll::Pending => Poll::Pending,
         }
     }
@@ -323,7 +330,7 @@ impl Drop for PyAsyncStream {
 #[pymethods]
 impl Sender {
     /// Queue a chunk, or `item` as the error that ends the body. Resolves to `False`
-    /// once the body is dropped, which stops forwarding.
+    /// once the body is dropped or the sender closed, which stops forwarding.
     fn send<'py>(
         &self,
         py: Python<'py>,
@@ -335,19 +342,41 @@ impl Sender {
         } else {
             Ok(item.extract()?)
         };
-        let tx = self.0.clone();
+        let tx = self.sender();
         // Channel readiness is runtime-independent, so this waits on the Python loop.
         aio::local(py, "Sender.send", async move {
-            Ok(tx.send(Some(item)).await.is_ok())
+            Ok(match tx {
+                Some(tx) => tx.send(Some(item)).await.is_ok(),
+                None => false,
+            })
         })
     }
 
     /// Mark the normal end of the body.
     fn finish<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, Coroutine>> {
         // Python may retain the sender after completion, especially on PyPy.
-        let tx = self.0.clone();
+        let tx = self.sender();
         aio::local(py, "Sender.finish", async move {
-            Ok(tx.send(None).await.is_ok())
+            Ok(match tx {
+                Some(tx) => tx.send(None).await.is_ok(),
+                None => false,
+            })
         })
+    }
+
+    /// Drop the channel end at once, so the body fails instead of waiting for more.
+    fn close(&self) {
+        let tx = self.0.lock().unwrap_or_else(PoisonError::into_inner).take();
+        drop(tx);
+    }
+}
+
+impl Sender {
+    #[inline]
+    fn sender(&self) -> Option<mpsc::Sender<Option<Item>>> {
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 }
