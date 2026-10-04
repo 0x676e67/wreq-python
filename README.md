@@ -49,6 +49,7 @@ from wreq import Client, Emulation
 async def main():
     async with Client(emulation=Emulation.Chrome154) as c:
         async with c.get("https://pingly.us.kg/api/all") as r:
+            r.raise_for_status()
             print(await r.text())
 
 
