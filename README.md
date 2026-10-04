@@ -107,7 +107,7 @@ maturin build --release
 
 ## Benchmark
 
-Our [benchmark suite](https://github.com/0x676e67/wreq-python/tree/main/bench) compares Python HTTP clients over HTTPS HTTP/1.1 and HTTP/2, with Full and Stream uploads and streamed responses. Local measurements retain the tested versions and machine details; performance varies by workload and environment.
+Our [benchmark suite](https://github.com/0x676e67/wreq-python/tree/main/bench) compares Python HTTP clients over HTTPS HTTP/1.1 and HTTP/2. It tests complete and streamed uploads, reading every response to the end. The results include client versions and machine details so you can check the conditions behind each measurement. Performance varies by workload and environment.
 
 ## Services
 

@@ -125,37 +125,16 @@
   margin: 0 0 1rem;
 }
 
-.wreq-carousel-controls {
-  display: flex;
-  flex-shrink: 0;
-  gap: .35rem;
-}
-
-.wreq-carousel-controls[hidden] {
-  display: none;
-}
-
-.wreq-carousel-controls button {
-  border: 1px solid var(--wreq-border);
-  border-radius: .3rem;
-  color: var(--md-default-fg-color);
-  cursor: pointer;
-  font-size: .6rem;
-  min-height: 2rem;
-  min-width: 2rem;
-  padding: .25rem .5rem;
-}
-
 .wreq-sponsor-window {
   display: flex;
   gap: .65rem;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   padding: .2rem 0 .7rem;
-  scroll-snap-type: x mandatory;
-  scrollbar-color: var(--wreq-border) transparent;
-  scrollbar-width: thin;
+  scrollbar-width: none;
 }
+
+.wreq-sponsor-window::-webkit-scrollbar { display: none; }
 
 .wreq-home .wreq-sponsor {
   align-items: center;
@@ -169,7 +148,6 @@
   justify-content: center;
   min-height: 4.5rem;
   padding: .8rem;
-  scroll-snap-align: start;
   text-decoration: none;
 }
 

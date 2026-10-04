@@ -4,6 +4,7 @@ import copy
 import importlib.metadata
 import json
 from pathlib import Path
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -13,6 +14,7 @@ from bench import async_clients, blocking_clients
 from bench.test_benchmark import make_document
 from bench.workloads import BODY_CASES
 from docs import build
+from docs.benchmark_view import render_explorer
 
 
 def docs_root(tmp_path: Path) -> Path:
@@ -32,10 +34,10 @@ def test_report_aggregation_and_metadata_escaping():
     text = report.render_markdown(document, "assets/benchmark/latest.json")
     for protocol in ("HTTP/1.1", "HTTP/2"):
         for kind in ("Full", "Stream"):
-            assert f"#### {protocol} — {kind} upload" in text
+            assert f"#### {protocol}: {kind} upload" in text
     assert "10 KiB" in text and "1 MiB" in text and "4 MiB" in text
     assert text.count("| Upload / echo payload") == 8
-    assert text.count("Unit: **requests/s (RPS, requests per second)**") == 8
+    assert text.count("Unit: requests/s (RPS, requests per second)") == 8
     assert "### Asynchronous clients" in text and "### Blocking clients" in text
     assert "N/A" in text
     assert f"{document['results'][0]['rps']:,.1f}" in text
@@ -86,10 +88,10 @@ def test_report_aggregation_and_metadata_escaping():
             f"| {report.payload_label(size)} | {report.payload_label(chunk)} |" in text
         )
     assert "| 4 MiB | 256 KiB |" in text
-    assert text.count("Unit: **requests/s (RPS, requests per second)**") == 8
+    assert text.count("Unit: requests/s (RPS, requests per second)") == 8
     full = make_document({**dynamic["configuration"], "body_kinds": ["full"]})
     text = report.render_markdown(full)
-    assert "both Full and Stream" not in text and "— Stream upload" not in text
+    assert "both Full and Stream" not in text and ": Stream upload" not in text
 
 
 def test_revision_comparison_and_mismatch_rejection():
@@ -144,6 +146,7 @@ def test_revision_comparison_and_mismatch_rejection():
 
 def test_markdown_cli_exports_preserve_existing_files(tmp_path, capsys):
     document = make_document()
+    document["environment"]["cpu"] = "Café CPU"
     source = tmp_path / "source.json"
     source.write_text(json.dumps(document), encoding="utf-8")
     for main, args, name, expected, character in (
@@ -152,7 +155,7 @@ def test_markdown_cli_exports_preserve_existing_files(tmp_path, capsys):
             ["--input", str(source), "--markdown"],
             "report.md",
             report.render_markdown(document),
-            "—",
+            "é",
         ),
         (
             compare.main,
@@ -248,6 +251,9 @@ def test_prepare_tracked_input_and_local_snapshot_override(tmp_path, monkeypatch
     page = root / "docs/source/benchmark.md"
     assert json.loads(snapshot.read_text(encoding="utf-8")) == document
     assert "{{BENCHMARK_RESULTS}}" not in page.read_text(encoding="utf-8")
+    assert "{{BENCHMARK_CHARTS}}" not in page.read_text(encoding="utf-8")
+    charts = root / "docs/source/assets/benchmark/charts"
+    assert len(list(charts.glob("*.svg"))) == 16
     assert "assets/benchmark/latest.json" in page.read_text(encoding="utf-8")
     assert build.prepare(data=snapshot, root=root) == document
     override = root / "override.json"
@@ -268,7 +274,8 @@ def test_prepare_rejects_missing_invalid_and_oversized_local_data(
     local.parent.mkdir(parents=True)
     page = root / "docs/source/benchmark.md"
     snapshot = root / "docs/source/assets/benchmark/latest.json"
-    for failure in ("missing", "json", "schema", "oversized", "override"):
+    charts = root / "docs/source/assets/benchmark/charts"
+    for failure in ("missing", "json", "schema", "oversized", "override", "render"):
         local.write_text(json.dumps(document), encoding="utf-8")
         assert build.prepare(root=root) == document
         with monkeypatch.context() as patch:
@@ -283,9 +290,40 @@ def test_prepare_rejects_missing_invalid_and_oversized_local_data(
             elif failure == "oversized":
                 patch.setattr(build, "MAX_DATA_BYTES", 128)
                 local.write_bytes(b" " * 129)
+            elif failure == "render":
+
+                def broken_renderer(*args):
+                    raise ValueError("Rendering failed after chart generation")
+
+                patch.setattr(build, "render_explorer", broken_renderer)
             with pytest.raises((FileNotFoundError, ValueError)):
                 build.prepare(
                     data=root / "absent.json" if failure == "override" else None,
                     root=root,
                 )
         assert not page.exists() and not snapshot.exists()
+        assert not list(charts.glob("*.svg"))
+
+
+def test_chart_explorer_controls_fallback_and_inert_metadata(tmp_path):
+    document = make_document(
+        {"clients": ["requests"], "protocols": ["h1"], "payload_bytes": [10240]}
+    )
+    document["environment"]["cpu"] = "</script><script>alert(1)</script>"
+    catalog = build.write_charts(document, tmp_path)
+    catalog["cases"][0]["rows"][0]["label"] = '<img src=x onerror="alert(1)">'
+    catalog["description"] = document["environment"]["cpu"]
+    content = render_explorer(document, catalog)
+    assert 'value="blocking" selected' in content and 'value="async"' not in content
+    assert 'value="h1" selected' in content and 'value="h2"' not in content
+    assert content.count("data-chart-payload=") == 1
+    assert content.count("data-chart-controls hidden") == 2
+    assert "<noscript>" in content and "Values for this chart" in content
+    assert "zero-based linear scale" in content and "requests/s (RPS)" in content
+    assert '<img src=x onerror="alert(1)">' not in content
+    assert "&lt;img src=x" in content
+    data = re.search(
+        r'<script type="application/json" data-chart-catalog>(.*?)</script>', content
+    ).group(1)
+    assert "</script>" not in data
+    assert json.loads(data) == catalog

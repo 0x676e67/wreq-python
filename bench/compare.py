@@ -100,7 +100,7 @@ def render_comparison(before: dict, after: dict) -> str:
         "",
         f"Each snapshot contains {len(cells[0]):,} supported cells, with "
         f"{requests:,} timed requests per cell across {config['rounds']} rounds. "
-        "These counts describe the recorded matrix, not a presumed full-suite size.",
+        "Counts come from the cases recorded in these snapshots.",
         "",
         "### Matching measurement environment",
         "",
@@ -134,7 +134,7 @@ def render_comparison(before: dict, after: dict) -> str:
                 if not keys:
                     continue
                 lines += [
-                    f"#### {name} — {kind.title()} upload",
+                    f"#### {name}: {kind.title()} upload",
                     "",
                     "| Payload | Concurrency | Client | Before RPS | After RPS | Change % | Before CV % | After CV % |",
                     "| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |",
@@ -158,23 +158,25 @@ def render_comparison(before: dict, after: dict) -> str:
                     )
                 lines.append("")
     lines += [
-        "### Interpretation limits",
+        "### Reading the comparison",
         "",
-        "CV describes variation in per-round RPS (population standard deviation "
-        "divided by the mean); it is not a confidence interval. Sequential runs "
-        "are not a paired experiment, and competing programs can affect results. "
-        "Peer-client changes can help identify environmental drift, but do not "
-        "establish its cause.",
+        "CV is the variation in per-round RPS: population standard deviation "
+        "divided by the mean. It is not a confidence interval. Sequential runs "
+        "are not a paired experiment, and other programs can affect performance. "
+        "If peer clients also change, the environment may have changed between "
+        "runs; their results alone can't tell you why.",
         "",
-        "The timer includes uploads, TLS and HTTP processing, and streamed "
-        "response consumption. Changes cannot be attributed to TLS IO alone "
-        "and do not establish universal client rankings or per-request latency.",
+        "The timer covers uploads, TLS and HTTP processing, and streamed response "
+        "consumption. A throughput change doesn't tell you how much came from "
+        "TLS I/O, how long an individual request took, or which client will be "
+        "fastest in a different workload.",
         "",
-        "Recorded configuration, environment, server hashes, and client metadata "
-        "match, except that wreq versions and native hashes may change and "
-        "artifact paths may relocate. Transitive dependencies, build toolchains "
-        "and flags, allocators, timed harness equivalence, and dirty-source "
-        "changes still require manual review of accompanying build and source records.",
+        "The comparison checks that recorded configurations, environments, "
+        "server hashes and client metadata match. It allows wreq versions and "
+        "native hashes to change, and artifact paths to move. Check the build "
+        "and source records yourself for transitive dependencies, toolchains "
+        "and flags, allocators, changes to the timed harness and uncommitted "
+        "source changes.",
         "",
     ]
     return "\n".join(lines)

@@ -19,8 +19,8 @@ else:
 
 REPOSITORY = "https://github.com/0x676e67/wreq-python"
 LABELS = {
-    "wreq": "wreq (default)",
-    "wreq_st": "wreq (1 thread)",
+    "wreq": "wreq (MT)",
+    "wreq_st": "wreq (ST)",
     "pyreqwest_st": "pyreqwest (ST)",
     "pyreqwest_mt": "pyreqwest (MT)",
     "ry": "ry (default)",
@@ -139,7 +139,7 @@ def render_markdown(document: dict, data_link: str | None = None) -> str:
         lines += [
             "### Body cases",
             "",
-            "Each payload is tested with the recorded upload modes at every recorded concurrency.",
+            "Each payload uses the upload modes and concurrency levels listed in this run.",
             "",
             "| Upload / echo payload | Stream upload chunk |",
             "| --- | --- |",
@@ -193,10 +193,10 @@ def render_markdown(document: dict, data_link: str | None = None) -> str:
         "",
         "### Throughput comparison",
         "",
-        "All cells are requests per second (RPS). Each value is total measured requests "
-        "divided by total measured time across all rounds, not the fastest round. "
-        "The JSON also includes individual timings, per-round results, response-payload "
-        "MB/s, and native artifact SHA-256 hashes.",
+        "Each value is total measured requests divided by total measured time "
+        "across all rounds, in requests per second (RPS). All timed samples count. "
+        "The raw JSON keeps individual timings, per-round results, response-payload "
+        "MB/s and native artifact SHA-256 hashes.",
         "",
     ]
     results = {
@@ -221,7 +221,8 @@ def render_markdown(document: dict, data_link: str | None = None) -> str:
         lines += [
             f"### {heading}",
             "",
-            "N/A means that this client API does not support that protocol or upload mode; it is not a failed or zero-throughput result.",
+            "N/A means the client API doesn't support that protocol or upload mode. "
+            "It doesn't indicate a failed request or zero throughput.",
             "",
         ]
         for protocol, name in (("h1", "HTTP/1.1"), ("h2", "HTTP/2")):
@@ -234,9 +235,9 @@ def render_markdown(document: dict, data_link: str | None = None) -> str:
                     escape(LABELS.get(client, client)) for client in group
                 ]
                 lines += [
-                    f"#### {name} — {kind.title()} upload",
+                    f"#### {name}: {kind.title()} upload",
                     "",
-                    "Unit: **requests/s (RPS, requests per second)**. Higher is better.",
+                    "Unit: requests/s (RPS, requests per second). Higher is better.",
                     "",
                     "| " + " | ".join(headers) + " |",
                     "| --- | ---: |" + " ---: |" * len(group),

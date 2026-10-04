@@ -5,49 +5,41 @@
     document.querySelectorAll("[data-sponsors]").forEach((section) => {
       if (initialized.has(section)) return;
       initialized.add(section);
-
       const viewport = section.querySelector("[data-sponsor-window]");
-      const controls = section.querySelector(".wreq-carousel-controls");
-      const pause = section.querySelector("[data-sponsor-pause]");
+      const originals = [...viewport.children];
       const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-      let paused = false;
-      let hovering = false;
+      if (!originals.length || reducedMotion.matches) return;
 
-      controls.hidden = false;
-
-      function move(direction) {
-        const card = viewport.querySelector(".wreq-sponsor");
-        const gap = parseFloat(window.getComputedStyle(viewport).columnGap) || 0;
-        const step = card.getBoundingClientRect().width + gap;
-        const max = viewport.scrollWidth - viewport.clientWidth;
-        const current = viewport.scrollLeft;
-        const left = direction > 0
-          ? (current >= max - 1 ? 0 : Math.min(max, current + step))
-          : (current <= 1 ? max : Math.max(0, current - step));
-        viewport.scrollTo({
-          left,
-          behavior: reducedMotion.matches ? "instant" : "smooth",
+      // Repeat the row for seamless wrapping; only the original links are tab stops.
+      for (let repeat = 0; repeat < 2; repeat++) {
+        originals.forEach((card) => {
+          const copy = card.cloneNode(true);
+          copy.setAttribute("aria-hidden", "true");
+          copy.tabIndex = -1;
+          viewport.append(copy);
         });
       }
-
-      pause.addEventListener("click", () => {
-        paused = !paused;
-        pause.setAttribute("aria-pressed", String(paused));
-        pause.textContent = paused ? "Resume" : "Pause";
-      });
-      section.querySelector("[data-sponsor-previous]").addEventListener("click", () => move(-1));
-      section.querySelector("[data-sponsor-next]").addEventListener("click", () => move(1));
-      section.addEventListener("mouseenter", () => { hovering = true; });
-      section.addEventListener("mouseleave", () => { hovering = false; });
-
-      const timer = window.setInterval(() => {
-        if (!section.isConnected) {
-          window.clearInterval(timer);
-          return;
+      const nextRow = viewport.children[originals.length];
+      const speed = 40; // Pixels per second.
+      let previous;
+      let position = viewport.scrollLeft;
+      function animate(time) {
+        if (!section.isConnected) return;
+        const elapsed = previous === undefined ? 0 : Math.min(time - previous, 64);
+        previous = time;
+        if (!reducedMotion.matches && !document.hidden
+          && !viewport.matches(":hover") && !section.contains(document.activeElement)) {
+          const width = nextRow.offsetLeft - originals[0].offsetLeft;
+          if (width > 0) {
+            position = (position + elapsed * speed / 1000) % width;
+            viewport.scrollLeft = position;
+          }
+        } else {
+          position = viewport.scrollLeft;
         }
-        if (paused || hovering || reducedMotion.matches || document.hidden || section.contains(document.activeElement)) return;
-        if (viewport.scrollWidth > viewport.clientWidth + 1) move(1);
-      }, 5000);
+        window.requestAnimationFrame(animate);
+      }
+      window.requestAnimationFrame(animate);
     });
   }
 

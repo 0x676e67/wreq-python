@@ -1,7 +1,7 @@
 site_name: wreq-python
 site_description: Python HTTP, powered by Rust. Browser profiles, async and blocking clients, and streaming transfers.
 site_author: "0x676e67"
-site_url: https://python.wreq.org
+site_url: !ENV [READTHEDOCS_CANONICAL_URL, "https://python.wreq.org"]
 
 repo_name: "0x676e67/wreq-python"
 repo_url: https://github.com/0x676e67/wreq-python
@@ -10,9 +10,11 @@ docs_dir: source
 
 extra_css:
   - stylesheets/home.css
+  - stylesheets/benchmarks.css
 
 extra_javascript:
   - javascripts/sponsors.js
+  - javascripts/benchmarks.js
 
 extra:
   version:
@@ -23,24 +25,18 @@ theme:
   font:
     code: Roboto Mono
   palette:
-    - media: "(prefers-color-scheme)"
+    - scheme: slate
+      primary: black
+      accent: indigo
       toggle:
-        icon: material/link
+        icon: material/toggle-switch-off
         name: Switch to light mode
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
+    - scheme: default
       primary: indigo
       accent: indigo
       toggle:
         icon: material/toggle-switch
         name: Switch to dark mode
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-      primary: black
-      accent: indigo
-      toggle:
-        icon: material/toggle-switch-off
-        name: Switch to system preference
   features:
     - search.highlight
     - search.share

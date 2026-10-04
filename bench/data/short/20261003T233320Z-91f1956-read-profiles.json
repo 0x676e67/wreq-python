@@ -1,0 +1,5529 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-03T23:35:47.381735+00:00",
+  "source": {
+    "repository": "https://github.com/0x676e67/wreq-python.git",
+    "commit": "91f1956f13ecf18325c85e2471349620c36ca9bd",
+    "dirty": true
+  },
+  "environment": {
+    "python": "3.14.6 (main, Jul 23 2026, 14:45:24) [Clang 22.1.3 ]",
+    "implementation": "CPython",
+    "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "cpu": "AMD Ryzen 9 9950X 16-Core Processor",
+    "cpu_count": 32,
+    "event_loop": "asyncio",
+    "affinity": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+    ],
+    "load_average": [
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "configuration": {
+    "clients": [
+      "wreq",
+      "wreq_st",
+      "pyreqwest_st",
+      "pyreqwest_mt",
+      "ry",
+      "pyreqwest_st_official",
+      "pyreqwest_mt_official",
+      "ry_official"
+    ],
+    "protocols": [
+      "h1",
+      "h2"
+    ],
+    "payload_bytes": [
+      10240,
+      4194304
+    ],
+    "concurrency": [
+      10
+    ],
+    "body_kinds": [
+      "full",
+      "stream"
+    ],
+    "rounds": 3,
+    "warmup": 1,
+    "samples": 1,
+    "requests": 100,
+    "stream_chunk_bytes": 65536,
+    "stream_chunk_bytes_by_payload": {
+      "10240": 10240,
+      "4194304": 262144
+    },
+    "server_workers": 4,
+    "seed": 160130,
+    "case_timeout": 30,
+    "tls_version": "1.3",
+    "tls_verification": false,
+    "response_consumption": "streamed chunks to EOF; adapter read sizes recorded per client",
+    "throughput_unit": "MB/s (decimal, response payload only)",
+    "timing": "upload and complete streamed response consumption; preparation excluded",
+    "concurrency_model": "evenly preallocated closed-loop workers",
+    "client_scope": {
+      "async": "one shared client per case",
+      "blocking": "one client per logical worker; persistent thread pool per case"
+    }
+  },
+  "clients": {
+    "wreq": {
+      "package": "wreq",
+      "version": "0.12.3",
+      "runtime": {
+        "kind": "default"
+      },
+      "native": [
+        {
+          "module": "wreq.wreq",
+          "path": "/home/gngpp/.cache/wreq-python/bench-16/source-91f1956/python/wreq/wreq.abi3.so",
+          "sha256": "ef00bb006e6c6db54f7dd1154627686ecac14c3bbf87cdf25e100b2500b99368"
+        }
+      ],
+      "response_read": "stream(): unchanged wreq native chunks",
+      "pool": {
+        "kind": "library default"
+      },
+      "api": "async",
+      "protocols": [
+        "h1",
+        "h2"
+      ],
+      "body_kinds": [
+        "full",
+        "stream"
+      ],
+      "canonical_client": "wreq",
+      "read_profile": "unchanged-reference"
+    },
+    "wreq_st": {
+      "package": "wreq",
+      "version": "0.12.3",
+      "runtime": {
+        "kind": "custom",
+        "workers": 1,
+        "work_steal": false
+      },
+      "native": [
+        {
+          "module": "wreq.wreq",
+          "path": "/home/gngpp/.cache/wreq-python/bench-16/source-91f1956/python/wreq/wreq.abi3.so",
+          "sha256": "ef00bb006e6c6db54f7dd1154627686ecac14c3bbf87cdf25e100b2500b99368"
+        }
+      ],
+      "response_read": "stream(): unchanged wreq native chunks",
+      "pool": {
+        "kind": "library default"
+      },
+      "api": "async",
+      "protocols": [
+        "h1",
+        "h2"
+      ],
+      "body_kinds": [
+        "full",
+        "stream"
+      ],
+      "canonical_client": "wreq_st",
+      "read_profile": "unchanged-reference"
+    },
+    "pyreqwest_st": {
+      "package": "pyreqwest",
+      "version": "0.14.0",
+      "runtime": {
+        "kind": "single_thread"
+      },
+      "native": [
+        {
+          "module": "pyreqwest._pyreqwest",
+          "path": "/home/gngpp/.cache/wreq-python/bench-16/venv-91f1956/lib/python3.14/site-packages/pyreqwest/_pyreqwest.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "1de448b2fe278113dde2cfa65072d6e485c8492adccff39a238d1a268ad62639"
+        }
+      ],
+      "response_read": "buffer_limit=0; read_chunk() to EOF",
+      "pool": {
+        "kind": "library default"
+      },
+      "api": "async",
+      "protocols": [
+        "h1",
+        "h2"
+      ],
+      "body_kinds": [
+        "full",
+        "stream"
+      ],
+      "canonical_client": "pyreqwest_st",
+      "read_profile": "natural",
+      "read_settings": {
+        "buffer_limit": 0,
+        "method": "read_chunk",
+        "read_bytes": null
+      }
+    },
+    "pyreqwest_mt": {
+      "package": "pyreqwest",
+      "version": "0.14.0",
+      "runtime": {
+        "kind": "multi_thread"
+      },
+      "native": [
+        {
+          "module": "pyreqwest._pyreqwest",
+          "path": "/home/gngpp/.cache/wreq-python/bench-16/venv-91f1956/lib/python3.14/site-packages/pyreqwest/_pyreqwest.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "1de448b2fe278113dde2cfa65072d6e485c8492adccff39a238d1a268ad62639"
+        }
+      ],
+      "response_read": "buffer_limit=0; read_chunk() to EOF",
+      "pool": {
+        "kind": "library default"
+      },
+      "api": "async",
+      "protocols": [
+        "h1",
+        "h2"
+      ],
+      "body_kinds": [
+        "full",
+        "stream"
+      ],
+      "canonical_client": "pyreqwest_mt",
+      "read_profile": "natural",
+      "read_settings": {
+        "buffer_limit": 0,
+        "method": "read_chunk",
+        "read_bytes": null
+      }
+    },
+    "ry": {
+      "package": "ry",
+      "version": "0.0.101",
+      "runtime": {
+        "kind": "default"
+      },
+      "native": [
+        {
+          "module": "ry.ryo3",
+          "path": "/home/gngpp/.cache/wreq-python/bench-16/venv-91f1956/lib/python3.14/site-packages/ry/ryo3.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "c6129e81f61cc96355dfabade960b33eaabcab62777614189c845f274a2fe826"
+        }
+      ],
+      "response_read": "stream(): native chunks",
+      "pool": {
+        "kind": "library default"
+      },
+      "api": "async",
+      "protocols": [
+        "h1",
+        "h2"
+      ],
+      "body_kinds": [
+        "full",
+        "stream"
+      ],
+      "canonical_client": "ry",
+      "read_profile": "natural",
+      "read_settings": {
+        "minimum_read_size": null
+      }
+    },
+    "pyreqwest_st_official": {
+      "package": "pyreqwest",
+      "version": "0.14.0",
+      "runtime": {
+        "kind": "single_thread"
+      },
+      "native": [
+        {
+          "module": "pyreqwest._pyreqwest",
+          "path": "/home/gngpp/.cache/wreq-python/bench-16/venv-91f1956/lib/python3.14/site-packages/pyreqwest/_pyreqwest.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "1de448b2fe278113dde2cfa65072d6e485c8492adccff39a238d1a268ad62639"
+        }
+      ],
+      "response_read": "buffer_limit=131072; read(65536) to EOF",
+      "pool": {
+        "kind": "library default"
+      },
+      "api": "async",
+      "protocols": [
+        "h1",
+        "h2"
+      ],
+      "body_kinds": [
+        "full",
+        "stream"
+      ],
+      "canonical_client": "pyreqwest_st",
+      "read_profile": "official-stream",
+      "read_settings": {
+        "buffer_limit": 131072,
+        "method": "read",
+        "read_bytes": 65536
+      }
+    },
+    "pyreqwest_mt_official": {
+      "package": "pyreqwest",
+      "version": "0.14.0",
+      "runtime": {
+        "kind": "multi_thread"
+      },
+      "native": [
+        {
+          "module": "pyreqwest._pyreqwest",
+          "path": "/home/gngpp/.cache/wreq-python/bench-16/venv-91f1956/lib/python3.14/site-packages/pyreqwest/_pyreqwest.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "1de448b2fe278113dde2cfa65072d6e485c8492adccff39a238d1a268ad62639"
+        }
+      ],
+      "response_read": "buffer_limit=131072; read(65536) to EOF",
+      "pool": {
+        "kind": "library default"
+      },
+      "api": "async",
+      "protocols": [
+        "h1",
+        "h2"
+      ],
+      "body_kinds": [
+        "full",
+        "stream"
+      ],
+      "canonical_client": "pyreqwest_mt",
+      "read_profile": "official-stream",
+      "read_settings": {
+        "buffer_limit": 131072,
+        "method": "read",
+        "read_bytes": 65536
+      }
+    },
+    "ry_official": {
+      "package": "ry",
+      "version": "0.0.101",
+      "runtime": {
+        "kind": "default"
+      },
+      "native": [
+        {
+          "module": "ry.ryo3",
+          "path": "/home/gngpp/.cache/wreq-python/bench-16/venv-91f1956/lib/python3.14/site-packages/ry/ryo3.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "c6129e81f61cc96355dfabade960b33eaabcab62777614189c845f274a2fe826"
+        }
+      ],
+      "response_read": "stream(65536): minimum returned chunk target; may exceed it",
+      "pool": {
+        "kind": "library default"
+      },
+      "api": "async",
+      "protocols": [
+        "h1",
+        "h2"
+      ],
+      "body_kinds": [
+        "full",
+        "stream"
+      ],
+      "canonical_client": "ry",
+      "read_profile": "official-stream",
+      "read_settings": {
+        "minimum_read_size": 65536
+      }
+    }
+  },
+  "server": {
+    "kind": "rust-tls-echo",
+    "executable": "/home/gngpp/.cache/wreq-python/bench-16/wreq-benchmark-server",
+    "sha256": "52201b771a5ae474fc3d52249b922b04a1d077508ac71621b256d7c4d597f550",
+    "workers": 4,
+    "protocols": [
+      {
+        "protocol": "h1",
+        "url": "https://127.0.0.1:45599",
+        "workers": 4
+      },
+      {
+        "protocol": "h2",
+        "url": "https://127.0.0.1:36963",
+        "workers": 4
+      }
+    ]
+  },
+  "results": [
+    {
+      "client": "pyreqwest_mt",
+      "protocol": "h1",
+      "body_kind": "full",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.014316866999999789,
+          "cpu_seconds": 0.027787848000000004
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.014535876000000059,
+          "cpu_seconds": 0.028305869000000428
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.014487745000003827,
+          "cpu_seconds": 0.028343451999999658
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.017431446999999878,
+          "cpu_seconds": 0.058103911999999994
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.014746831000000071,
+          "cpu_seconds": 0.031116824000000598
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.015948086999998168,
+          "cpu_seconds": 0.034537987000000214
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.014316866999999789,
+          "rps": 6984.76838542968,
+          "mbps": 71.52402826679993
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.014535876000000059,
+          "rps": 6879.530342718911,
+          "mbps": 70.44639070944164
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.014487745000003827,
+          "rps": 6902.385429890821,
+          "mbps": 70.680426802082
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.043340488000003674,
+      "rps": 6921.934058517629,
+      "mbps": 70.88060475922052,
+      "round_rps_cv_pct": 0.6529155405513933
+    },
+    {
+      "client": "pyreqwest_mt",
+      "protocol": "h1",
+      "body_kind": "full",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.10779304000000067,
+          "cpu_seconds": 0.455039811
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.11155870700000037,
+          "cpu_seconds": 0.4365261789999999
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.1178005120000023,
+          "cpu_seconds": 0.4273076610000004
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.11659498699999915,
+          "cpu_seconds": 0.49191147500000004
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.11429815600000026,
+          "cpu_seconds": 0.4567139080000002
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.11714360600000617,
+          "cpu_seconds": 0.4556435099999998
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.10779304000000067,
+          "rps": 927.7036810539844,
+          "mbps": 3891.071260259451
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.11155870700000037,
+          "rps": 896.3890196396743,
+          "mbps": 3759.7280506307643
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.1178005120000023,
+          "rps": 848.8927450501917,
+          "mbps": 3560.5142361349995
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 0.33715225900000334,
+      "rps": 889.8056945838142,
+      "mbps": 3732.1155840156703,
+      "round_rps_cv_pct": 3.6363502879279372
+    },
+    {
+      "client": "pyreqwest_mt",
+      "protocol": "h1",
+      "body_kind": "stream",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.03523042600000004,
+          "cpu_seconds": 0.06626630299999992
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.034659921999999455,
+          "cpu_seconds": 0.06420450099999986
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.03497812199999828,
+          "cpu_seconds": 0.06465875100000051
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.03693378100000011,
+          "cpu_seconds": 0.07253131800000001
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.03696835399999898,
+          "cpu_seconds": 0.0710107019999997
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.03533111400000166,
+          "cpu_seconds": 0.06943707000000021
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.03523042600000004,
+          "rps": 2838.455600849104,
+          "mbps": 29.065785352694824
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.034659921999999455,
+          "rps": 2885.1767179395724,
+          "mbps": 29.54420959170122
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.03497812199999828,
+          "rps": 2858.9299334025113,
+          "mbps": 29.275442518041714
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.10486846999999777,
+      "rps": 2860.726393738808,
+      "mbps": 29.293838271885395,
+      "round_rps_cv_pct": 0.6684116254829946
+    },
+    {
+      "client": "pyreqwest_mt",
+      "protocol": "h1",
+      "body_kind": "stream",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.27622119500000153,
+          "cpu_seconds": 0.7579694490000004
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.2749641280000006,
+          "cpu_seconds": 0.7559195320000001
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.2840732129999992,
+          "cpu_seconds": 0.7781809449999999
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.2843157050000009,
+          "cpu_seconds": 0.8044051809999999
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.27934974200000084,
+          "cpu_seconds": 0.7865298459999996
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.2893052340000004,
+          "cpu_seconds": 0.8161826979999995
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.27622119500000153,
+          "rps": 362.028699499325,
+          "mbps": 1518.458422424817
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.2749641280000006,
+          "rps": 363.6838038742268,
+          "mbps": 1525.400433324885
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.2840732129999992,
+          "rps": 352.0219275303521,
+          "mbps": 1476.486978728266
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 0.8352585360000013,
+      "rps": 359.1702294198398,
+      "mbps": 1506.4691299365518,
+      "round_rps_cv_pct": 1.4340783496025373
+    },
+    {
+      "client": "pyreqwest_mt",
+      "protocol": "h2",
+      "body_kind": "full",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.015855826000006346,
+          "cpu_seconds": 0.029993658000000423
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.015397785999994085,
+          "cpu_seconds": 0.027603780999999827
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.015230040999995254,
+          "cpu_seconds": 0.02953033400000038
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.016026019999998198,
+          "cpu_seconds": 0.03230458500000033
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.016417613999990976,
+          "cpu_seconds": 0.0304816379999977
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.015719505000021172,
+          "cpu_seconds": 0.030394696999998416
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.015855826000006346,
+          "rps": 6306.830057289982,
+          "mbps": 64.58193978664941
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.015397785999994085,
+          "rps": 6494.440174713327,
+          "mbps": 66.50306738906447
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.015230040999995254,
+          "rps": 6565.970505268579,
+          "mbps": 67.23553797395024
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.046483652999995684,
+      "rps": 6453.881754947871,
+      "mbps": 66.0877491706662,
+      "round_rps_cv_pct": 1.692667528452464
+    },
+    {
+      "client": "pyreqwest_mt",
+      "protocol": "h2",
+      "body_kind": "full",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 1.2273576300000002,
+          "cpu_seconds": 2.851927269000001
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 1.2239014240000046,
+          "cpu_seconds": 2.844308008999999
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 1.2225172709999867,
+          "cpu_seconds": 2.8405042710000004
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 1.2164058160000053,
+          "cpu_seconds": 2.8228625810000008
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 1.2152770729999958,
+          "cpu_seconds": 2.823188287999997
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 1.226391074999981,
+          "cpu_seconds": 2.8518533169999998
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 1.2273576300000002,
+          "rps": 81.47584498252557,
+          "mbps": 341.73446251358695
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 1.2239014240000046,
+          "rps": 81.7059266694665,
+          "mbps": 342.69949505345005
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 1.2225172709999867,
+          "rps": 81.79843538586792,
+          "mbps": 343.08750473268736
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 3.6737763249999915,
+      "rps": 81.65984356709596,
+      "mbps": 342.50620851284486,
+      "round_rps_cv_pct": 0.16609124073245557
+    },
+    {
+      "client": "pyreqwest_mt",
+      "protocol": "h2",
+      "body_kind": "stream",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.03406647299999577,
+          "cpu_seconds": 0.06638504300000037
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.03402118799999698,
+          "cpu_seconds": 0.06504101499999848
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.03490974199999641,
+          "cpu_seconds": 0.06614457600000634
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.03485895200000044,
+          "cpu_seconds": 0.06795131900000051
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.03458909900000151,
+          "cpu_seconds": 0.06733214900000206
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.034389659000012784,
+          "cpu_seconds": 0.06735472500000128
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.03406647299999577,
+          "rps": 2935.4374314010265,
+          "mbps": 30.058879297546515
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.03402118799999698,
+          "rps": 2939.344740107514,
+          "mbps": 30.098890138700945
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.03490974199999641,
+          "rps": 2864.529906866979,
+          "mbps": 29.332786246317866
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.10299740299998916,
+      "rps": 2912.6947987225617,
+      "mbps": 29.825994738919032,
+      "round_rps_cv_pct": 1.1803255218818045
+    },
+    {
+      "client": "pyreqwest_mt",
+      "protocol": "h2",
+      "body_kind": "stream",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 1.3856489939999932,
+          "cpu_seconds": 3.176326377999999
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 1.3587663450000065,
+          "cpu_seconds": 3.1387273369999953
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 1.3976514440000045,
+          "cpu_seconds": 3.2302344030000043
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 1.3736148790000016,
+          "cpu_seconds": 3.1422860659999987
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 1.3663867589999938,
+          "cpu_seconds": 3.1612355050000005
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 1.3730724320000007,
+          "cpu_seconds": 3.179887205
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 1.3856489939999932,
+          "rps": 72.16834886252622,
+          "mbps": 302.6959943074892
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 1.3587663450000065,
+          "rps": 73.59617079712076,
+          "mbps": 308.6847135590468
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 1.3976514440000045,
+          "rps": 71.54859706208673,
+          "mbps": 300.0965668518986
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 4.142066783000004,
+      "rps": 72.42761059074883,
+      "mbps": 303.78341681122015,
+      "round_rps_cv_pct": 1.1835583779204364
+    },
+    {
+      "client": "pyreqwest_mt_official",
+      "protocol": "h1",
+      "body_kind": "full",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.014899847000000577,
+          "cpu_seconds": 0.028188692999999987
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.014255963000000094,
+          "cpu_seconds": 0.027294432999999785
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.013927779999995948,
+          "cpu_seconds": 0.027103669999999802
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.01785776499999958,
+          "cpu_seconds": 0.05805052199999999
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.014789393000000928,
+          "cpu_seconds": 0.03234678599999974
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.01483445699999919,
+          "cpu_seconds": 0.030625764999999916
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.014899847000000577,
+          "rps": 6711.478312495164,
+          "mbps": 68.72553791995047
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.014255963000000094,
+          "rps": 7014.608553627653,
+          "mbps": 71.82959158914717
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.013927779999995948,
+          "rps": 7179.895144813394,
+          "mbps": 73.52212628288916
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.04308358999999662,
+      "rps": 6963.208033500076,
+      "mbps": 71.30325026304078,
+      "round_rps_cv_pct": 2.783472708068926
+    },
+    {
+      "client": "pyreqwest_mt_official",
+      "protocol": "h1",
+      "body_kind": "full",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.1131371699999999,
+          "cpu_seconds": 0.4381519209999999
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.11221685900000011,
+          "cpu_seconds": 0.4366720879999999
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.11578490799999486,
+          "cpu_seconds": 0.4267431110000004
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.11376485699999961,
+          "cpu_seconds": 0.48308492599999997
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.1182900480000022,
+          "cpu_seconds": 0.455488672
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.12109052099999928,
+          "cpu_seconds": 0.44067960699999986
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.1131371699999999,
+          "rps": 883.8828123418687,
+          "mbps": 3707.273215336749
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.11221685900000011,
+          "rps": 891.1316970652324,
+          "mbps": 3737.6772415274927
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.11578490799999486,
+          "rps": 863.6704189461759,
+          "mbps": 3622.4962928676214
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 0.34113893699999487,
+      "rps": 879.4070903726962,
+      "mbps": 3688.5006767785612,
+      "round_rps_cv_pct": 1.3211068586922492
+    },
+    {
+      "client": "pyreqwest_mt_official",
+      "protocol": "h1",
+      "body_kind": "stream",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.035892426999998506,
+          "cpu_seconds": 0.06562681599999998
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.03478335399999821,
+          "cpu_seconds": 0.06325403200000057
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.03511415999999912,
+          "cpu_seconds": 0.06468807699999957
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.0359322389999992,
+          "cpu_seconds": 0.06989744200000003
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.03314195599999792,
+          "cpu_seconds": 0.06483606500000061
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.03494492300000118,
+          "cpu_seconds": 0.06767907399999995
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.035892426999998506,
+          "rps": 2786.1030406220275,
+          "mbps": 28.52969513596956
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.03478335399999821,
+          "rps": 2874.9383972576406,
+          "mbps": 29.43936918791824
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.03511415999999912,
+          "rps": 2847.853971161563,
+          "mbps": 29.162024664694407
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.10578994099999584,
+      "rps": 2835.80836858593,
+      "mbps": 29.038677694319926,
+      "round_rps_cv_pct": 1.3107208079542843
+    },
+    {
+      "client": "pyreqwest_mt_official",
+      "protocol": "h1",
+      "body_kind": "stream",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.274223580000001,
+          "cpu_seconds": 0.7623812000000001
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.2744072129999999,
+          "cpu_seconds": 0.750955125
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.28143369000000007,
+          "cpu_seconds": 0.7755871299999999
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.2770561399999991,
+          "cpu_seconds": 0.7876088219999999
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.27932264100000026,
+          "cpu_seconds": 0.7728977050000005
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.28250863399999915,
+          "cpu_seconds": 0.7936100360000005
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.274223580000001,
+          "rps": 364.6659415649071,
+          "mbps": 1529.519817369456
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.2744072129999999,
+          "rps": 364.4219075247123,
+          "mbps": 1528.496264418531
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.28143369000000007,
+          "rps": 355.32348667993506,
+          "mbps": 1490.3347214755984
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 0.830064483000001,
+      "rps": 361.4177044604372,
+      "mbps": 1515.8957234892296,
+      "round_rps_cv_pct": 1.202780962840183
+    },
+    {
+      "client": "pyreqwest_mt_official",
+      "protocol": "h2",
+      "body_kind": "full",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.015713453000003597,
+          "cpu_seconds": 0.028158482000000262
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.015459856999996191,
+          "cpu_seconds": 0.027415490999999292
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.01497447599999191,
+          "cpu_seconds": 0.028403685000000678
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.0158698070000014,
+          "cpu_seconds": 0.02955063499999966
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.016944073999994202,
+          "cpu_seconds": 0.03116436700000058
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.01501476699999671,
+          "cpu_seconds": 0.0278975800000012
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.015713453000003597,
+          "rps": 6363.97359638121,
+          "mbps": 65.16708962694359
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.015459856999996191,
+          "rps": 6468.365134297467,
+          "mbps": 66.23605897520606
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.01497447599999191,
+          "rps": 6678.030002522561,
+          "mbps": 68.38302722583101
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.0461477859999917,
+      "rps": 6500.853583746227,
+      "mbps": 66.56874069756137,
+      "round_rps_cv_pct": 2.0080395794398034
+    },
+    {
+      "client": "pyreqwest_mt_official",
+      "protocol": "h2",
+      "body_kind": "full",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.5610393420000008,
+          "cpu_seconds": 0.8655035039999994
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.5426880720000042,
+          "cpu_seconds": 0.807690856999999
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.5526553679999893,
+          "cpu_seconds": 0.8424506019999995
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.5570079949999922,
+          "cpu_seconds": 0.8395451119999997
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.5320760590000049,
+          "cpu_seconds": 0.7957559449999998
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.5553435459999889,
+          "cpu_seconds": 0.8486424309999983
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.5610393420000008,
+          "rps": 178.24061971040857,
+          "mbps": 747.5953442138455
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.5426880720000042,
+          "rps": 184.26791587930686,
+          "mbps": 772.8756566442403
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.5526553679999893,
+          "rps": 180.94459185638806,
+          "mbps": 758.9366254016159
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 1.6563827819999943,
+      "rps": 181.11755522945361,
+      "mbps": 759.6620863691182,
+      "round_rps_cv_pct": 1.3607208076599036
+    },
+    {
+      "client": "pyreqwest_mt_official",
+      "protocol": "h2",
+      "body_kind": "stream",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.03325239399999447,
+          "cpu_seconds": 0.06401679999999921
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.035283332000005885,
+          "cpu_seconds": 0.06702778800000075
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.03455325199999493,
+          "cpu_seconds": 0.06515829699999998
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.03502206199999591,
+          "cpu_seconds": 0.0663248129999996
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.03510494900000083,
+          "cpu_seconds": 0.06697878599999996
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.03396426900000904,
+          "cpu_seconds": 0.06601750500000136
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.03325239399999447,
+          "rps": 3007.3022712294533,
+          "mbps": 30.794775257389603
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.035283332000005885,
+          "rps": 2834.199445788831,
+          "mbps": 29.02220232487763
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.03455325199999493,
+          "rps": 2894.083601740718,
+          "mbps": 29.635416081824953
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.10308897799999528,
+      "rps": 2910.107421959443,
+      "mbps": 29.799500000864697,
+      "round_rps_cv_pct": 2.4650324417795266
+    },
+    {
+      "client": "pyreqwest_mt_official",
+      "protocol": "h2",
+      "body_kind": "stream",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.6550856750000094,
+          "cpu_seconds": 1.3450623400000001
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.5725840570000003,
+          "cpu_seconds": 1.1594954739999999
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.5812900459999923,
+          "cpu_seconds": 1.2099775540000017
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.6489878759999925,
+          "cpu_seconds": 1.312102598000001
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.5808897689999952,
+          "cpu_seconds": 1.1662244640000008
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.5821739699999995,
+          "cpu_seconds": 1.2107874480000014
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.6550856750000094,
+          "rps": 152.65178863817863,
+          "mbps": 640.2680076922671
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.5725840570000003,
+          "rps": 174.64684665504046,
+          "mbps": 732.5219675126228
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.5812900459999923,
+          "rps": 172.0311584348054,
+          "mbps": 721.550975947738
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 1.808959778000002,
+      "rps": 165.841166646437,
+      "mbps": 695.5882686298172,
+      "round_rps_cv_pct": 5.894102617850893
+    },
+    {
+      "client": "pyreqwest_st",
+      "protocol": "h1",
+      "body_kind": "full",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.023266026000001716,
+          "cpu_seconds": 0.02901135599999982
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.02254279399999959,
+          "cpu_seconds": 0.028314482999999946
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.022610432999996988,
+          "cpu_seconds": 0.02887804900000024
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.02507355000000011,
+          "cpu_seconds": 0.031120465999999958
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.027043453000000994,
+          "cpu_seconds": 0.03333145599999998
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.025610362000001885,
+          "cpu_seconds": 0.032270467000000025
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.023266026000001716,
+          "rps": 4298.112621381607,
+          "mbps": 44.012673242947656
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.02254279399999959,
+          "rps": 4436.007355610038,
+          "mbps": 45.42471532144679
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.022610432999996988,
+          "rps": 4422.737061250146,
+          "mbps": 45.2888275072015
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.06841925299999829,
+      "rps": 4384.730713151859,
+      "mbps": 44.89964250267504,
+      "round_rps_cv_pct": 1.416289860470658
+    },
+    {
+      "client": "pyreqwest_st",
+      "protocol": "h1",
+      "body_kind": "full",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.32057160000000096,
+          "cpu_seconds": 0.353670634
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.3121349689999988,
+          "cpu_seconds": 0.3430740459999999
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.3161734759999959,
+          "cpu_seconds": 0.35098384900000035
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.3313089930000004,
+          "cpu_seconds": 0.36799950599999987
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.35248428099999884,
+          "cpu_seconds": 0.3687795100000004
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.3256427539999933,
+          "cpu_seconds": 0.3670456899999994
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.32057160000000096,
+          "rps": 311.94279218745424,
+          "mbps": 1308.3829010430081
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.3121349689999988,
+          "rps": 320.3742288804571,
+          "mbps": 1343.7469096902169
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.3161734759999959,
+          "rps": 316.2820653557963,
+          "mbps": 1326.583131850078
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 0.9488800449999957,
+      "rps": 316.1621972986073,
+      "mbps": 1326.0803687783377,
+      "round_rps_cv_pct": 1.0887462599246545
+    },
+    {
+      "client": "pyreqwest_st",
+      "protocol": "h1",
+      "body_kind": "stream",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.040478945000000266,
+          "cpu_seconds": 0.054251417999999996
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.03996393999999981,
+          "cpu_seconds": 0.053631218000000036
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.042258469000000076,
+          "cpu_seconds": 0.05660897300000034
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.0414357410000008,
+          "cpu_seconds": 0.05477258899999998
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.041675177000001895,
+          "cpu_seconds": 0.0551790440000004
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.042274530000000254,
+          "cpu_seconds": 0.056166892000000246
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.040478945000000266,
+          "rps": 2470.42011593927,
+          "mbps": 25.297101987218127
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.03996393999999981,
+          "rps": 2502.2557835889174,
+          "mbps": 25.62309922395051
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.042258469000000076,
+          "rps": 2366.389563237604,
+          "mbps": 24.231829127553063
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.12270135400000015,
+      "rps": 2444.960794809156,
+      "mbps": 25.03639853884576,
+      "round_rps_cv_pct": 2.371637278778943
+    },
+    {
+      "client": "pyreqwest_st",
+      "protocol": "h1",
+      "body_kind": "stream",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.5287383899999991,
+          "cpu_seconds": 0.650219249
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.5290187390000014,
+          "cpu_seconds": 0.6615955539999998
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.5270006330000001,
+          "cpu_seconds": 0.6558471770000001
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.5214834929999999,
+          "cpu_seconds": 0.651762819
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.5269232129999999,
+          "cpu_seconds": 0.6571784909999998
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.5145549059999972,
+          "cpu_seconds": 0.6425916430000003
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.5287383899999991,
+          "rps": 189.1294483080757,
+          "mbps": 793.2664015563552
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.5290187390000014,
+          "rps": 189.02922075885053,
+          "mbps": 792.8460167457298
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.5270006330000001,
+          "rps": 189.75309276336293,
+          "mbps": 795.8821559897442
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 1.5847577620000006,
+      "rps": 189.30337947762635,
+      "mbps": 793.9959217565261,
+      "round_rps_cv_pct": 0.1691658171514893
+    },
+    {
+      "client": "pyreqwest_st",
+      "protocol": "h2",
+      "body_kind": "full",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.022503374000002907,
+          "cpu_seconds": 0.028158833000000882
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.022563850000011598,
+          "cpu_seconds": 0.028194680999998667
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.023508808000002546,
+          "cpu_seconds": 0.028952199999999095
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.025012197999998875,
+          "cpu_seconds": 0.03122096700000121
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.0219438760000088,
+          "cpu_seconds": 0.027508492999999135
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.02245552600001588,
+          "cpu_seconds": 0.027791355999998046
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.022503374000002907,
+          "rps": 4443.778075233833,
+          "mbps": 45.504287490394454
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.022563850000011598,
+          "rps": 4431.867788517855,
+          "mbps": 45.382326154422834
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.023508808000002546,
+          "rps": 4253.724816672508,
+          "mbps": 43.55814212272648
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.06857603200001705,
+      "rps": 4374.706311381875,
+      "mbps": 44.7969926285504,
+      "round_rps_cv_pct": 1.9860995468652547
+    },
+    {
+      "client": "pyreqwest_st",
+      "protocol": "h2",
+      "body_kind": "full",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 1.517358900000005,
+          "cpu_seconds": 1.8626935810000003
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 1.5045071910000019,
+          "cpu_seconds": 1.849602443000002
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 1.495677908999994,
+          "cpu_seconds": 1.8360638400000013
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 1.4856453029999983,
+          "cpu_seconds": 1.8265152579999988
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 1.5201722599999954,
+          "cpu_seconds": 1.8693363320000014
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 1.5136309089999997,
+          "cpu_seconds": 1.855401694000001
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 1.517358900000005,
+          "rps": 65.90398619601446,
+          "mbps": 276.4213529178882
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 1.5045071910000019,
+          "rps": 66.46694718257407,
+          "mbps": 278.78258243565915
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 1.495677908999994,
+          "rps": 66.85931469487285,
+          "mbps": 280.428291061964
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 4.517544000000001,
+      "rps": 66.40776492713739,
+      "mbps": 278.5343540649521,
+      "round_rps_cv_pct": 0.5903900035630097
+    },
+    {
+      "client": "pyreqwest_st",
+      "protocol": "h2",
+      "body_kind": "stream",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.04267810700000041,
+          "cpu_seconds": 0.056389976000000175
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.03838653799999747,
+          "cpu_seconds": 0.05126416600000283
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.04250919199999714,
+          "cpu_seconds": 0.056669609000000065
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.04172689899999682,
+          "cpu_seconds": 0.05572315999999944
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.03919303099999638,
+          "cpu_seconds": 0.052669050999998746
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.04162459699999488,
+          "cpu_seconds": 0.05592416899999719
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.04267810700000041,
+          "rps": 2343.121732179898,
+          "mbps": 23.993566537522156
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.03838653799999747,
+          "rps": 2605.0799371385506,
+          "mbps": 26.676018556298757
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.04250919199999714,
+          "rps": 2352.4323868589813,
+          "mbps": 24.08890764143597
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.12357383699999502,
+      "rps": 2427.698348478182,
+      "mbps": 24.859631088416585,
+      "round_rps_cv_pct": 4.986688098711737
+    },
+    {
+      "client": "pyreqwest_st",
+      "protocol": "h2",
+      "body_kind": "stream",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 1.7166709210000022,
+          "cpu_seconds": 2.129158629000001
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 1.6627434929999936,
+          "cpu_seconds": 2.087246105000002
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 1.6825432510000269,
+          "cpu_seconds": 2.108653754999999
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 1.7006507019999972,
+          "cpu_seconds": 2.121182461
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 1.691580571000003,
+          "cpu_seconds": 2.1200055849999977
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 1.6965576180000141,
+          "cpu_seconds": 2.120021315999999
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 1.7166709210000022,
+          "rps": 58.252282820604655,
+          "mbps": 244.32778284359338
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 1.6627434929999936,
+          "rps": 60.14156748830554,
+          "mbps": 252.25201708246988
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 1.6825432510000269,
+          "rps": 59.433836212272446,
+          "mbps": 249.28357696047917
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 5.061957665000023,
+      "rps": 59.26560825948722,
+      "mbps": 248.5779777852003,
+      "round_rps_cv_pct": 1.3147684708977503
+    },
+    {
+      "client": "pyreqwest_st_official",
+      "protocol": "h1",
+      "body_kind": "full",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.015740722000000318,
+          "cpu_seconds": 0.02010506600000017
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.015592457999996867,
+          "cpu_seconds": 0.019574530000000312
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.015082990999999879,
+          "cpu_seconds": 0.019489361999999844
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.017754697000000874,
+          "cpu_seconds": 0.02217013300000037
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.018224547999999174,
+          "cpu_seconds": 0.022828366999999794
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.018770177999996918,
+          "cpu_seconds": 0.023403800999999724
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.015740722000000318,
+          "rps": 6352.94874021649,
+          "mbps": 65.05419509981685
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.015592457999996867,
+          "rps": 6413.357021710117,
+          "mbps": 65.6727759023116
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.015082990999999879,
+          "rps": 6629.984729156226,
+          "mbps": 67.89104362655976
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.046416170999997064,
+      "rps": 6463.264710051568,
+      "mbps": 66.18383063092806,
+      "round_rps_cv_pct": 1.8396673211290386
+    },
+    {
+      "client": "pyreqwest_st_official",
+      "protocol": "h1",
+      "body_kind": "full",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.29971888600000085,
+          "cpu_seconds": 0.33585346299999985
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.3360793780000009,
+          "cpu_seconds": 0.3553097599999999
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.3036766780000022,
+          "cpu_seconds": 0.34441385199999974
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.3015276689999986,
+          "cpu_seconds": 0.3430032809999999
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.31504753600000157,
+          "cpu_seconds": 0.3475778860000003
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.3092214489999989,
+          "cpu_seconds": 0.3474220880000001
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.29971888600000085,
+          "rps": 333.64597518222365,
+          "mbps": 1399.4126482907013
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.3360793780000009,
+          "rps": 297.54875349715667,
+          "mbps": 1248.0099269881382
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.3036766780000022,
+          "rps": 329.2975959121868,
+          "mbps": 1381.1742237248689
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 0.9394749420000039,
+      "rps": 319.32730356952806,
+      "mbps": 1339.355786670886,
+      "round_rps_cv_pct": 5.0254548635997525
+    },
+    {
+      "client": "pyreqwest_st_official",
+      "protocol": "h1",
+      "body_kind": "stream",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.03202274799999927,
+          "cpu_seconds": 0.04365938
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.03290153999999745,
+          "cpu_seconds": 0.04480933900000039
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.03131828499999756,
+          "cpu_seconds": 0.04296014600000042
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.034438985999999616,
+          "cpu_seconds": 0.04633054099999999
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.035358521999999226,
+          "cpu_seconds": 0.047524770999999966
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.0339728000000008,
+          "cpu_seconds": 0.04591259800000014
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.03202274799999927,
+          "rps": 3122.780093700962,
+          "mbps": 31.97726815949785
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.03290153999999745,
+          "rps": 3039.3714093628364,
+          "mbps": 31.123163231875445
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.03131828499999756,
+          "rps": 3193.022861884289,
+          "mbps": 32.696554105695114
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.09624257299999428,
+      "rps": 3117.1236454787822,
+      "mbps": 31.91934612970273,
+      "round_rps_cv_pct": 2.014008102045936
+    },
+    {
+      "client": "pyreqwest_st_official",
+      "protocol": "h1",
+      "body_kind": "stream",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.5079713699999999,
+          "cpu_seconds": 0.637665445
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.5107615750000001,
+          "cpu_seconds": 0.6369278449999998
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.5260525409999985,
+          "cpu_seconds": 0.6556590489999996
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.512793126,
+          "cpu_seconds": 0.633014465
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.49860696500000046,
+          "cpu_seconds": 0.6256475790000002
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.5058903899999976,
+          "cpu_seconds": 0.6408917809999997
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.5079713699999999,
+          "rps": 196.86148847325788,
+          "mbps": 825.6969285493394
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.5107615750000001,
+          "rps": 195.78606710968808,
+          "mbps": 821.1862844224331
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.5260525409999985,
+          "rps": 190.09508025549158,
+          "mbps": 797.3165554959294
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 1.5447854859999985,
+      "rps": 194.20172102782192,
+      "mbps": 814.5410553138776,
+      "round_rps_cv_pct": 1.528399366534704
+    },
+    {
+      "client": "pyreqwest_st_official",
+      "protocol": "h2",
+      "body_kind": "full",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.017689065999995535,
+          "cpu_seconds": 0.022230105000000222
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.017557612000004497,
+          "cpu_seconds": 0.021833347999999475
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.01677221799999984,
+          "cpu_seconds": 0.021039249000001092
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.01685561799999391,
+          "cpu_seconds": 0.02132570099999853
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.016517058000005136,
+          "cpu_seconds": 0.020949990000000085
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.017521931999993967,
+          "cpu_seconds": 0.021807826999999946
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.017689065999995535,
+          "rps": 5653.2097285422105,
+          "mbps": 57.88886762027224
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.017557612000004497,
+          "rps": 5695.535360957651,
+          "mbps": 58.32228209620635
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.01677221799999984,
+          "rps": 5962.240652965575,
+          "mbps": 61.053344286367484
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.05201889599999987,
+      "rps": 5767.1350810674785,
+      "mbps": 59.055463230130975,
+      "round_rps_cv_pct": 2.3707145609926483
+    },
+    {
+      "client": "pyreqwest_st_official",
+      "protocol": "h2",
+      "body_kind": "full",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.4465712840000009,
+          "cpu_seconds": 0.44975067699999993
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.5066829489999947,
+          "cpu_seconds": 0.5632995259999998
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.515212560000009,
+          "cpu_seconds": 0.5731249789999993
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.4656187779999996,
+          "cpu_seconds": 0.43833486399999977
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.5350230689999904,
+          "cpu_seconds": 0.597298180000001
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.5060052899999903,
+          "cpu_seconds": 0.5616466330000005
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.4465712840000009,
+          "rps": 223.9284154240419,
+          "mbps": 939.2238485267206
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.5066829489999947,
+          "rps": 197.36207858851998,
+          "mbps": 827.7965556721437
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.515212560000009,
+          "rps": 194.0946470714888,
+          "mbps": 814.0919545905338
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 1.4684667930000046,
+      "rps": 204.29471162035264,
+      "mbps": 856.8741261280916,
+      "round_rps_cv_pct": 6.51318437276002
+    },
+    {
+      "client": "pyreqwest_st_official",
+      "protocol": "h2",
+      "body_kind": "stream",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.033339540000000056,
+          "cpu_seconds": 0.044986001999999914
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.03317862800000171,
+          "cpu_seconds": 0.04492984899999897
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.03247032499999136,
+          "cpu_seconds": 0.04374481199999991
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.033660532999995496,
+          "cpu_seconds": 0.04533170600000069
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.03309481299999106,
+          "cpu_seconds": 0.04490452900000008
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.03278863500000284,
+          "cpu_seconds": 0.044465042000000565
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.033339540000000056,
+          "rps": 2999.441503991952,
+          "mbps": 30.714281000877584
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.03317862800000171,
+          "rps": 3013.9884024135913,
+          "mbps": 30.863241240715176
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.03247032499999136,
+          "rps": 3079.7351119838377,
+          "mbps": 31.5364875467145
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.09898849299999313,
+      "rps": 3030.655290408561,
+      "mbps": 31.033910173783667,
+      "round_rps_cv_pct": 1.152422995170002
+    },
+    {
+      "client": "pyreqwest_st_official",
+      "protocol": "h2",
+      "body_kind": "stream",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.7035626090000022,
+          "cpu_seconds": 0.8325698050000003
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.73661062299999,
+          "cpu_seconds": 0.8806844099999989
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.6842402929999878,
+          "cpu_seconds": 0.8129582409999987
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.6980318899999958,
+          "cpu_seconds": 0.8266046929999993
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.7299637560000036,
+          "cpu_seconds": 0.8746536379999998
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.6835253899999998,
+          "cpu_seconds": 0.8123228549999997
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.7035626090000022,
+          "rps": 142.13376140345696,
+          "mbps": 596.1522039895651
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.73661062299999,
+          "rps": 135.75693436612488,
+          "mbps": 569.405852839575
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.6842402929999878,
+          "rps": 146.14748798489975,
+          "mbps": 612.986993445017
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 2.12441352499998,
+      "rps": 141.21544438952995,
+      "mbps": 592.3005032647831,
+      "round_rps_cv_pct": 3.0268528449294334
+    },
+    {
+      "client": "ry",
+      "protocol": "h1",
+      "body_kind": "full",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.040102998000000056,
+          "cpu_seconds": 0.07494439900000005
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.03954042300000182,
+          "cpu_seconds": 0.07447233399999931
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.03962385399999846,
+          "cpu_seconds": 0.07514118799999991
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.04098802400000068,
+          "cpu_seconds": 0.0813323640000001
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.0414830429999995,
+          "cpu_seconds": 0.08092346699999986
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.0411416090000003,
+          "cpu_seconds": 0.0809786360000011
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.040102998000000056,
+          "rps": 2493.579158346213,
+          "mbps": 25.53425058146522
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.03954042300000182,
+          "rps": 2529.057415495919,
+          "mbps": 25.89754793467821
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.03962385399999846,
+          "rps": 2523.7322951978344,
+          "mbps": 25.843018702825827
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.11926727500000034,
+      "rps": 2515.35888616554,
+      "mbps": 25.75727499433513,
+      "round_rps_cv_pct": 0.6210196737100319
+    },
+    {
+      "client": "ry",
+      "protocol": "h1",
+      "body_kind": "full",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.18739346899999987,
+          "cpu_seconds": 0.65962841
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.17958453099999971,
+          "cpu_seconds": 0.6271711440000001
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.17906647399999542,
+          "cpu_seconds": 0.6426145779999999
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.22238368000000008,
+          "cpu_seconds": 0.673060984
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.1915560689999971,
+          "cpu_seconds": 0.6871419689999998
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.18912309699999952,
+          "cpu_seconds": 0.6547811439999993
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.18739346899999987,
+          "rps": 533.6365271086372,
+          "mbps": 2238.2338201978655
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.17958453099999971,
+          "rps": 556.8408339134742,
+          "mbps": 2335.5597370466203
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.17906647399999542,
+          "rps": 558.4518294586096,
+          "mbps": 2342.316742105564
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 0.546044473999995,
+      "rps": 549.4057980339578,
+      "mbps": 2304.3749363170214,
+      "round_rps_cv_pct": 2.062688225095333
+    },
+    {
+      "client": "ry",
+      "protocol": "h1",
+      "body_kind": "stream",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.06926007500000075,
+          "cpu_seconds": 0.13060888199999998
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.0691471679999971,
+          "cpu_seconds": 0.12703046299999965
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.06790874499999688,
+          "cpu_seconds": 0.12918889100000008
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.07282045400000037,
+          "cpu_seconds": 0.13928016999999993
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.07017103700000149,
+          "cpu_seconds": 0.13195122700000006
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.07152951699999477,
+          "cpu_seconds": 0.1365932799999996
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.06926007500000075,
+          "rps": 1443.8332618034115,
+          "mbps": 14.784852600866932
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.0691471679999971,
+          "rps": 1446.1908259207985,
+          "mbps": 14.808994057428977
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.06790874499999688,
+          "rps": 1472.564395056993,
+          "mbps": 15.079059405383607
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.20631598799999473,
+      "rps": 1454.0802334718126,
+      "mbps": 14.889781590751362,
+      "round_rps_cv_pct": 0.895609232629212
+    },
+    {
+      "client": "ry",
+      "protocol": "h1",
+      "body_kind": "stream",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.4058242759999988,
+          "cpu_seconds": 1.056525385
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.39710875599999795,
+          "cpu_seconds": 1.0364452279999998
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.4036417180000029,
+          "cpu_seconds": 1.0553104910000002
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.4228953620000002,
+          "cpu_seconds": 1.1031741219999998
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.4404006239999987,
+          "cpu_seconds": 1.1494874370000003
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.4212713800000003,
+          "cpu_seconds": 1.1031450360000008
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.4058242759999988,
+          "rps": 246.41207023307865,
+          "mbps": 1033.5271318268826
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.39710875599999795,
+          "rps": 251.82018399010198,
+          "mbps": 1056.2104049904208
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.4036417180000029,
+          "rps": 247.74446133934867,
+          "mbps": 1039.1155851734754
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 1.2065747499999997,
+      "rps": 248.63772426863738,
+      "mbps": 1042.8622014508428,
+      "round_rps_cv_pct": 0.9251995701686452
+    },
+    {
+      "client": "ry",
+      "protocol": "h2",
+      "body_kind": "full",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.04044663699999518,
+          "cpu_seconds": 0.07813929499999972
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.0377911629999943,
+          "cpu_seconds": 0.0750999309999969
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.039102354999982936,
+          "cpu_seconds": 0.07629535099999885
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.03993842899999578,
+          "cpu_seconds": 0.077952303
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.04006128199999637,
+          "cpu_seconds": 0.07780256600000257
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.03895341399999097,
+          "cpu_seconds": 0.0768111590000018
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.04044663699999518,
+          "rps": 2472.3934402756877,
+          "mbps": 25.31730882842304
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.0377911629999943,
+          "rps": 2646.1212638524803,
+          "mbps": 27.0962817418494
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.039102354999982936,
+          "rps": 2557.3907249331564,
+          "mbps": 26.187681023315523
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.11734015499997241,
+      "rps": 2556.6695390854948,
+      "mbps": 26.180296080235465,
+      "round_rps_cv_pct": 2.7721633361710807
+    },
+    {
+      "client": "ry",
+      "protocol": "h2",
+      "body_kind": "full",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 2.950130389000009,
+          "cpu_seconds": 6.589705697999996
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 2.9489371389999945,
+          "cpu_seconds": 6.578437805
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 2.9608760289999907,
+          "cpu_seconds": 6.6115258069999925
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 2.960741444,
+          "cpu_seconds": 6.593554998999998
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 2.951078555999999,
+          "cpu_seconds": 6.610684364999997
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 2.9463705419999826,
+          "cpu_seconds": 6.583948000000007
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 2.950130389000009,
+          "rps": 33.89680685737301,
+          "mbps": 142.17351258910705
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 2.9489371389999945,
+          "rps": 33.91052277021772,
+          "mbps": 142.23104129721526
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 2.9608760289999907,
+          "rps": 33.773788237184014,
+          "mbps": 141.65753509837387
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 8.859943556999994,
+      "rps": 33.86026085493269,
+      "mbps": 142.0202275448876,
+      "round_rps_cv_pct": 0.18156898008893174
+    },
+    {
+      "client": "ry",
+      "protocol": "h2",
+      "body_kind": "stream",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.06785700099999303,
+          "cpu_seconds": 0.134109825000003
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.06768553300000235,
+          "cpu_seconds": 0.13304479899999677
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.06728955599999153,
+          "cpu_seconds": 0.13333494300000837
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.06787678199999903,
+          "cpu_seconds": 0.13237973199999686
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.06786713599998961,
+          "cpu_seconds": 0.13226443299999602
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.06736857800001417,
+          "cpu_seconds": 0.13402988400000027
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.06785700099999303,
+          "rps": 1473.6872913085308,
+          "mbps": 15.090557862999356
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.06768553300000235,
+          "rps": 1477.4205885325084,
+          "mbps": 15.128786826572886
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.06728955599999153,
+          "rps": 1486.1147248469374,
+          "mbps": 15.217814782432638
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.20283208999998692,
+      "rps": 1479.0559028407158,
+      "mbps": 15.14553244508893,
+      "round_rps_cv_pct": 0.3520091778033262
+    },
+    {
+      "client": "ry",
+      "protocol": "h2",
+      "body_kind": "stream",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 3.174908631000001,
+          "cpu_seconds": 7.083089965999999
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 3.1731513240000027,
+          "cpu_seconds": 7.087500861999999
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 3.1566583289999954,
+          "cpu_seconds": 7.059444005000003
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 3.162690087999998,
+          "cpu_seconds": 7.0339494039999995
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 3.1491671859999997,
+          "cpu_seconds": 7.0412553350000024
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 3.157536597999993,
+          "cpu_seconds": 7.054223910999994
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 3.174908631000001,
+          "rps": 31.49696940050303,
+          "mbps": 132.10786474440746
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 3.1731513240000027,
+          "rps": 31.51441257895708,
+          "mbps": 132.18102673757
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 3.1566583289999954,
+          "rps": 31.679069945995458,
+          "mbps": 132.87164979076854
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 9.504718283999999,
+      "rps": 31.56327110767842,
+      "mbps": 132.38595426002004,
+      "round_rps_cv_pct": 0.25992461580451187
+    },
+    {
+      "client": "ry_official",
+      "protocol": "h1",
+      "body_kind": "full",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.04096460199999896,
+          "cpu_seconds": 0.07744625199999988
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.040181485000001516,
+          "cpu_seconds": 0.07394100600000009
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.04386703400000158,
+          "cpu_seconds": 0.08271728900000141
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.04143437099999936,
+          "cpu_seconds": 0.08226801499999992
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.04104476899999909,
+          "cpu_seconds": 0.07999699800000037
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.04000329500000532,
+          "cpu_seconds": 0.07905995700000013
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.04096460199999896,
+          "rps": 2441.131980239977,
+          "mbps": 24.997191477657367
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.040181485000001516,
+          "rps": 2488.708418815189,
+          "mbps": 25.484374208667536
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.04386703400000158,
+          "rps": 2279.61616917151,
+          "mbps": 23.343269572316263
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.12501312100000206,
+      "rps": 2399.7481032410597,
+      "mbps": 24.57342057718845,
+      "round_rps_cv_pct": 3.72371185754681
+    },
+    {
+      "client": "ry_official",
+      "protocol": "h1",
+      "body_kind": "full",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.19509694300000024,
+          "cpu_seconds": 0.6907305870000001
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.17516951500000033,
+          "cpu_seconds": 0.6471861109999999
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.18268982299999692,
+          "cpu_seconds": 0.6464355590000004
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.220434107,
+          "cpu_seconds": 0.792607489
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.19697740099999805,
+          "cpu_seconds": 0.6717595869999995
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.19172671900000182,
+          "cpu_seconds": 0.656851155
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.19509694300000024,
+          "rps": 512.5656940713822,
+          "mbps": 2149.8563409063745
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.17516951500000033,
+          "rps": 570.8755887118818,
+          "mbps": 2394.425765236601
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.18268982299999692,
+          "rps": 547.3758655948869,
+          "mbps": 2295.8607825680965
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 0.5529562809999975,
+      "rps": 542.5383711302871,
+      "mbps": 2275.570860185248,
+      "round_rps_cv_pct": 4.4064521664288065
+    },
+    {
+      "client": "ry_official",
+      "protocol": "h1",
+      "body_kind": "stream",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.07240585700000146,
+          "cpu_seconds": 0.1345872309999998
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.06856912699999995,
+          "cpu_seconds": 0.12793391599999993
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.06665168699999668,
+          "cpu_seconds": 0.12583905500000014
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.07023078799999993,
+          "cpu_seconds": 0.136022812
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.0680706690000008,
+          "cpu_seconds": 0.12920526799999976
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.06669405699999942,
+          "cpu_seconds": 0.12690169399999895
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.07240585700000146,
+          "rps": 1381.1037413727176,
+          "mbps": 14.142502311656628
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.06856912699999995,
+          "rps": 1458.3822833270149,
+          "mbps": 14.933834581268632
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.06665168699999668,
+          "rps": 1500.3371182488595,
+          "mbps": 15.36345209086832
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.2076266709999981,
+      "rps": 1444.901074390403,
+      "mbps": 14.795787001757725,
+      "round_rps_cv_pct": 3.413761334831826
+    },
+    {
+      "client": "ry_official",
+      "protocol": "h1",
+      "body_kind": "stream",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.40095775899999886,
+          "cpu_seconds": 1.0425822189999998
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.4070533430000012,
+          "cpu_seconds": 1.0634052400000007
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.40787360000000206,
+          "cpu_seconds": 1.073037417
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.4228890520000004,
+          "cpu_seconds": 1.1275754079999998
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.44068883599999964,
+          "cpu_seconds": 1.140894371
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.4078431360000039,
+          "cpu_seconds": 1.0670271270000011
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.40095775899999886,
+          "rps": 249.40283048619165,
+          "mbps": 1046.0712895195556
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.4070533430000012,
+          "rps": 245.6680474922416,
+          "mbps": 1030.406474268899
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.40787360000000206,
+          "rps": 245.17399508082772,
+          "mbps": 1028.3342682634961
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 1.215884702000002,
+      "rps": 246.73392099311033,
+      "mbps": 1034.8770717570867,
+      "round_rps_cv_pct": 0.7650907277771254
+    },
+    {
+      "client": "ry_official",
+      "protocol": "h2",
+      "body_kind": "full",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.04094523099999492,
+          "cpu_seconds": 0.07898307900000034
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.042031961999995815,
+          "cpu_seconds": 0.08041557600000004
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.040281075999985205,
+          "cpu_seconds": 0.07830574299999427
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.04115101400000043,
+          "cpu_seconds": 0.07996048500000086
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.04145702200000301,
+          "cpu_seconds": 0.08088015499999912
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.038616788000013,
+          "cpu_seconds": 0.07501781600000612
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.04094523099999492,
+          "rps": 2442.286868524747,
+          "mbps": 25.00901753369341
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.042031961999995815,
+          "rps": 2379.1418540017225,
+          "mbps": 24.362412584977637
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.040281075999985205,
+          "rps": 2482.5553319389164,
+          "mbps": 25.421366599054505
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.12325826899997594,
+      "rps": 2433.913784721888,
+      "mbps": 24.923277155552135,
+      "round_rps_cv_pct": 1.748141049227565
+    },
+    {
+      "client": "ry_official",
+      "protocol": "h2",
+      "body_kind": "full",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.7878356459999978,
+          "cpu_seconds": 2.0841299579999983
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.7920961460000058,
+          "cpu_seconds": 2.09760747
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.8028029080000181,
+          "cpu_seconds": 2.130224994999999
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.7953070729999965,
+          "cpu_seconds": 2.105335089999997
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.8009707759999998,
+          "cpu_seconds": 2.1131237019999993
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.7829159400000094,
+          "cpu_seconds": 2.0833918749999967
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.7878356459999978,
+          "rps": 126.93002723057835,
+          "mbps": 532.3831209333237
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.7920961460000058,
+          "rps": 126.24730028669937,
+          "mbps": 529.5195565817044
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.8028029080000181,
+          "rps": 124.56357469995332,
+          "mbps": 522.457499618313
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 2.3827347000000216,
+      "rps": 125.90575022892699,
+      "mbps": 528.0869918081894,
+      "round_rps_cv_pct": 0.7898214735116672
+    },
+    {
+      "client": "ry_official",
+      "protocol": "h2",
+      "body_kind": "stream",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.06812796100000185,
+          "cpu_seconds": 0.1342818120000011
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.06813110099999165,
+          "cpu_seconds": 0.13428751100000014
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.0671617929999968,
+          "cpu_seconds": 0.1323541189999986
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.06766599700000597,
+          "cpu_seconds": 0.13330066400000007
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.06590725700000633,
+          "cpu_seconds": 0.131029238
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.0680073550000202,
+          "cpu_seconds": 0.13424511300000574
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.06812796100000185,
+          "rps": 1467.82611033959,
+          "mbps": 15.030539369877403
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.06813110099999165,
+          "rps": 1467.7584617341245,
+          "mbps": 15.029846648157434
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.0671617929999968,
+          "rps": 1488.9417856965902,
+          "mbps": 15.246763885533083
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.2034208549999903,
+      "rps": 1474.775042116573,
+      "mbps": 15.101696431273709,
+      "round_rps_cv_pct": 0.6760051040582712
+    },
+    {
+      "client": "ry_official",
+      "protocol": "h2",
+      "body_kind": "stream",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.9876098720000002,
+          "cpu_seconds": 2.5507848379999984
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.9878942679999909,
+          "cpu_seconds": 2.5479346659999997
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.9762170479999952,
+          "cpu_seconds": 2.5349308659999963
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.9827717249999992,
+          "cpu_seconds": 2.554630104000001
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.9811885610000104,
+          "cpu_seconds": 2.5415145899999985
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.9694937390000007,
+          "cpu_seconds": 2.528902856000002
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.9876098720000002,
+          "rps": 101.25455692083239,
+          "mbps": 424.69239311127495
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.9878942679999909,
+          "rps": 101.22540765668347,
+          "mbps": 424.5701322360581
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.9762170479999952,
+          "rps": 102.43623608589192,
+          "mbps": 429.6487147600008
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 2.9517211879999863,
+      "rps": 101.6356155925664,
+      "mbps": 426.2906690223636,
+      "round_rps_cv_pct": 0.5549508301515539
+    },
+    {
+      "client": "wreq",
+      "protocol": "h1",
+      "body_kind": "full",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.004512470999999962,
+          "cpu_seconds": 0.011474997999999959
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.004044958000001486,
+          "cpu_seconds": 0.010983634999999659
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.003898577000001069,
+          "cpu_seconds": 0.010400192999999724
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.00470008799999988,
+          "cpu_seconds": 0.015761984000000062
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.004495659999999901,
+          "cpu_seconds": 0.015113244000000137
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.004693305000003534,
+          "cpu_seconds": 0.01635014899999998
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.004512470999999962,
+          "rps": 22160.807238428974,
+          "mbps": 226.92666612151268
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.004044958000001486,
+          "rps": 24722.13555739349,
+          "mbps": 253.1546681077093
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.003898577000001069,
+          "rps": 25650.38474293892,
+          "mbps": 262.65993976769454
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.012456006000002517,
+      "rps": 24084.766818508226,
+      "mbps": 246.62801222152424,
+      "round_rps_cv_pct": 6.103536919647562
+    },
+    {
+      "client": "wreq",
+      "protocol": "h1",
+      "body_kind": "full",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.11407065200000055,
+          "cpu_seconds": 0.500524164
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.12481674499999684,
+          "cpu_seconds": 0.5028104920000005
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.13388807500000155,
+          "cpu_seconds": 0.5147706059999999
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.1203472149999989,
+          "cpu_seconds": 0.519803849
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.13164449599999983,
+          "cpu_seconds": 0.512332357
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.10781464699999788,
+          "cpu_seconds": 0.48991049599999936
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.11407065200000055,
+          "rps": 876.6496749751155,
+          "mbps": 3676.935238346827
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.12481674499999684,
+          "rps": 801.174553943083,
+          "mbps": 3360.369636301689
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.13388807500000155,
+          "rps": 746.8925070436545,
+          "mbps": 3132.6942298632284
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 0.37277547199999894,
+      "rps": 804.7739793352092,
+      "mbps": 3375.4667206215854,
+      "round_rps_cv_pct": 6.583219511533223
+    },
+    {
+      "client": "wreq",
+      "protocol": "h1",
+      "body_kind": "stream",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.006987854999999321,
+          "cpu_seconds": 0.01782702
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.0073069809999992685,
+          "cpu_seconds": 0.01948767699999987
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.00594949999999983,
+          "cpu_seconds": 0.017583195999999468
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.008764326999999739,
+          "cpu_seconds": 0.027048372999999987
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.00695649999999759,
+          "cpu_seconds": 0.022636820999999863
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.007819011999998793,
+          "cpu_seconds": 0.024147102000000586
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.006987854999999321,
+          "rps": 14310.543077955926,
+          "mbps": 146.5399611182687
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.0073069809999992685,
+          "rps": 13685.542633819632,
+          "mbps": 140.13995657031305
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.00594949999999983,
+          "rps": 16808.135137406985,
+          "mbps": 172.11530380704755
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.02024433599999842,
+      "rps": 14818.959732738254,
+      "mbps": 151.74614766323973,
+      "round_rps_cv_pct": 9.032897665873362
+    },
+    {
+      "client": "wreq",
+      "protocol": "h1",
+      "body_kind": "stream",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.11781860500000008,
+          "cpu_seconds": 0.5348960380000001
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.12245419300000293,
+          "cpu_seconds": 0.5400190170000001
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.1258909430000017,
+          "cpu_seconds": 0.53568484
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.11846361199999933,
+          "cpu_seconds": 0.539224479
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.11961183100000028,
+          "cpu_seconds": 0.5503343439999999
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.1181802879999978,
+          "cpu_seconds": 0.5440924480000007
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.11781860500000008,
+          "rps": 848.7623834962224,
+          "mbps": 3559.9674601477395
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.12245419300000293,
+          "rps": 816.6318976108691,
+          "mbps": 3425.202434676859
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.1258909430000017,
+          "rps": 794.3383186826923,
+          "mbps": 3331.6963874040907
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 0.3661637410000047,
+      "rps": 819.3055903915842,
+      "mbps": 3436.4167150017834,
+      "round_rps_cv_pct": 2.7245863886388277
+    },
+    {
+      "client": "wreq",
+      "protocol": "h2",
+      "body_kind": "full",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.008116161000003785,
+          "cpu_seconds": 0.022916772999998614
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.008509701999997787,
+          "cpu_seconds": 0.0234963790000009
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.00848006199998963,
+          "cpu_seconds": 0.02178442700000005
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.00869867000000113,
+          "cpu_seconds": 0.023067485000000332
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.008483381000004897,
+          "cpu_seconds": 0.02246527800000031
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.009131703000008429,
+          "cpu_seconds": 0.024257915999999824
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.008116161000003785,
+          "rps": 12321.096143848472,
+          "mbps": 126.16802451300836
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.008509701999997787,
+          "rps": 11751.29281848248,
+          "mbps": 120.33323846126059
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.00848006199998963,
+          "rps": 11792.366612428339,
+          "mbps": 120.7538341112662
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.025105924999991203,
+      "rps": 11949.370517123154,
+      "mbps": 122.3615540953411,
+      "round_rps_cv_pct": 2.1703960049527793
+    },
+    {
+      "client": "wreq",
+      "protocol": "h2",
+      "body_kind": "full",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.6025855100000044,
+          "cpu_seconds": 0.9283604229999991
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.5829946159999935,
+          "cpu_seconds": 0.9025549159999997
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.6587426760000028,
+          "cpu_seconds": 1.0151578459999975
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.6085255239999938,
+          "cpu_seconds": 0.9367119769999999
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.5694753359999964,
+          "cpu_seconds": 0.8883156630000002
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.6791242329999818,
+          "cpu_seconds": 1.0498742649999997
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.6025855100000044,
+          "rps": 165.95155100891702,
+          "mbps": 696.0512542029047
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.5829946159999935,
+          "rps": 171.52817068211334,
+          "mbps": 719.4412924046707
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.6587426760000028,
+          "rps": 151.8043443112217,
+          "mbps": 636.7135685619345
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 1.8443228020000006,
+      "rps": 162.66133004194126,
+      "mbps": 682.2510672402344,
+      "round_rps_cv_pct": 5.090141208247781
+    },
+    {
+      "client": "wreq",
+      "protocol": "h2",
+      "body_kind": "stream",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.009922312999997018,
+          "cpu_seconds": 0.028314144999999513
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.009434932000004892,
+          "cpu_seconds": 0.028187195000000997
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.010634734999996454,
+          "cpu_seconds": 0.030211937999998995
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.010672206999998934,
+          "cpu_seconds": 0.029748141000000672
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.011423909000001231,
+          "cpu_seconds": 0.032989302999999026
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.010224871000005464,
+          "cpu_seconds": 0.02827563700000013
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.009922312999997018,
+          "rps": 10078.295252329779,
+          "mbps": 103.20174338385694
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.009434932000004892,
+          "rps": 10598.910516784663,
+          "mbps": 108.53284369187494
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.010634734999996454,
+          "rps": 9403.149208704623,
+          "mbps": 96.28824789713534
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.029991979999998364,
+      "rps": 10002.674048196097,
+      "mbps": 102.42738225352802,
+      "round_rps_cv_pct": 4.882167453953561
+    },
+    {
+      "client": "wreq",
+      "protocol": "h2",
+      "body_kind": "stream",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.6901724880000017,
+          "cpu_seconds": 1.1126810829999991
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.6501193109999974,
+          "cpu_seconds": 1.0515816519999994
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.5970669929999985,
+          "cpu_seconds": 0.978161708
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.6615919959999985,
+          "cpu_seconds": 1.0748634159999995
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.643107999999998,
+          "cpu_seconds": 1.0478538990000015
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.6011167939999922,
+          "cpu_seconds": 0.9806858100000007
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.6901724880000017,
+          "rps": 144.89131592275197,
+          "mbps": 607.7182259400623
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.6501193109999974,
+          "rps": 153.81791973873607,
+          "mbps": 645.1591160318596
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.5970669929999985,
+          "rps": 167.48539305035783,
+          "mbps": 702.484654012688
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 1.9373587919999977,
+      "rps": 154.84999538485093,
+      "mbps": 649.4879550426618,
+      "round_rps_cv_pct": 5.979111459593993
+    },
+    {
+      "client": "wreq_st",
+      "protocol": "h1",
+      "body_kind": "full",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.004270745999999548,
+          "cpu_seconds": 0.006199324999999867
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.0037071889999999996,
+          "cpu_seconds": 0.005452440000000003
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.004348651999997344,
+          "cpu_seconds": 0.006273078000000432
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.0071135160000004305,
+          "cpu_seconds": 0.009129984000000313
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.007236231000000259,
+          "cpu_seconds": 0.009370239999999974
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.007076038000001006,
+          "cpu_seconds": 0.009087792999999955
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.004270745999999548,
+          "rps": 23415.112956848894,
+          "mbps": 239.77075667813267
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.0037071889999999996,
+          "rps": 26974.61607703303,
+          "mbps": 276.2200686288183
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.004348651999997344,
+          "rps": 22995.631749806857,
+          "mbps": 235.4752691180222
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.012326586999996891,
+      "rps": 24337.6370117759,
+      "mbps": 249.2174030005852,
+      "round_rps_cv_pct": 7.297390640861475
+    },
+    {
+      "client": "wreq_st",
+      "protocol": "h1",
+      "body_kind": "full",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.2956155729999992,
+          "cpu_seconds": 0.42890829600000013
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.32021918499999913,
+          "cpu_seconds": 0.45276418600000046
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.2903185759999971,
+          "cpu_seconds": 0.4217643889999998
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.30380178899999954,
+          "cpu_seconds": 0.43918633399999996
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.31471121299999893,
+          "cpu_seconds": 0.45167804600000006
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.2963140580000001,
+          "cpu_seconds": 0.4303989890000004
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.2956155729999992,
+          "rps": 338.2771718863413,
+          "mbps": 1418.837295151569
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.32021918499999913,
+          "rps": 312.28609866082905,
+          "mbps": 1309.82283275751
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.2903185759999971,
+          "rps": 344.4491957001091,
+          "mbps": 1444.7246393217504
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 0.9061533339999954,
+      "rps": 331.06979662671694,
+      "mbps": 1388.6073722706253,
+      "round_rps_cv_pct": 4.201979610905369
+    },
+    {
+      "client": "wreq_st",
+      "protocol": "h1",
+      "body_kind": "stream",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.007904331999999847,
+          "cpu_seconds": 0.012225247000000009
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.00817494200000013,
+          "cpu_seconds": 0.012597994000000057
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.007803610999999933,
+          "cpu_seconds": 0.012673879000000277
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.010878504999999983,
+          "cpu_seconds": 0.016334790000000002
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.012116077000001724,
+          "cpu_seconds": 0.017733560999999565
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.010837889000001155,
+          "cpu_seconds": 0.015893839000000298
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.007904331999999847,
+          "rps": 12651.290456929431,
+          "mbps": 129.54921427895738
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.00817494200000013,
+          "rps": 12232.502689315523,
+          "mbps": 125.26082753859096
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.007803610999999933,
+          "rps": 12814.580326979505,
+          "mbps": 131.22130254827013
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.02388288499999991,
+      "rps": 12561.296510032233,
+      "mbps": 128.62767626273006,
+      "round_rps_cv_pct": 1.95083384649963
+    },
+    {
+      "client": "wreq_st",
+      "protocol": "h1",
+      "body_kind": "stream",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.4336729589999999,
+          "cpu_seconds": 0.618791866
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.43501427900000067,
+          "cpu_seconds": 0.617068926
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.4183342979999978,
+          "cpu_seconds": 0.6033227109999997
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.4348368209999993,
+          "cpu_seconds": 0.629199861
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.4189342810000021,
+          "cpu_seconds": 0.5995444569999999
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.414567679000001,
+          "cpu_seconds": 0.6017186319999999
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.4336729589999999,
+          "rps": 230.5885066723748,
+          "mbps": 967.1582958899683
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.43501427900000067,
+          "rps": 229.8775116758865,
+          "mbps": 964.1761667322174
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.4183342979999978,
+          "rps": 239.04327347312204,
+          "mbps": 1002.6201581014096
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h1",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 1.2870215359999984,
+      "rps": 233.09633258537826,
+      "mbps": 977.6768801481824,
+      "round_rps_cv_pct": 1.785535593376926
+    },
+    {
+      "client": "wreq_st",
+      "protocol": "h2",
+      "body_kind": "full",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.005942670999999677,
+          "cpu_seconds": 0.008050542000000327
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.005698408000000654,
+          "cpu_seconds": 0.008054621999999512
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.005540198000005603,
+          "cpu_seconds": 0.007788447999999448
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.005877133999987905,
+          "cpu_seconds": 0.008223037999999683
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.005903703999990739,
+          "cpu_seconds": 0.008144970000000029
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.006280150999998568,
+          "cpu_seconds": 0.008503990999999544
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.005942670999999677,
+          "rps": 16827.450148259162,
+          "mbps": 172.31308951817383
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.005698408000000654,
+          "rps": 17548.76098727724,
+          "mbps": 179.69931250971896
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.005540198000005603,
+          "rps": 18049.89641162624,
+          "mbps": 184.8309392550527
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.017181277000005934,
+      "rps": 17460.867431442748,
+      "mbps": 178.79928249797373,
+      "round_rps_cv_pct": 2.8711987685397635
+    },
+    {
+      "client": "wreq_st",
+      "protocol": "h2",
+      "body_kind": "full",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.48735074500000053,
+          "cpu_seconds": 0.5400782979999992
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.48969406000000504,
+          "cpu_seconds": 0.5534101360000001
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.4847699940000041,
+          "cpu_seconds": 0.5371766779999998
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.4994855549999926,
+          "cpu_seconds": 0.5499049830000002
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.49152959600000656,
+          "cpu_seconds": 0.5454769650000006
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.4896325459999957,
+          "cpu_seconds": 0.538438159
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.48735074500000053,
+          "rps": 205.19102725491862,
+          "mbps": 860.6335463794142
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.48969406000000504,
+          "rps": 204.2091341683805,
+          "mbps": 856.515188278975
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.4847699940000041,
+          "rps": 206.28339467726866,
+          "mbps": 865.2152674284466
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 1.4618147990000097,
+      "rps": 205.2243555101661,
+      "mbps": 860.7733352137118,
+      "round_rps_cv_pct": 0.41281607106475265
+    },
+    {
+      "client": "wreq_st",
+      "protocol": "h2",
+      "body_kind": "stream",
+      "payload_bytes": 10240,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.00913954600000011,
+          "cpu_seconds": 0.01388187800000118
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.010672665999990727,
+          "cpu_seconds": 0.016180045000000476
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.009039231000002701,
+          "cpu_seconds": 0.014023390000000191
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.009844461000000138,
+          "cpu_seconds": 0.015062290000001255
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.010461147000000892,
+          "cpu_seconds": 0.01603394700000038
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.010718319999995174,
+          "cpu_seconds": 0.01637801800000105
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.00913954600000011,
+          "rps": 10941.462519035278,
+          "mbps": 112.04057619492126
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.010672665999990727,
+          "rps": 9369.730112428037,
+          "mbps": 95.94603635126309
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.009039231000002701,
+          "rps": 11062.887982392542,
+          "mbps": 113.28397293969962
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 10240
+      },
+      "total_requests": 300,
+      "total_seconds": 0.028851442999993537,
+      "rps": 10398.093433318645,
+      "mbps": 106.47647675718292,
+      "round_rps_cv_pct": 7.37363759768196
+    },
+    {
+      "client": "wreq_st",
+      "protocol": "h2",
+      "body_kind": "stream",
+      "payload_bytes": 4194304,
+      "concurrency": 10,
+      "samples": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.4892323509999983,
+          "cpu_seconds": 0.5302288269999993
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.49029752100000223,
+          "cpu_seconds": 0.5442562999999989
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.4808810260000058,
+          "cpu_seconds": 0.5432383740000013
+        }
+      ],
+      "warmup": [
+        {
+          "round": 1,
+          "sample": 1,
+          "seconds": 0.4927904500000011,
+          "cpu_seconds": 0.5332503969999998
+        },
+        {
+          "round": 2,
+          "sample": 1,
+          "seconds": 0.49246049399999947,
+          "cpu_seconds": 0.5403634359999998
+        },
+        {
+          "round": 3,
+          "sample": 1,
+          "seconds": 0.48693914300000074,
+          "cpu_seconds": 0.5467104270000007
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "total_requests": 100,
+          "total_seconds": 0.4892323509999983,
+          "rps": 204.4018548560791,
+          "mbps": 857.323517430272
+        },
+        {
+          "round": 2,
+          "total_requests": 100,
+          "total_seconds": 0.49029752100000223,
+          "rps": 203.95779239520067,
+          "mbps": 855.4609844743597
+        },
+        {
+          "round": 3,
+          "total_requests": 100,
+          "total_seconds": 0.4808810260000058,
+          "rps": 207.95164415573925,
+          "mbps": 872.2124128889938
+        }
+      ],
+      "validation": {
+        "status": 200,
+        "protocol": "h2",
+        "response_bytes": 4194304
+      },
+      "total_requests": 300,
+      "total_seconds": 1.4604108980000063,
+      "rps": 205.42163880784645,
+      "mbps": 861.6008013383056,
+      "round_rps_cv_pct": 0.8699846803795576
+    }
+  ],
+  "experiment": {
+    "kind": "paired official streaming-read parameters; not original upstream benchmark",
+    "canonical_aliases": {
+      "pyreqwest_st_official": "pyreqwest_st",
+      "pyreqwest_mt_official": "pyreqwest_mt",
+      "ry_official": "ry"
+    },
+    "upstream_pyreqwest_commit": "e2f77ec907a6240704d8cb90f36e233dc7b94781",
+    "script_sha256": "d5f53c9b5471d083d68fda60f4fdc2c9bbfcc96bc65573ba7ba9f3d99db02ce7",
+    "frozen_harness_sha256": {
+      "benchmark.py": "a07e8241a7c2dcc4a333e034fa023fdb0467a59190d8863036173bdaac00d062",
+      "clients.py": "edde2911328ca169a0e468a330847c6c92a47cd5b9b240c4304b56e9c81e991e",
+      "async_clients.py": "371a6d486e07a0fbdb33e4d8d59df44d7aabf9b9228fbee6abb5dfa07c60138b",
+      "blocking_clients.py": "4874e6911c8b1253890a8c201407e160761aa6b10c4b6c701591f309bd505617",
+      "results.py": "82b799967168818d0e0e82525d4fe5eb918d0f5e1d7562ddf5ba6139c124cb47",
+      "workloads.py": "daa650fda5203d6440323c17a34967ba4a59b67024ce4a150109d7f85aee9457"
+    },
+    "order": "canonical groups shuffled; natural/official adjacent with alternating AB/BA across rounds",
+    "scope": "Only response-read parameters change; server, scheduling, upload chunks, runtime and TLS unchanged",
+    "official_scope": "Official streaming settings applied at both payload sizes; upstream normally fully consumes small responses"
+  }
+}

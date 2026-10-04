@@ -57,24 +57,31 @@ uv venv --python 3.14
 uv pip install -r bench/requirements.txt
 uv run --no-sync maturin develop --release --uv --locked
 cargo build --release --locked --manifest-path bench/server/Cargo.toml
-uv run --no-sync python bench/benchmark.py \
+uv run --no-sync python bench/run.py \
   --server bench/server/target/release/wreq-benchmark-server
-uv run --no-sync python bench/report.py --input bench/data/RUN.json --markdown \
-  --output bench/data/RUN.md
 ```
 
 On Windows, the server executable ends in `.exe`. If Cargo uses a custom target
 directory, pass the actual executable path to `--server`.
 
-The retained WSL measurements built wreq with `--features jemalloc` in addition
-to the release flags above. Use a run's build records to reproduce its allocator
-and toolchain; the generic command above uses the platform's default allocator.
+`bench/run.py` passes workload options to the measurement runner. Before it
+starts, it prints the number of cases and batches. It saves stdout/stderr logs
+beside the raw JSON and generates an English `.report.md` once validation passes.
 
-A quick integration check uses the same clients and protocols, with fewer
-requests. Smoke results validate behavior, not performance rankings:
+The default suite has 1,680 supported cases, 5,040 timed batches and the same
+number of warm-up batches. Allow several hours for a full run. The setup commands
+above prepare the dependencies and native binaries; the runner won't install or
+build them for you. Publishing the results to the docs is optional.
+
+The saved WSL measurements built wreq with `--features jemalloc` in addition
+to the release flags above. Check a run's build records for its allocator and
+toolchain. The setup command above uses the platform's default allocator.
+
+For an integration check, use the same clients and protocols with fewer
+requests. This smoke run checks behavior; it isn't enough to rank performance:
 
 ```bash
-uv run --no-sync python bench/benchmark.py \
+uv run --no-sync python bench/run.py \
   --server bench/server/target/release/wreq-benchmark-server \
   --sizes 10240,1048576 --concurrency 2 --requests 4 \
   --rounds 1 --warmup 0 --samples 1 --output bench/data/smoke/RUN.json
@@ -95,9 +102,10 @@ the timer includes both upload and download. Responses are streamed, never
 collected into a complete body. Native streaming interfaces are used where
 available; adapters requiring a read size use documented 64 KiB reads.
 
-Other programs can compete for CPU and IO. Compare repeated results and their
-environment, not one ranking. These benchmarks do not establish universal
-client performance or measure browser-emulation compatibility.
+Other programs on the machine compete for CPU and I/O. Repeat measurements and
+check their environments before treating a difference as stable. A client that
+wins here may perform differently in your application. These tests also don't
+measure browser-emulation compatibility.
 
 Compare two snapshots with identical recorded workloads and compatible metadata:
 
@@ -107,28 +115,50 @@ uv run --no-sync python bench/compare.py \
   --output bench/data/COMPARISON.md
 ```
 
-The English report shows each cell's RPS change and round variation. Three-round
-variation is not a confidence interval, and sequential runs do not isolate TLS
-IO improvements; review build and harness records before attributing changes.
-Omit `--output` to print UTF-8 Markdown to stdout. File exports refuse to
-overwrite an existing path, including the input JSON.
+The English report shows each case's RPS change and variation between rounds.
+That variation isn't a confidence interval. Running one snapshot after another
+also doesn't isolate TLS I/O improvements; check the build and harness records
+before attributing a change. Omit `--output` to print UTF-8 Markdown to stdout.
+File exports refuse to overwrite any existing path, including the input JSON.
 
 ## Stored data and documentation
 
-Benchmarks run locally, not in GitHub Actions. JSON snapshots are retained in
-[`bench/data`](data/) on `main`. Without `--output`, a run creates a timestamped
-filename containing the measured source SHA. An explicit output path must not
-already exist; completed runs never overwrite an earlier snapshot.
+We run the benchmarks locally, outside GitHub Actions, and keep JSON snapshots
+in [`bench/data`](data/) on `main`. Without `--output`, the runner creates a
+timestamped filename containing the measured source SHA. If you supply an output
+path, it must be new. Completed runs never overwrite an earlier snapshot.
 
-Keep every completed snapshot. After reviewing a full measurement, copy that
-JSON to `bench/data/latest.json` to select it for the documentation. Smoke runs
-belong in `bench/data/smoke/` and must not replace `latest.json`.
+Keep every completed snapshot. After reviewing a full measurement, select it
+with:
 
-`python docs/build.py` reads the checked-in `bench/data/latest.json`, validates
-the complete recorded matrix, renders `docs/templates/benchmark.md`, and
-includes a frozen raw JSON download in the built site. It does not download
-measurements or start a benchmark. Missing or invalid data fails the build.
+```bash
+uv run --no-sync python bench/run.py --input bench/data/RUN.json --publish
+```
+
+`--input` reads a saved run and generates its report, or reuses the report if its
+contents match. It never starts a measurement. With `--publish`, the runner also
+freezes the candidate JSON and builds the docs. Only a successful build lets it
+atomically select the original bytes as `bench/data/latest.json`. Historical
+JSON, logs and reports stay untouched.
+
+Smoke runs belong in `bench/data/smoke/` and cannot be published. Publication
+requires the complete default matrix, at least 300 requests per batch and
+three rounds, with at least one warm-up and timed sample per round. These checks
+confirm coverage; you still need to review the quality of the measurements.
+
+Use `--build-docs` instead of `--publish` to preview a complete recorded matrix
+without changing `latest.json`. If your docs dependencies are in a separate
+virtual environment, add `--docs-python PATH/TO/python`. You can also pass
+`--publish` to a new measurement to run those steps after it finishes. The
+runner doesn't commit, push or enable benchmarks in CI.
+
+`python docs/build.py` reads and validates the checked-in `bench/data/latest.json`.
+It generates responsive light/dark SVG charts and fills
+`docs/templates/benchmark.md` with body-size controls and expandable tables.
+The built site includes a frozen raw JSON download. The build won't fetch
+measurements or start a benchmark, and missing or invalid data stops it.
+Read the Docs uses this same entry point.
 
 Use `python docs/build.py --data bench/data/RUN.json` to preview another run.
-The page labels every measurement with its actual source revision and dirty
-state; storing data on `main` does not change which code was measured.
+Each measurement shows its source revision and whether the checkout had
+uncommitted changes. Saving data on `main` doesn't change which code was tested.

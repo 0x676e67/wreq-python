@@ -1,13 +1,13 @@
 # Introduction
 
-wreq is a Python HTTP client with a native [Rust engine](https://github.com/0x676e67/wreq).
-It provides async and blocking APIs, reusable connection pools, streaming
-transfers, and control over TLS and HTTP/2 behavior.
+wreq is a Python HTTP client built on [Rust](https://github.com/0x676e67/wreq).
+You can make async or blocking requests, reuse connections and stream bodies.
+It also lets you configure TLS and HTTP/2 behavior.
 
-Use it for everyday HTTP requests, or when a server expects network behavior
-that a conventional Python client does not expose. Browser emulation is a
-configuration of the network stack, not a browser process: it does not execute
-JavaScript, render pages, or guarantee access to a protected website.
+Use it for everyday HTTP calls or for services that expect browser-like network
+behavior. Browser profiles configure the network stack; they don't run a browser,
+execute JavaScript or render pages. A profile won't guarantee access to a
+protected website.
 
 ## Start with a reusable client
 
@@ -27,11 +27,11 @@ async def main():
 asyncio.run(main())
 ```
 
-The [blocking client](../guide/blocking.md) offers the same HTTP building
-blocks for synchronous applications. Reuse a client across requests to reuse
-connections, and use context managers to close resources.
+For synchronous code, use the [blocking client](../guide/blocking.md).
+It has the same HTTP capabilities. Keep a client open across requests to reuse
+connections, and use context managers to close resources when you're done.
 
-## Choose the control you need
+## What you can configure
 
 <div class="grid cards" markdown>
 
@@ -53,28 +53,29 @@ connections, and use context managers to close resources.
 - **Streaming and buffers**
 
     Stream request and response bodies, or read a complete body. Rust-backed
-    binary outputs are read-only `memoryview` objects; convert to `bytes` only
-    when another API requires a copy.
+    binary outputs are read-only `memoryview` objects. Convert to `bytes` when
+    an API requires that type; the conversion copies the data.
 
     [Advanced features](../guide/advanced.md)
 
 - **Runtime configuration**
 
-    Clients use the shared runtime unless you supply a custom `Runtime`.
-    Select worker settings for your workload, including a single-worker runtime.
+    Clients share a runtime by default. Supply your own `Runtime` to choose
+    worker settings for a workload, including a single-worker runtime.
 
     [Runtime API](../api/runtime.md)
 
 - **Protocol settings**
 
-    Tune HTTP/1, HTTP/2, TLS, certificate verification, and client certificates
-    when the default configuration does not fit your service.
+    Change HTTP/1, HTTP/2 or TLS settings when the defaults don't fit your
+    service. You can also configure certificate verification and client certificates.
 
     [HTTP/1](../api/http1.md) · [HTTP/2](../api/http2.md) · [TLS](../api/tls.md)
 
 - **WebSockets**
 
-    Upgrade a connection and exchange text or binary frames through the client.
+    Open a WebSocket connection through the client to send and receive text or
+    binary frames.
 
     [WebSocket guide](../guide/websocket.md)
 
@@ -82,11 +83,11 @@ connections, and use context managers to close resources.
 
 ## Measure your workload
 
-Performance depends on payload size, concurrency, protocol, runtime settings,
-and how the application consumes responses. Our [HTTPS benchmarks](../benchmark.md)
-publish those settings, repeated measurements, and raw data alongside the
-tested source commit. Treat them as reproducible workloads, not a promise that
-one client is fastest in every application.
+Payload size, concurrency and protocol affect performance. So do runtime
+settings and the way you read responses. Our [HTTPS benchmarks](../benchmark.md)
+include those settings, repeated measurements and raw data, with the source
+commit tested. Use them to reproduce a workload and check how close it is to
+your application. Performance rankings can change with the workload.
 
 ## Next steps
 

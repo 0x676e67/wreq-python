@@ -11,11 +11,30 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from bench.charts import write_charts
 from bench.report import render_markdown
 from bench.results import validate_document, write_atomic
+from docs.benchmark_view import render_explorer
 
 MAX_DATA_BYTES = 8 * 1024 * 1024
 PLACEHOLDER = "{{BENCHMARK_RESULTS}}"
+CHART_PLACEHOLDER = "{{BENCHMARK_CHARTS}}"
+
+
+def clear_generated(root: Path) -> None:
+    """Remove only this build's page, download and flat generated chart assets."""
+    root = root.resolve()
+    charts = root / "docs/source/assets/benchmark/charts"
+    if not charts.resolve().is_relative_to(root):
+        raise ValueError(
+            "Generated chart directory must stay inside the docs workspace"
+        )
+    for path in charts.glob("*.svg"):
+        if not path.resolve().is_relative_to(charts.resolve()):
+            raise ValueError("Generated chart asset points outside its directory")
+        path.unlink()
+    (root / "docs/source/benchmark.md").unlink(missing_ok=True)
+    (root / "docs/source/assets/benchmark/latest.json").unlink(missing_ok=True)
 
 
 def decode_document(raw: bytes) -> dict:
@@ -42,17 +61,25 @@ def prepare(
         with source.open("rb") as handle:
             raw = handle.read(MAX_DATA_BYTES + 1)
     finally:
-        page.unlink(missing_ok=True)
-        snapshot.unlink(missing_ok=True)
-    if template.count(PLACEHOLDER) != 1:
+        clear_generated(root)
+    if template.count(PLACEHOLDER) != 1 or template.count(CHART_PLACEHOLDER) != 1:
         raise ValueError(
-            "The benchmark template must contain exactly one results placeholder"
+            "The benchmark template must contain exactly one results and charts placeholder"
         )
     document = decode_document(raw)
-    content = render_markdown(document, data_link="assets/benchmark/latest.json")
-    write_atomic(snapshot, document)
-    page.parent.mkdir(parents=True, exist_ok=True)
-    page.write_text(template.replace(PLACEHOLDER, content), encoding="utf-8")
+    try:
+        content = render_markdown(document, data_link="assets/benchmark/latest.json")
+        catalog = write_charts(document, root / "docs/source/assets/benchmark/charts")
+        charts = render_explorer(document, catalog)
+        write_atomic(snapshot, document)
+        page.parent.mkdir(parents=True, exist_ok=True)
+        page.write_text(
+            template.replace(PLACEHOLDER, content).replace(CHART_PLACEHOLDER, charts),
+            encoding="utf-8",
+        )
+    except Exception:
+        clear_generated(root)
+        raise
     return document
 
 
