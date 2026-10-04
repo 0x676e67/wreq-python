@@ -176,7 +176,7 @@ impl Cookie {
 
     fn parse<'a>(value: &'a HeaderValue) -> Result<RawCookie<'a>, ParseError> {
         std::str::from_utf8(value.as_bytes())
-            .map_err(cookie::ParseError::from)
+            .map_err(ParseError::from)
             .and_then(RawCookie::parse)
     }
 }
@@ -228,45 +228,39 @@ impl Jar {
 
     /// Get a cookie by name and URL.
     #[pyo3(signature = (name, url))]
-    pub fn get(&self, py: Python, name: PyBackedStr, url: PyBackedStr) -> Option<Cookie> {
-        py.detach(|| {
-            self.0
-                .get(&name, AsRef::<str>::as_ref(&url))
-                .map(RawCookie::from)
-                .map(Cookie)
-        })
+    pub fn get(&self, name: PyBackedStr, url: PyBackedStr) -> Option<Cookie> {
+        self.0
+            .get(&name, AsRef::<str>::as_ref(&url))
+            .map(RawCookie::from)
+            .map(Cookie)
     }
 
     /// Get all cookies.
-    pub fn get_all(&self, py: Python) -> Vec<Cookie> {
-        py.detach(|| self.0.get_all().map(RawCookie::from).map(Cookie).collect())
+    pub fn get_all(&self) -> Vec<Cookie> {
+        self.0.get_all().map(RawCookie::from).map(Cookie).collect()
     }
 
     /// Add a cookie to this jar.
     #[pyo3(signature = (cookie, url))]
-    pub fn add(&self, py: Python, cookie: PyCookie, url: PyBackedStr) {
-        py.detach(|| {
-            let url = AsRef::<str>::as_ref(&url);
-            match cookie {
-                PyCookie::Cookie(cookie) => self.0.add(cookie.0, url),
-                PyCookie::String(cookie_str) => self.0.add(cookie_str.as_ref(), url),
-            }
-        })
+    pub fn add(&self, cookie: PyCookie, url: PyBackedStr) {
+        let url = AsRef::<str>::as_ref(&url);
+        match cookie {
+            PyCookie::Cookie(cookie) => self.0.add(cookie.0, url),
+            PyCookie::String(cookie_str) => self.0.add(cookie_str.as_ref(), url),
+        }
     }
 
     /// Remove a cookie from this jar by name and URL.
     #[pyo3(signature = (name, url))]
-    pub fn remove(&self, py: Python, name: PyBackedStr, url: PyBackedStr) {
-        py.detach(|| {
-            self.0.remove(
-                AsRef::<str>::as_ref(&name).to_owned(),
-                AsRef::<str>::as_ref(&url),
-            )
-        })
+    pub fn remove(&self, name: PyBackedStr, url: PyBackedStr) {
+        self.0.remove(
+            AsRef::<str>::as_ref(&name).to_owned(),
+            AsRef::<str>::as_ref(&url),
+        )
     }
 
     /// Clear all cookies in this jar.
-    pub fn clear(&self, py: Python) {
-        py.detach(|| self.0.clear())
+    pub fn clear(&self) {
+        self.0.clear()
     }
 }
