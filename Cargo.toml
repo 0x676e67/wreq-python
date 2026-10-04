@@ -79,10 +79,9 @@ tikv-jemallocator = { version = "0.7.0", default-features = false, features = [
 wreq-util = { git = "https://github.com/0x676e67/wreq-util", rev = "5715529002738f46eea86a7271f918f9374d3582" }
 # demo/netty-migration
 wreq = { git = "https://github.com/0x676e67/wreq", rev = "54fdc7c9e0c1290e2f70f38d271ba954e3d86cc2" }
-# demo/tokio-btls-read-records
-btls = { git = "https://github.com/0x676e67/btls", rev = "0a23537f963f2de3fca63f8ac40f5923c9fbbccd" }
-btls-sys = { git = "https://github.com/0x676e67/btls", rev = "0a23537f963f2de3fca63f8ac40f5923c9fbbccd" }
-tokio-btls = { git = "https://github.com/0x676e67/btls", rev = "0a23537f963f2de3fca63f8ac40f5923c9fbbccd" }
+btls = { git = "https://github.com/0x676e67/btls", rev = "main" }
+btls-sys = { git = "https://github.com/0x676e67/btls", rev = "main" }
+tokio-btls = { git = "https://github.com/0x676e67/btls", rev = "main" }
 # main (0x676e67/netty#145)
 netty = { git = "https://github.com/0x676e67/netty", rev = "f8652ddf5e386d66b7f03cceedbc6b319d849762" }
 
