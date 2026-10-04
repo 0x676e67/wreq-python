@@ -5,6 +5,7 @@ import importlib.metadata
 import json
 from pathlib import Path
 import re
+from textwrap import indent
 from types import SimpleNamespace
 
 import pytest
@@ -273,10 +274,21 @@ def test_prepare_tracked_input_and_local_snapshot_override(tmp_path, monkeypatch
     assert "{{BENCHMARK_RESULTS}}" not in content
     assert "{{BENCHMARK_CHARTS}}" not in content
     assert "<details" not in content and "<summary>" not in content
-    assert report.render_markdown(document, environment_only=True) in content
+    assert '??? note "Measurement environment"' in content
+    assert '???+ note "Measurement environment"' not in content
+    assert (
+        indent(
+            report.render_markdown(
+                document, environment_only=True, environment_heading=None
+            ),
+            "    ",
+        )
+        in content
+    )
+    assert "    | Item | Value |" in content
     assert "### Throughput comparison" not in content
     assert "| Upload / echo payload | Concurrency" not in content
-    assert "### Measurement environment" in content
+    assert "### Measurement environment" not in content
     assert "### Client versions and runtimes" not in content
     assert "### Body cases" not in content
     assert "## Runtime and client differences" in content
@@ -420,7 +432,8 @@ def test_prepare_independent_blocking_source_and_shared_environment(tmp_path):
     assert "Async clients · Measured" in content
     assert "Blocking clients · Measured" in content
     assert "2026-10-03 00:00 UTC" in content and "2026-10-05 12:34 UTC" in content
-    assert content.count("### Measurement environment") == 1
+    assert content.count('??? note "Measurement environment"') == 1
+    assert "### Measurement environment" not in content
     catalog = json.loads(
         re.search(r"data-chart-catalog>(.*?)</script>", content).group(1)
     )

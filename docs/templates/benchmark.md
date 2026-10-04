@@ -13,6 +13,10 @@ Async and blocking clients have separate charts.
 We keep the local measurements in the repository. Check the revision beside
 the chart: it identifies the code tested, which may differ from the docs revision.
 
+??? note "Measurement environment"
+
+    Hardware, Python and test settings used for these measurements.
+
 {{BENCHMARK_RESULTS}}
 
 {{BENCHMARK_CHARTS}}

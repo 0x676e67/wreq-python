@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+from textwrap import indent
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -100,7 +101,9 @@ def prepare(
     try:
         directory = root / "docs/source/assets/benchmark/charts"
         if blocking is None:
-            content = render_markdown(document, environment_only=True)
+            content = render_markdown(
+                document, environment_only=True, environment_heading=None
+            )
             catalog = write_charts(document, directory)
         else:
             content = measurement_environments(document, blocking)
@@ -125,7 +128,9 @@ def prepare(
             blocking_snapshot.write_bytes(blocking_raw)
         page.parent.mkdir(parents=True, exist_ok=True)
         page.write_text(
-            template.replace(PLACEHOLDER, content).replace(CHART_PLACEHOLDER, charts),
+            template.replace(PLACEHOLDER, indent(content, "    ")).replace(
+                CHART_PLACEHOLDER, charts
+            ),
             encoding="utf-8",
         )
     except Exception:
@@ -137,7 +142,12 @@ def prepare(
 def measurement_environments(async_document: dict, blocking_document: dict) -> str:
     """Share one table only when all displayed environment/settings match."""
     shared = [
-        render_markdown(document, environment_only=True, include_source=False)
+        render_markdown(
+            document,
+            environment_only=True,
+            environment_heading=None,
+            include_source=False,
+        )
         for document in (async_document, blocking_document)
     ]
     if shared[0] == shared[1]:

@@ -92,7 +92,7 @@ def render_markdown(
     data_link: str | None = None,
     *,
     environment_only: bool = False,
-    environment_heading: str = "Measurement environment",
+    environment_heading: str | None = "Measurement environment",
     include_source: bool = True,
 ) -> str:
     validate_document(document)
@@ -119,9 +119,9 @@ def render_markdown(
             ]
     if data_link is not None:
         lines += [f"[Download this build's raw JSON]({safe_data_link(data_link)}).", ""]
+    if environment_heading is not None:
+        lines += [f"### {escape(environment_heading)}", ""]
     lines += [
-        f"### {escape(environment_heading)}",
-        "",
         "| Item | Value |",
         "| --- | --- |",
         f"| Python | {escape(environment.get('implementation', 'Not recorded'))} "
