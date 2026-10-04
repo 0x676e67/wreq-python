@@ -1,5 +1,3 @@
-mod scope;
-
 use std::{
     future::Future,
     sync::{
@@ -17,8 +15,7 @@ use pyo3::{
     prelude::*,
 };
 
-use self::scope::Scope;
-use super::Port;
+use super::{Port, scope::Scope};
 
 /// An awaitable driving a Rust future on the asyncio event loop thread.
 ///
@@ -35,11 +32,11 @@ pub struct Coroutine {
     future: Mutex<Option<BoxFuture<'static, PyResult<Py<PyAny>>>>>,
     slot: Arc<Slot>,
     waker: Waker,
-    scope: Scope,
+    pub(super) scope: Scope,
 }
 
 /// The outcome of a step: the protocol's `StopIteration` is built only for Python.
-enum Step {
+pub(super) enum Step {
     /// Suspend, handing the task an asyncio future to wait on, or `None`.
     Yield(Py<PyAny>),
     /// Finish with this value.
@@ -81,20 +78,24 @@ impl Coroutine {
         }
     }
 
-    /// Let `async with` enter the coroutine; see [`aio::managed`](super::managed).
+    /// Let `async with` enter the coroutine; see [`coroutine::managed`](super::managed).
     pub(super) fn managed(mut self) -> Self {
         self.scope = Scope::Ready;
         self
     }
 
     #[inline]
-    fn future(&mut self) -> &mut Option<BoxFuture<'static, PyResult<Py<PyAny>>>> {
+    pub(super) fn future(&mut self) -> &mut Option<BoxFuture<'static, PyResult<Py<PyAny>>>> {
         self.future
             .get_mut()
             .unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn step(&mut self, py: Python<'_>, sent: Option<&Bound<'_, PyAny>>) -> PyResult<Step> {
+    pub(super) fn step(
+        &mut self,
+        py: Python<'_>,
+        sent: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Step> {
         if self.scope.is_opening() {
             return self.forward(py, sent);
         }
@@ -129,7 +130,7 @@ impl Coroutine {
             .inspect_err(|_| self.abandon())
     }
 
-    fn finish(&mut self) {
+    pub(super) fn finish(&mut self) {
         *self.future() = None;
         self.slot.state.store(DONE, Ordering::Release);
         // A finished coroutine must not keep its loop's port open.
@@ -197,7 +198,7 @@ impl Coroutine {
 // ===== impl Step =====
 
 impl Step {
-    fn into_result(self) -> PyResult<Py<PyAny>> {
+    pub(super) fn into_result(self) -> PyResult<Py<PyAny>> {
         match self {
             Step::Yield(value) => Ok(value),
             Step::Return(value) => Err(PyStopIteration::new_err((value,))),
@@ -206,7 +207,7 @@ impl Step {
 }
 
 /// Fail if `waiter`, the future a task waits on for this coroutine, is still pending.
-fn ensure_done(waiter: &Bound<'_, PyAny>) -> PyResult<()> {
+pub(super) fn ensure_done(waiter: &Bound<'_, PyAny>) -> PyResult<()> {
     if waiter
         .call_method0(intern!(waiter.py(), "done"))?
         .is_truthy()?
@@ -228,10 +229,7 @@ impl Slot {
         if self.state.load(Ordering::Acquire) == NOTIFIED {
             return Ok(py.None());
         }
-        let (event_loop, port) = Port::current(py)?;
-        let waiter = event_loop.call_method0(intern!(py, "create_future"))?;
-        waiter.setattr(intern!(py, "_asyncio_future_blocking"), true)?;
-        let waiter = waiter.unbind();
+        let (waiter, port) = Port::waiter(py)?;
         // Publish the port and waiter before waiting, so a wake that sees WAITING
         // always reaches the loop that runs this task.
         *self.lock_port() = Some(port);

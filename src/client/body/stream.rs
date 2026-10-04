@@ -24,7 +24,7 @@ use tokio::{
 };
 
 use crate::{
-    aio::{self, Coroutine},
+    coroutine::{self, Coroutine},
     extractor::{Binary, Text},
     runtime,
 };
@@ -344,7 +344,7 @@ impl Sender {
         };
         let tx = self.sender();
         // Channel readiness is runtime-independent, so this waits on the Python loop.
-        aio::local(py, "Sender.send", async move {
+        coroutine::local(py, "Sender.send", async move {
             Ok(match tx {
                 Some(tx) => tx.send(Some(item)).await.is_ok(),
                 None => false,
@@ -356,7 +356,7 @@ impl Sender {
     fn finish<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, Coroutine>> {
         // Python may retain the sender after completion, especially on PyPy.
         let tx = self.sender();
-        aio::local(py, "Sender.finish", async move {
+        coroutine::local(py, "Sender.finish", async move {
             Ok(match tx {
                 Some(tx) => tx.send(None).await.is_ok(),
                 None => false,

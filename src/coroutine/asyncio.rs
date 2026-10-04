@@ -1,3 +1,6 @@
+//! The asyncio event loop side: the futures a suspended task waits on, and the per-loop
+//! [`Port`] that resolves them when Rust work wakes.
+
 use std::{
     cell::RefCell,
     io::{self, ErrorKind, Read, Write},
@@ -10,7 +13,7 @@ use std::{
 
 use pyo3::{PyTraverseError, PyVisit, intern, prelude::*, sync::PyOnceLock};
 
-use super::coroutine::Slot;
+use super::awaitable::Slot;
 
 /// Wakes queued for one event loop, delivered by a single bell per batch.
 pub(crate) struct Port {
@@ -53,8 +56,17 @@ thread_local! {
 // ===== impl Port =====
 
 impl Port {
+    /// A new asyncio future for a task to wait on, and the port of the loop that runs it.
+    pub(super) fn waiter(py: Python<'_>) -> PyResult<(Py<PyAny>, Arc<Port>)> {
+        let (event_loop, port) = Self::current(py)?;
+        let waiter = event_loop.call_method0(intern!(py, "create_future"))?;
+        // Tasks only accept futures marked as yielded by `await`.
+        waiter.setattr(intern!(py, "_asyncio_future_blocking"), true)?;
+        Ok((waiter.unbind(), port))
+    }
+
     /// Return the running loop and its port, opening the port on first use.
-    pub(super) fn current(py: Python<'_>) -> PyResult<(Bound<'_, PyAny>, Arc<Port>)> {
+    fn current(py: Python<'_>) -> PyResult<(Bound<'_, PyAny>, Arc<Port>)> {
         static GET_RUNNING_LOOP: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
         let event_loop = GET_RUNNING_LOOP
             .get_or_try_init(py, || {
