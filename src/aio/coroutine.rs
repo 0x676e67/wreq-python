@@ -1,7 +1,7 @@
+mod scope;
+
 use std::{
     future::Future,
-    mem,
-    pin::Pin,
     sync::{
         Arc, Mutex, MutexGuard, PoisonError,
         atomic::{AtomicU8, Ordering},
@@ -9,16 +9,16 @@ use std::{
     task::{Context, Poll, Wake, Waker},
 };
 
+use futures_util::{FutureExt, future::BoxFuture};
 use pyo3::{
     PyTraverseError, PyVisit,
-    exceptions::{PyRuntimeError, PyStopIteration, PyTypeError},
+    exceptions::{PyRuntimeError, PyStopIteration},
     intern,
     prelude::*,
 };
 
+use self::scope::Scope;
 use super::Port;
-
-type BoxFuture = Pin<Box<dyn Future<Output = PyResult<Py<PyAny>>> + Send>>;
 
 /// An awaitable driving a Rust future on the asyncio event loop thread.
 ///
@@ -26,36 +26,24 @@ type BoxFuture = Pin<Box<dyn Future<Output = PyResult<Py<PyAny>>> + Send>>;
 /// the C task fast path work unchanged. A throw or close drops the Rust future,
 /// which aborts any spawned work. PyO3's borrow flag rejects reentrant polls.
 ///
-/// A coroutine built with [`managed`](Self::managed) also works as `async with`: entering
-/// awaits it, then awaits its result's `__aenter__`, and keeps the result for `__aexit__`.
+/// A coroutine built with [`managed`](Self::managed) also works as `async with`, as
+/// `async with await` would; the `scope` module holds that state.
 #[pyclass(module = "wreq")]
 pub struct Coroutine {
     qualname: &'static str,
     /// Polled only through `&mut self`, so `get_mut` reaches it without locking.
-    future: Mutex<Option<BoxFuture>>,
+    future: Mutex<Option<BoxFuture<'static, PyResult<Py<PyAny>>>>>,
     slot: Arc<Slot>,
     waker: Waker,
     scope: Scope,
 }
 
-/// The `async with` state of a coroutine.
-enum Scope {
-    /// `async with` is unsupported.
-    Unsupported,
-    /// Not yet awaited; `async with` may enter it.
-    Ready,
-    /// Awaited, entered or exited already.
-    Spent,
-    /// Awaited by `async with` until the result, an async context manager, is ready.
-    Entering,
-    /// Awaiting the result's own `__aenter__`. A wreq coroutine runs as this one's future;
-    /// any other awaitable is driven through `delegate`, its `__await__` iterator.
-    Opening {
-        manager: Py<PyAny>,
-        delegate: Option<Py<PyAny>>,
-    },
-    /// The entered context manager, kept until `__aexit__`.
-    Entered(Py<PyAny>),
+/// The outcome of a step: the protocol's `StopIteration` is built only for Python.
+enum Step {
+    /// Suspend, handing the task an asyncio future to wait on, or `None`.
+    Yield(Py<PyAny>),
+    /// Finish with this value.
+    Return(Py<PyAny>),
 }
 
 /// Wake state shared with Rust wakers for the coroutine's whole life.
@@ -86,7 +74,7 @@ impl Coroutine {
         let slot = Arc::new(Slot::default());
         Coroutine {
             qualname,
-            future: Mutex::new(Some(Box::pin(future))),
+            future: Mutex::new(Some(future.boxed())),
             waker: Waker::from(slot.clone()),
             slot,
             scope: Scope::Unsupported,
@@ -100,30 +88,17 @@ impl Coroutine {
     }
 
     #[inline]
-    fn future(&mut self) -> &mut Option<BoxFuture> {
+    fn future(&mut self) -> &mut Option<BoxFuture<'static, PyResult<Py<PyAny>>>> {
         self.future
             .get_mut()
             .unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn step(&mut self, py: Python<'_>, sent: Option<&Bound<'_, PyAny>>) -> PyResult<Py<PyAny>> {
-        if let Scope::Opening {
-            delegate: Some(delegate),
-            ..
-        } = &self.scope
-        {
-            let delegate = delegate.bind(py).clone();
-            let result = match sent {
-                Some(value) if !value.is_none() => {
-                    delegate.call_method1(intern!(py, "send"), (value,))
-                }
-                _ => delegate.call_method0(intern!(py, "__next__")),
-            };
-            return self.resume(py, result);
+    fn step(&mut self, py: Python<'_>, sent: Option<&Bound<'_, PyAny>>) -> PyResult<Step> {
+        if self.scope.is_opening() {
+            return self.forward(py, sent);
         }
-        if let Scope::Ready = self.scope {
-            self.scope = Scope::Spent;
-        }
+        self.scope.start();
 
         let future = self
             .future
@@ -134,114 +109,24 @@ impl Coroutine {
 
         // A pending waiter means another task is suspended on this coroutine. Once
         // it is taken, wakes from now on resume this poll.
-        if let Some(waiter) = self.slot.take_waiter() {
-            let done = waiter
-                .bind(py)
-                .call_method0(intern!(py, "done"))
-                .and_then(|done| done.is_truthy());
-            if !matches!(done, Ok(true)) {
-                self.slot.set_waiter(waiter);
-                done?;
-                return Err(PyRuntimeError::new_err(
-                    "coroutine is being awaited already",
-                ));
-            }
+        if let Some(waiter) = self.slot.take_waiter()
+            && let Err(err) = ensure_done(waiter.bind(py))
+        {
+            self.slot.set_waiter(waiter);
+            return Err(err);
         }
 
         self.slot.state.store(POLLING, Ordering::Release);
         if let Poll::Ready(result) = future.as_mut().poll(&mut Context::from_waker(&self.waker)) {
-            return match result {
-                Ok(value) => self.complete(py, value),
-                Err(err) => {
-                    self.abandon();
-                    Err(err)
-                }
-            };
+            return result
+                .and_then(|value| self.complete(py, value))
+                .inspect_err(|_| self.abandon());
         }
         // A coroutine that cannot wait ends here, releasing any spawned work.
-        self.slot.suspend(py).inspect_err(|_| self.abandon())
-    }
-
-    /// Finish with `value`, first entering it when awaited by `async with`.
-    fn complete(&mut self, py: Python<'_>, value: Py<PyAny>) -> PyResult<Py<PyAny>> {
-        match mem::replace(&mut self.scope, Scope::Spent) {
-            Scope::Entering => return self.open(py, value),
-            Scope::Opening { manager, .. } => self.scope = Scope::Entered(manager),
-            scope => self.scope = scope,
-        }
-        self.finish();
-        Err(PyStopIteration::new_err((value,)))
-    }
-
-    /// Await `manager.__aenter__()`, as `async with` would.
-    fn open(&mut self, py: Python<'_>, manager: Py<PyAny>) -> PyResult<Py<PyAny>> {
-        let awaitable = match manager.bind(py).call_method0(intern!(py, "__aenter__")) {
-            Ok(awaitable) => awaitable,
-            Err(err) => {
-                self.finish();
-                return Err(err);
-            }
-        };
-        // `Response.__aenter__` returns a ready wreq coroutine; poll its future in place.
-        if let Ok(coroutine) = awaitable.cast::<Coroutine>()
-            && let Ok(mut coroutine) = coroutine.try_borrow_mut()
-            && let Some(future) = coroutine.future().take()
-        {
-            coroutine.finish();
-            *self.future() = Some(future);
-            self.scope = Scope::Opening {
-                manager,
-                delegate: None,
-            };
-            return self.step(py, None);
-        }
-        self.finish();
-        let delegate = awaitable.call_method0(intern!(py, "__await__"))?;
-        self.scope = Scope::Opening {
-            manager,
-            delegate: Some(delegate.clone().unbind()),
-        };
-        let result = delegate.call_method0(intern!(py, "__next__"));
-        self.resume(py, result)
-    }
-
-    /// Handle a step of the `__aenter__` delegate: pass on what it yields, and finish when
-    /// it returns or raises.
-    fn resume(
-        &mut self,
-        py: Python<'_>,
-        result: PyResult<Bound<'_, PyAny>>,
-    ) -> PyResult<Py<PyAny>> {
-        match result {
-            Ok(yielded) => Ok(yielded.unbind()),
-            Err(err) if err.is_instance_of::<PyStopIteration>(py) => {
-                let value = err.value(py).getattr(intern!(py, "value"))?.unbind();
-                self.complete(py, value)
-            }
-            Err(err) => {
-                self.abandon();
-                Err(err)
-            }
-        }
-    }
-
-    /// The `__aenter__` delegate, if one is running.
-    fn delegate<'py>(&self, py: Python<'py>) -> Option<Bound<'py, PyAny>> {
-        match &self.scope {
-            Scope::Opening {
-                delegate: Some(delegate),
-                ..
-            } => Some(delegate.bind(py).clone()),
-            _ => None,
-        }
-    }
-
-    /// Finish without entering, dropping any context manager being entered.
-    fn abandon(&mut self) {
-        self.finish();
-        if let Scope::Entering | Scope::Opening { .. } = self.scope {
-            self.scope = Scope::Spent;
-        }
+        self.slot
+            .suspend(py)
+            .map(Step::Yield)
+            .inspect_err(|_| self.abandon())
     }
 
     fn finish(&mut self) {
@@ -269,29 +154,15 @@ impl Coroutine {
     }
 
     fn send(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
-        self.step(py, Some(value))
+        self.step(py, Some(value)).and_then(Step::into_result)
     }
 
     fn throw(&mut self, py: Python<'_>, exc: Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
-        if let Some(delegate) = self.delegate(py)
-            && let Ok(throw) = delegate.getattr(intern!(py, "throw"))
-        {
-            let result = throw.call1((exc,));
-            return self.resume(py, result);
-        }
-        self.abandon();
-        Err(PyErr::from_value(exc))
+        self.throw_step(py, exc).and_then(Step::into_result)
     }
 
     fn close(&mut self, py: Python<'_>) -> PyResult<()> {
-        let delegate = self.delegate(py);
-        self.abandon();
-        if let Some(delegate) = delegate
-            && let Ok(close) = delegate.getattr(intern!(py, "close"))
-        {
-            close.call0()?;
-        }
-        Ok(())
+        self.stop(py)
     }
 
     fn __await__(slf: Py<Self>) -> Py<Self> {
@@ -299,55 +170,11 @@ impl Coroutine {
     }
 
     fn __next__(&mut self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        self.step(py, None)
-    }
-
-    /// Enter by awaiting the coroutine itself, which also awaits the result's `__aenter__`.
-    fn __aenter__(mut slf: PyRefMut<'_, Self>) -> PyResult<PyRefMut<'_, Self>> {
-        let pending = slf.future().is_some();
-        match slf.scope {
-            Scope::Unsupported => Err(PyTypeError::new_err(
-                "coroutine does not support the asynchronous context manager protocol",
-            )),
-            Scope::Ready if pending => {
-                slf.scope = Scope::Entering;
-                Ok(slf)
-            }
-            _ => Err(PyRuntimeError::new_err(
-                "cannot reuse already awaited coroutine",
-            )),
-        }
-    }
-
-    /// Exit the entered result, returning its `__aexit__` awaitable.
-    fn __aexit__<'py>(
-        &mut self,
-        py: Python<'py>,
-        exc_type: Bound<'py, PyAny>,
-        exc_val: Bound<'py, PyAny>,
-        traceback: Bound<'py, PyAny>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let value = match mem::replace(&mut self.scope, Scope::Spent) {
-            Scope::Entered(value) => value,
-            scope => {
-                self.scope = scope;
-                return Err(PyRuntimeError::new_err("coroutine was not entered"));
-            }
-        };
-        value
-            .into_bound(py)
-            .call_method1(intern!(py, "__aexit__"), (exc_type, exc_val, traceback))
+        self.step(py, None).and_then(Step::into_result)
     }
 
     fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {
-        match &self.scope {
-            Scope::Opening { manager, delegate } => {
-                visit.call(manager)?;
-                visit.call(delegate)?;
-            }
-            Scope::Entered(value) => visit.call(value)?,
-            _ => {}
-        }
+        self.scope.traverse(&visit)?;
         // Pending Rust work owns the waiter until its loop closes the port; only then
         // can a cycle through the waiter be collected without aborting live requests.
         let closed = self
@@ -363,9 +190,32 @@ impl Coroutine {
 
     fn __clear__(&mut self) {
         self.finish();
-        if !matches!(self.scope, Scope::Unsupported) {
-            self.scope = Scope::Spent;
+        self.scope.clear();
+    }
+}
+
+// ===== impl Step =====
+
+impl Step {
+    fn into_result(self) -> PyResult<Py<PyAny>> {
+        match self {
+            Step::Yield(value) => Ok(value),
+            Step::Return(value) => Err(PyStopIteration::new_err((value,))),
         }
+    }
+}
+
+/// Fail if `waiter`, the future a task waits on for this coroutine, is still pending.
+fn ensure_done(waiter: &Bound<'_, PyAny>) -> PyResult<()> {
+    if waiter
+        .call_method0(intern!(waiter.py(), "done"))?
+        .is_truthy()?
+    {
+        Ok(())
+    } else {
+        Err(PyRuntimeError::new_err(
+            "coroutine is being awaited already",
+        ))
     }
 }
 

@@ -161,7 +161,10 @@ def test_closed_loop_releases_pending_requests(new_loop, woken):
 
 @pytest.mark.asyncio
 async def test_request_coroutine_enters_its_result():
+    writers = []
+
     async def serve(reader, writer):
+        writers.append(writer)
         try:
             while True:
                 await reader.readuntil(b"\r\n\r\n")
@@ -227,4 +230,99 @@ async def test_request_coroutine_enters_its_result():
                     pass
     finally:
         server.close()
+        # Pooled connections outlive the client; close them so the server can stop.
+        for writer in writers:
+            writer.close()
+        await server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_entering_rejects_a_second_driver():
+    gate = asyncio.Event()
+    writers = []
+
+    async def serve(reader, writer):
+        writers.append(writer)
+        try:
+            while True:
+                head = await reader.readuntil(b"\r\n\r\n")
+                if head.startswith(b"GET /slow "):
+                    await gate.wait()
+                writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
+        except (asyncio.IncompleteReadError, ConnectionError):
+            pass
+        finally:
+            writer.close()
+
+    server = await asyncio.start_server(serve, "127.0.0.1", 0)
+    url = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}/"
+    original = wreq.Response.__aenter__
+    try:
+        async with wreq.Client(proxies=[]) as client:
+            # A second task awaiting a coroutine suspended in `__aenter__` fails, while
+            # the first one still enters.
+            opening = asyncio.Event()
+
+            async def aenter(self):
+                opening.set()
+                await gate.wait()
+                return self
+
+            wreq.Response.__aenter__ = aenter
+
+            async def enter(coroutine):
+                async with coroutine as response:
+                    return await response.text()
+
+            coroutine = client.get(url)
+            first = asyncio.create_task(enter(coroutine))
+            await asyncio.wait_for(opening.wait(), 5)
+            with pytest.raises(RuntimeError, match="awaited already"):
+                await coroutine
+            gate.set()
+            assert await asyncio.wait_for(first, 5) == "ok"
+
+            # An `__aenter__` returning a coroutine another task awaits fails, and that
+            # task still completes.
+            gate.clear()
+            awaited = client.get(url + "slow")
+            other = asyncio.ensure_future(awaited)
+            await asyncio.sleep(0.05)
+            wreq.Response.__aenter__ = lambda self: awaited
+            with pytest.raises(RuntimeError, match="awaited already"):
+                async with client.get(url):
+                    pass
+            wreq.Response.__aenter__ = original
+            gate.set()
+            assert await (await asyncio.wait_for(other, 5)).text() == "ok"
+
+            # So does a Python coroutine another task is suspended in.
+            gate.clear()
+
+            async def slow():
+                await gate.wait()
+                return "slow"
+
+            shared = slow()
+            other = asyncio.ensure_future(shared)
+            await asyncio.sleep(0)
+            wreq.Response.__aenter__ = lambda self: shared
+            with pytest.raises(RuntimeError, match="awaited already"):
+                async with client.get(url):
+                    pass
+            wreq.Response.__aenter__ = original
+            gate.set()
+            assert await asyncio.wait_for(other, 5) == "slow"
+
+            # An `__aenter__` result must be awaitable.
+            wreq.Response.__aenter__ = lambda self: 1
+            with pytest.raises(TypeError, match="does not implement __await__"):
+                async with client.get(url):
+                    pass
+    finally:
+        wreq.Response.__aenter__ = original
+        gate.set()
+        server.close()
+        for writer in writers:
+            writer.close()
         await server.wait_closed()
