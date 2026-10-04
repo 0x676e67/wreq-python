@@ -1,4 +1,4 @@
-//! Types and utilities for representing HTTP request bodies.
+//! Request bodies extracted from Python.
 
 mod form;
 mod json;
@@ -14,11 +14,16 @@ use pyo3::{
 pub use self::{
     form::Form,
     json::Json,
-    stream::{Pull, PyStream, Streamer},
+    stream::{Pulls, PyStream},
 };
-use crate::extractor::{BytesInput, StrInput};
+use crate::{
+    error::Error,
+    extractor::{BytesInput, StrInput},
+};
 
-/// Represents the body of an HTTP request.
+/// A `body=` argument, matched by type before trying form, JSON and then a stream.
+/// Mappings and pair sequences with scalar values are form-encoded and other containers
+/// JSON-encoded, without the `Content-Type` that `form=` and `json=` set.
 pub enum Body {
     Text(StrInput),
     Bytes(BytesInput),
@@ -55,16 +60,6 @@ impl FromPyObject<'_, '_> for Body {
     }
 }
 
-impl Body {
-    /// See [`PyStream::feed`].
-    pub fn feed(&mut self, py: Python<'_>) -> Option<tokio::sync::mpsc::UnboundedReceiver<Pull>> {
-        match self {
-            Body::Stream(stream) => stream.feed(py),
-            _ => None,
-        }
-    }
-}
-
 impl TryFrom<Body> for wreq::Body {
     type Error = PyErr;
 
@@ -72,10 +67,10 @@ impl TryFrom<Body> for wreq::Body {
         match value {
             Body::Form(form) => serde_urlencoded::to_string(form)
                 .map(wreq::Body::from)
-                .map_err(crate::Error::Form)
+                .map_err(Error::Form)
                 .map_err(Into::into),
             Body::Json(json) => serde_json::to_vec(&json)
-                .map_err(crate::Error::Json)
+                .map_err(Error::Json)
                 .map(wreq::Body::from)
                 .map_err(Into::into),
             Body::Text(s) => Ok(wreq::Body::from(s.0)),

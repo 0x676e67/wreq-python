@@ -36,7 +36,7 @@ use crate::{
     tls::{Identity, KeyLog, TlsOptions, TlsVerify, TlsVersion},
 };
 
-/// A IP socket address.
+/// An IP socket address.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[pyclass(eq, str, frozen, skip_from_py_object)]
 pub struct SocketAddr(pub std::net::SocketAddr);
@@ -235,8 +235,11 @@ impl FromPyObject<'_, '_> for Builder {
 #[pyclass(subclass, frozen, skip_from_py_object)]
 pub struct Client {
     inner: wreq::Client,
+    /// Runs this client's requests and response reads, keeping the runtime alive.
     runtime: runtime::Runtime,
+    /// Cancelled by `close()`; pending and new requests then fail with `CancelledError`.
     cancel: CancellationToken,
+    /// Turn error statuses into exceptions for every request.
     raise_for_status: bool,
 
     /// Get the cookie jar of the client.
@@ -249,7 +252,7 @@ pub struct Client {
 #[pyclass(name = "Client", subclass, frozen, skip_from_py_object)]
 pub struct BlockingClient(Client);
 
-// ====== Client =====
+// ===== impl Client =====
 
 impl Client {
     /// Return a coroutine named `qualname` that sends the request when awaited.
@@ -803,26 +806,19 @@ impl BlockingClient {
         self.request(py, Method::TRACE, url, kwds)
     }
 
-    /// Make a rqeuest with the specified method and URL.
+    /// Make a request with the specified method and URL.
     #[pyo3(signature = (method, url, **kwds))]
     pub fn request(
         &self,
         py: Python,
         method: Method,
         url: PyBackedStr,
-        kwds: Option<Request>,
+        mut kwds: Option<Request>,
     ) -> PyResult<BlockingResponse> {
-        // A synchronous body is read ahead here, and any rest is pulled here while waiting.
-        let mut kwds = kwds;
-        let pulls = kwds.as_mut().and_then(|request| request.feed(py));
-        py.detach(|| {
-            let fut = execute_request(self.0.clone(), method, url, kwds);
-            match pulls {
-                Some(pulls) => nogil::block_on_feeding(&self.0.runtime, fut, pulls),
-                None => nogil::block_on(&self.0.runtime, fut),
-            }
-            .map(Into::into)
-        })
+        // A sync iterator body is pulled on this thread while it waits.
+        let pulls = kwds.as_mut().and_then(Request::feed);
+        let fut = execute_request(self.0.clone(), method, url, kwds);
+        nogil::block_on_feeding(py, &self.0.runtime, fut, pulls).map(Into::into)
     }
 
     /// Make a WebSocket request to the specified URL.

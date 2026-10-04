@@ -1,5 +1,6 @@
 import asyncio
 import threading
+import time
 from contextlib import asynccontextmanager
 
 import pytest
@@ -143,3 +144,107 @@ async def test_blocking_upload_iterator_can_send_requests():
             assert await asyncio.wait_for(bodies.get(), 5) == chunk * 16
     finally:
         client.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("blocking", [False, True])
+async def test_sync_upload_sends_each_chunk_as_yielded(blocking):
+    # A chunk goes out once yielded, before the iterator produces the next one.
+    first_seen = threading.Event()
+    bodies = asyncio.Queue()
+
+    async def accept(reader, writer):
+        try:
+            await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 5)
+            body = bytearray()
+            while size := int(await asyncio.wait_for(reader.readline(), 10), 16):
+                body.extend(await reader.readexactly(size))
+                await reader.readexactly(2)
+                first_seen.set()
+            await reader.readexactly(2)
+            bodies.put_nowait(bytes(body))
+            writer.write(
+                b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 2\r\n\r\nok"
+            )
+            await writer.drain()
+        finally:
+            writer.close()
+
+    def chunks():
+        yield b"first"
+        # Holding the first chunk back until a later one is ready would stall here.
+        assert first_seen.wait(5), "the first chunk was not sent"
+        yield b"second"
+
+    server = await asyncio.start_server(accept, "127.0.0.1", 0)
+    url = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}/"
+    factory = wreq.blocking.Client if blocking else wreq.Client
+    client = factory(proxies=[])
+    try:
+        if blocking:
+
+            def send():
+                with client.post(url, body=chunks()) as response:
+                    return response.bytes()
+
+            assert await asyncio.wait_for(asyncio.to_thread(send), 10) == b"ok"
+        else:
+            response = await asyncio.wait_for(client.post(url, body=chunks()), 10)
+            async with response:
+                assert await response.bytes() == b"ok"
+        assert await asyncio.wait_for(bodies.get(), 5) == b"firstsecond"
+    finally:
+        client.close()
+        server.close()
+        await server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_blocking_upload_returns_on_early_response():
+    # A response sent before the body is read returns while a slow iterator still uploads.
+    finished = threading.Event()
+    bodies = asyncio.Queue()
+
+    async def accept(reader, writer):
+        try:
+            await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 5)
+            writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
+            await writer.drain()
+            body = bytearray()
+            while size := int(await asyncio.wait_for(reader.readline(), 10), 16):
+                body.extend(await reader.readexactly(size))
+                await reader.readexactly(2)
+            await reader.readexactly(2)
+            bodies.put_nowait(bytes(body))
+        finally:
+            writer.close()
+
+    def chunks():
+        for _ in range(50):
+            yield b"x"
+            if finished.wait(0.1):
+                return
+
+    server = await asyncio.start_server(accept, "127.0.0.1", 0)
+    url = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}/"
+    client = wreq.blocking.Client(proxies=[])
+    try:
+
+        def send():
+            started = time.monotonic()
+            response = client.post(url, body=chunks())
+            elapsed = time.monotonic() - started
+            finished.set()
+            with response:
+                return elapsed, response.bytes()
+
+        elapsed, body = await asyncio.wait_for(asyncio.to_thread(send), 10)
+        assert body == b"ok"
+        # The iterator alone takes 5 s; the response must not wait for it.
+        assert elapsed < 2, elapsed
+        assert set(await asyncio.wait_for(bodies.get(), 5)) == {ord("x")}
+    finally:
+        finished.set()
+        client.close()
+        server.close()
+        await server.wait_closed()

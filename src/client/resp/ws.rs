@@ -1,21 +1,20 @@
 mod cmd;
 pub mod msg;
 
-use std::{fmt::Display, time::Duration};
+use std::{
+    fmt::{self, Display},
+    time::Duration,
+};
 
 use msg::Message;
 use pyo3::prelude::*;
 use tokio::sync::mpsc;
-use wreq::{
-    header::HeaderValue,
-    ws::{self, WebSocketResponse, message::Utf8Bytes},
-};
+use wreq::{header::HeaderValue, ws::WebSocketResponse};
 
 use crate::{
     aio::{self, Coroutine},
-    client::SocketAddr,
+    client::{SocketAddr, nogil},
     cookie::Cookie,
-    error::Error,
     extractor::StrInput,
     header::HeaderMap,
     http::{StatusCode, Version},
@@ -25,11 +24,11 @@ use crate::{
 /// A WebSocket response.
 #[pyclass(subclass, frozen, str)]
 pub struct WebSocket {
-    /// Returns the status code of the response.
+    /// Returns the HTTP version of the response.
     #[pyo3(get)]
     version: Version,
 
-    /// Returns the HTTP version of the response.
+    /// Returns the status code of the response.
     #[pyo3(get)]
     status: StatusCode,
 
@@ -87,8 +86,8 @@ impl WebSocket {
 impl WebSocket {
     /// Returns the cookies of the response.
     #[getter]
-    pub fn cookies(&self, py: Python) -> Vec<Cookie> {
-        py.detach(|| Cookie::extract_headers_cookies(&self.headers.0))
+    pub fn cookies(&self) -> Vec<Cookie> {
+        Cookie::extract_headers_cookies(&self.headers.0)
     }
 
     /// Returns the WebSocket protocol.
@@ -184,7 +183,7 @@ impl WebSocket {
 }
 
 impl Display for WebSocket {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "<{} [{}] >", stringify!(WebSocket), self.status.0)
     }
 }
@@ -213,8 +212,8 @@ impl BlockingWebSocket {
 
     /// Returns the cookies of the response.
     #[getter]
-    pub fn cookies(&self, py: Python) -> Vec<Cookie> {
-        self.0.cookies(py)
+    pub fn cookies(&self) -> Vec<Cookie> {
+        self.0.cookies()
     }
 
     /// Returns the remote address of the response.
@@ -238,39 +237,33 @@ impl BlockingWebSocket {
     /// Receive a message from the WebSocket.
     #[pyo3(signature = (timeout=None))]
     pub fn recv(&self, py: Python, timeout: Option<Duration>) -> PyResult<Option<Message>> {
-        py.detach(|| {
-            crate::client::nogil::block_on(&self.0.runtime, cmd::recv(self.0.cmd.clone(), timeout))
-        })
+        nogil::run(py, &self.0.runtime, cmd::recv(self.0.cmd.clone(), timeout))
     }
 
     /// Send a message to the WebSocket.
     #[pyo3(signature = (message))]
     pub fn send(&self, py: Python, message: Message) -> PyResult<()> {
-        py.detach(|| {
-            crate::client::nogil::block_on(&self.0.runtime, cmd::send(self.0.cmd.clone(), message))
-        })
+        nogil::run(py, &self.0.runtime, cmd::send(self.0.cmd.clone(), message))
     }
 
     /// Send multiple messages to the WebSocket.
     #[pyo3(signature = (messages))]
     pub fn send_all(&self, py: Python, messages: Vec<Message>) -> PyResult<()> {
-        py.detach(|| {
-            crate::client::nogil::block_on(
-                &self.0.runtime,
-                cmd::send_all(self.0.cmd.clone(), messages),
-            )
-        })
+        nogil::run(
+            py,
+            &self.0.runtime,
+            cmd::send_all(self.0.cmd.clone(), messages),
+        )
     }
 
     /// Close the WebSocket connection.
     #[pyo3(signature = (code=None, reason=None))]
     pub fn close(&self, py: Python, code: Option<u16>, reason: Option<StrInput>) -> PyResult<()> {
-        py.detach(|| {
-            crate::client::nogil::block_on(
-                &self.0.runtime,
-                cmd::close(self.0.cmd.clone(), code, reason),
-            )
-        })
+        nogil::run(
+            py,
+            &self.0.runtime,
+            cmd::close(self.0.cmd.clone(), code, reason),
+        )
     }
 }
 
@@ -288,9 +281,7 @@ impl BlockingWebSocket {
         _exc_value: &Bound<'py, PyAny>,
         _traceback: &Bound<'py, PyAny>,
     ) -> PyResult<()> {
-        py.detach(|| {
-            crate::client::nogil::block_on(&self.0.runtime, cmd::close_on_exit(self.0.cmd.clone()))
-        })
+        nogil::run(py, &self.0.runtime, cmd::close_on_exit(self.0.cmd.clone()))
     }
 }
 
@@ -303,7 +294,7 @@ impl From<WebSocket> for BlockingWebSocket {
 
 impl Display for BlockingWebSocket {
     #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
 }

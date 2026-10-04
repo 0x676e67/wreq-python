@@ -229,3 +229,24 @@ async def test_stream_read_ahead_yields_and_closes_waiting_readers():
         stalled.set()
         listener.close()
         thread.join(10)
+
+
+@pytest.mark.asyncio
+async def test_content_length_reports_the_received_length():
+    heads = [
+        (b"Content-Length: 5\r\n\r\nhello", 5),
+        (b"Transfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n", None),
+    ]
+    async with local_server() as (url, connections):
+        for head, length in heads:
+            async with wreq.Client(proxies=[]) as client:
+                task = asyncio.create_task(client.get(url))
+                _, writer = await asyncio.wait_for(connections.get(), 5)
+                writer.write(b"HTTP/1.1 200 OK\r\nConnection: close\r\n" + head)
+                await writer.drain()
+                response = await asyncio.wait_for(task, 5)
+                async with response:
+                    assert response.content_length == length
+                    assert await response.bytes() == b"hello"
+                    # The length describes the received body, not what is left to read.
+                    assert response.content_length == length

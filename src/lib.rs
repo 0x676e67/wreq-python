@@ -24,11 +24,8 @@ mod tls;
 
 use client::{
     BlockingClient, Client, SocketAddr,
-    body::{
-        Streamer,
-        multipart::{Multipart, Part},
-    },
-    resp::{BlockingResponse, BlockingWebSocket, Message, Response, WebSocket},
+    body::multipart::{Multipart, Part},
+    resp::{BlockingResponse, BlockingWebSocket, Message, Response, Streamer, WebSocket},
 };
 use cookie::{Cookie, Jar, SameSite};
 use dns::{DnsOptions, LookupIpStrategy};

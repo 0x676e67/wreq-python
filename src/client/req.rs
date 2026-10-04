@@ -10,7 +10,7 @@ use pyo3::{PyResult, exceptions::asyncio::CancelledError, prelude::*, pybacked::
 use crate::{
     client::{
         Client,
-        body::{Body, Form, Json, Pull, multipart::Multipart},
+        body::{Body, Form, Json, Pulls, multipart::Multipart},
         query::Query,
         resp::{Response, WebSocket},
     },
@@ -156,65 +156,38 @@ pub struct WebSocketRequest {
     /// The query parameters to use for the request.
     query: Option<Query>,
 
-    /// Read buffer capacity. This buffer is eagerly allocated and used for receiving
-    /// messages.
-    ///
-    /// For high read load scenarios a larger buffer, e.g. 128 KiB, improves performance.
-    ///
-    /// For scenarios where you expect a lot of connections and don't need high read load
-    /// performance a smaller buffer, e.g. 4 KiB, would be appropriate to lower total
-    /// memory usage.
-    ///
-    /// The default value is 128 KiB.
+    /// Read buffer capacity, allocated up front; default 128 KiB.
     read_buffer_size: Option<usize>,
 
-    /// The target minimum size of the write buffer to reach before writing the data
-    /// to the underlying stream.
-    /// The default value is 128 KiB.
-    ///
-    /// If set to `0` each message will be eagerly written to the underlying stream.
-    /// It is often more optimal to allow them to buffer a little, hence the default value.
-    ///
-    /// Note: [`flush`](WebSocket::flush) will always fully write the buffer regardless.
+    /// Bytes buffered before writing to the socket; `0` writes each message at once.
+    /// Default 128 KiB.
     write_buffer_size: Option<usize>,
 
-    /// The max size of the write buffer in bytes. Setting this can provide backpressure
-    /// in the case the write buffer is filling up due to write errors.
-    /// The default value is unlimited.
-    ///
-    /// Note: The write buffer only builds up past [`write_buffer_size`](Self::write_buffer_size)
-    /// when writes to the underlying stream are failing. So the **write buffer can not
-    /// fill up if you are not observing write errors even if not flushing**.
-    ///
-    /// Note: Should always be at least [`write_buffer_size + 1 message`](Self::write_buffer_size)
-    /// and probably a little more depending on error handling strategy.
+    /// Write buffer limit. The buffer only grows past `write_buffer_size` while writes fail,
+    /// so keep it above that plus one message. Default unlimited.
     max_write_buffer_size: Option<usize>,
 
-    /// The maximum size of an incoming message. `None` means no size limit. The default value is
-    /// 64 MiB which should be reasonably big for all normal use-cases but small enough to
-    /// prevent memory eating by a malicious user.
+    /// Largest incoming message; `None` means unlimited. Default 64 MiB.
     max_message_size: Option<usize>,
 
-    /// The maximum size of a single incoming message frame. `None` means no size limit. The limit
-    /// is for frame payload NOT including the frame header. The default value is 16 MiB which
-    /// should be reasonably big for all normal use-cases but small enough to prevent memory
-    /// eating by a malicious user.
+    /// Largest incoming frame payload, excluding the header; `None` means unlimited.
+    /// Default 16 MiB.
     max_frame_size: Option<usize>,
 
-    /// When set to `true`, the server will accept and handle unmasked frames
-    /// from the client. According to the RFC 6455, the server must close the
-    /// connection to the client in such cases, however it seems like there are
-    /// some popular libraries that are sending unmasked frames, ignoring the RFC.
-    /// By default this option is set to `false`, i.e. according to RFC 6455.
+    /// Accept unmasked frames. Only a server checks masking
+    /// ([RFC 6455 §5.1](https://www.rfc-editor.org/rfc/rfc6455#section-5.1)).
     accept_unmasked_frames: Option<bool>,
 }
 
 // ===== impl Request =====
 
 impl Request {
-    /// See [`Body::feed`].
-    pub fn feed(&mut self, py: Python<'_>) -> Option<tokio::sync::mpsc::UnboundedReceiver<Pull>> {
-        self.body.as_mut()?.feed(py)
+    /// See [`PyStream::feed`](crate::client::body::PyStream::feed).
+    pub fn feed(&mut self) -> Option<Pulls> {
+        match &mut self.body {
+            Some(Body::Stream(stream)) => stream.feed(),
+            _ => None,
+        }
     }
 }
 
@@ -291,6 +264,8 @@ impl FromPyObject<'_, '_> for WebSocketRequest {
     }
 }
 
+/// Build and send a request with `client`, failing with `CancelledError` once the client is
+/// closed. Callers run it on the client's runtime.
 pub async fn execute_request<U>(
     client: Client,
     method: Method,
@@ -439,6 +414,7 @@ where
     }
 }
 
+/// Like [`execute_request`], opening a WebSocket.
 pub async fn execute_websocket_request<U>(
     client: Client,
     url: U,
