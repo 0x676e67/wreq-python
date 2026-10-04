@@ -1,0 +1,99 @@
+.wreq-bench {
+  --bench-accent: var(--wreq-accent);
+  --bench-border: var(--md-default-fg-color--lightest);
+  border: 1px solid var(--bench-border);
+  border-radius: .6rem;
+  margin: 1.4rem 0;
+  padding: 1.25rem;
+}
+
+.wreq-bench-provenance,
+.wreq-bench .wreq-bench-note {
+  color: var(--md-default-fg-color--light);
+  font-size: .62rem;
+  line-height: 1.65;
+}
+
+.wreq-bench .wreq-bench-eyebrow {
+  color: var(--bench-accent);
+  font-size: .55rem;
+  font-weight: 700;
+  letter-spacing: .11em;
+  margin: .4rem 0;
+}
+
+.wreq-bench .wreq-bench-heading h3 { margin: .3rem 0; }
+.wreq-bench-intro { font-size: .72rem; }
+
+.wreq-bench-body-controls {
+  align-items: center;
+  display: flex;
+  gap: .5rem;
+  margin: 1.1rem 0;
+}
+
+.wreq-bench-payloads {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: .35rem;
+}
+
+.wreq-bench button {
+  background: var(--wreq-control-bg);
+  border: 1px solid var(--wreq-control-border);
+  border-radius: .3rem;
+  color: var(--wreq-control-fg);
+  cursor: pointer;
+  font-size: .65rem;
+  min-height: 2.1rem;
+  padding: .35rem .65rem;
+}
+
+.wreq-bench button[aria-pressed="true"] {
+  font-weight: 700;
+}
+
+.wreq-bench-filters {
+  display: grid;
+  gap: .7rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.wreq-bench-filters label {
+  color: var(--md-default-fg-color--light);
+  display: flex;
+  flex-direction: column;
+  font-size: .6rem;
+  gap: .3rem;
+}
+
+.wreq-bench-filters select {
+  background: var(--wreq-control-bg);
+  border: 1px solid var(--wreq-control-border);
+  border-radius: .3rem;
+  color: var(--wreq-control-fg);
+  font: inherit;
+  font-size: .7rem;
+  min-height: 2.1rem;
+  min-width: 0;
+  padding: .35rem;
+}
+
+.wreq-bench [hidden] { display: none; }
+.wreq-bench-selection { font-size: .65rem; font-weight: 600; margin-top: 1rem; }
+.md-typeset .wreq-bench-figure { margin: 0; max-width: none; }
+.wreq-bench-figure picture, .wreq-bench-figure img { display: block; width: 100%; }
+.wreq-bench-figure figcaption {
+  color: var(--md-default-fg-color--light);
+  font-size: .58rem;
+  font-style: normal;
+  margin: .7rem 0;
+}
+
+@media (max-width: 760px) {
+  .wreq-bench { padding: .8rem; }
+  .wreq-bench-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wreq-bench-payloads { gap: .3rem; }
+  .wreq-bench button { font-size: .6rem; padding: .35rem .5rem; }
+}

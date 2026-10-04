@@ -1,4 +1,4 @@
-# :lock: Authentication Guide
+# Authentication Guide
 
 !!! tip "Supported authentication methods"
     - Basic Auth

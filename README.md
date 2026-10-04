@@ -71,7 +71,7 @@ Due to the complexity of TLS encryption and the widespread adoption of HTTP/2, b
 
 2. **Device Emulation**
 
-**TLS** and **HTTP/2** fingerprints are often identical across various browser models because these underlying protocols evolve slower than browser release cycles. **100+ browser device emulation [profiles](https://python.wreq.org/en/latest/getting-started/introduction/#behavior)** are maintained in **wreq**.
+**TLS** and **HTTP/2** fingerprints are often identical across various browser models because these underlying protocols evolve slower than browser release cycles. **100+ browser device emulation [profiles](https://python.wreq.org/en/latest/api/emulation/#wreq.emulation.Profile)** are maintained in **wreq**.
 
 ## Building
 
@@ -104,7 +104,7 @@ maturin build --release
 
 ## Benchmark
 
-Outperforms `requests`, `httpx`, `aiohttp`, and `curl_cffi` according to our [benchmark](https://github.com/0x676e67/wreq-python/tree/main/bench) suite driven by [pyperf](https://github.com/psf/pyperf), though results are for reference only as they vary by environment.
+Our [benchmark suite](https://github.com/0x676e67/wreq-python/tree/main/bench) compares Python HTTP clients over HTTPS HTTP/1.1 and HTTP/2. It tests complete and streamed uploads, reading every response to the end. The results include client versions and machine details so you can check the conditions behind each measurement. Performance varies by workload and environment.
 
 ## Services
 

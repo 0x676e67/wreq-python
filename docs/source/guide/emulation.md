@@ -1,4 +1,4 @@
-# :busts_in_silhouette: Emulation
+# Emulation
 
 !!! info "Emulation topics"
     - Firefox/Chrome/Android

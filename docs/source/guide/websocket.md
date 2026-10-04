@@ -1,4 +1,4 @@
-# :satellite: WebSocket
+# WebSocket
 
 !!! info "On this page"
     - HTTP/1.1 WebSocket

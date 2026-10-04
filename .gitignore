@@ -1,4 +1,5 @@
 /target
+bench/server/target/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -86,6 +87,11 @@ dist
 
 keylog.txt
 *.json
+!/bench/data/**/*.json
+!/bench/data/**/*-stdout.log
+!/bench/data/**/*-stderr.log
 *.csv
 docs/site
+docs/source/benchmark.md
+docs/source/assets/benchmark/
 *.pdb

@@ -1,4 +1,4 @@
-# :package: Installation
+# Installation
 
 !!! info "Supported Platforms"
 	- **Python 3.11+ is required**

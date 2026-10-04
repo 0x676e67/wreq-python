@@ -1,0 +1,91 @@
+[data-md-color-scheme] {
+  --wreq-accent: #7ed6bc;
+  --wreq-accent-hover: #a4e5d0;
+  --wreq-accent-active: #67c9ab;
+  --wreq-on-accent: #142c26;
+  --wreq-control-bg: #252c31;
+  --wreq-control-fg: #e2e8e5;
+  --wreq-control-border: #7c8d85;
+  --wreq-control-hover: #303c3b;
+  --wreq-control-active: #3b4a45;
+  --wreq-control-shadow: 0 2px 8px #0006;
+}
+
+/* Override Material's palette and pointer-focus colors before local states. */
+.md-typeset .md-button,
+.md-typeset .md-button:focus,
+.md-typeset .md-button:hover {
+  background: var(--wreq-control-bg);
+  border-color: var(--wreq-accent);
+  color: var(--wreq-accent);
+}
+
+.md-typeset .md-button--primary,
+.md-typeset .md-button--primary:focus,
+.md-typeset .md-button--primary:hover,
+.wreq-bench button[aria-pressed="true"] {
+  background: var(--wreq-accent);
+  border-color: var(--wreq-accent);
+  color: var(--wreq-on-accent);
+}
+
+.md-typeset .md-button,
+.wreq-bench button,
+.wreq-bench select {
+  transition: background-color 120ms ease, border-color 120ms ease,
+              color 120ms ease, box-shadow 120ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .md-typeset .md-button:not(:disabled):hover,
+  .wreq-bench button:not(:disabled):hover,
+  .wreq-bench select:not(:disabled):hover {
+    background: var(--wreq-control-hover);
+    border-color: var(--wreq-accent);
+    box-shadow: var(--wreq-control-shadow);
+    color: var(--wreq-accent);
+  }
+
+  .md-typeset .md-button--primary:not(:disabled):hover,
+  .wreq-bench button[aria-pressed="true"]:not(:disabled):hover {
+    background: var(--wreq-accent-hover);
+    border-color: var(--wreq-accent-hover);
+    color: var(--wreq-on-accent);
+  }
+}
+
+.md-typeset .md-button:not(:disabled):active,
+.wreq-bench button:not(:disabled):active,
+.wreq-bench select:not(:disabled):active {
+  background: var(--wreq-control-active);
+  border-color: var(--wreq-accent);
+  box-shadow: none;
+  color: var(--wreq-accent-active);
+}
+
+.md-typeset .md-button--primary:not(:disabled):active,
+.wreq-bench button[aria-pressed="true"]:not(:disabled):active {
+  background: var(--wreq-accent-active);
+  border-color: var(--wreq-accent-active);
+  color: var(--wreq-on-accent);
+}
+
+.md-typeset .md-button:focus-visible,
+.wreq-bench button:focus-visible,
+.wreq-bench select:focus-visible {
+  outline: 2px solid var(--wreq-accent);
+  outline-offset: 3px;
+}
+
+.wreq-bench button:disabled,
+.wreq-bench select:disabled {
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .md-typeset .md-button,
+  .wreq-bench button,
+  .wreq-bench select {
+    transition: none;
+  }
+}

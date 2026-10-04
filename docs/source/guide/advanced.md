@@ -1,4 +1,4 @@
-# :star2: Advanced Features
+# Advanced Features
 
 !!! info "On this page"
     - Header order

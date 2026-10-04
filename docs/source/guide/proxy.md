@@ -1,4 +1,4 @@
-# :globe_with_meridians: Proxy Usage
+# Proxy Usage
 
 !!! info "On this page"
     - HTTP/HTTPS proxy

@@ -208,7 +208,7 @@ async with client.get("https://tls.peet.ws/api/all") as response:
     print(await response.text())
 ```
 
-Available presets are listed in the [Emulation reference](../getting-started/introduction.md#behavior).
+Available profiles are listed in the [Emulation API](../api/emulation.md).
 
 ---
 
