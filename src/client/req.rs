@@ -10,7 +10,7 @@ use pyo3::{PyResult, exceptions::asyncio::CancelledError, prelude::*, pybacked::
 use crate::{
     client::{
         Client,
-        body::{Body, Form, Json, Pulls, multipart::Multipart},
+        body::{Body, Form, Json, multipart::Multipart},
         query::Query,
         resp::{Response, WebSocket},
     },
@@ -180,16 +180,6 @@ pub struct WebSocketRequest {
 }
 
 // ===== impl Request =====
-
-impl Request {
-    /// See [`PyStream::feed`](crate::client::body::PyStream::feed).
-    pub fn feed(&mut self) -> Option<Pulls> {
-        match &mut self.body {
-            Some(Body::Stream(stream)) => stream.feed(),
-            _ => None,
-        }
-    }
-}
 
 impl FromPyObject<'_, '_> for Request {
     type Error = PyErr;

@@ -813,12 +813,15 @@ impl BlockingClient {
         py: Python,
         method: Method,
         url: PyBackedStr,
-        mut kwds: Option<Request>,
+        kwds: Option<Request>,
     ) -> PyResult<BlockingResponse> {
-        // A sync iterator body is pulled on this thread while it waits.
-        let pulls = kwds.as_mut().and_then(Request::feed);
-        let fut = execute_request(self.0.clone(), method, url, kwds);
-        nogil::block_on_feeding(py, &self.0.runtime, fut, pulls).map(Into::into)
+        py.detach(|| {
+            nogil::block_on(
+                &self.0.runtime,
+                execute_request(self.0.clone(), method, url, kwds),
+            )
+            .map(Into::into)
+        })
     }
 
     /// Make a WebSocket request to the specified URL.

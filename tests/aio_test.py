@@ -182,6 +182,25 @@ async def test_request_coroutine_enters_its_result():
             with pytest.raises(RuntimeError, match="consumed"):
                 await response.text()
 
+            # Entering also awaits the response's own `__aenter__`, as `async with await` does.
+            entered = []
+            original = wreq.Response.__aenter__
+
+            async def aenter(self):
+                await asyncio.sleep(0.01)
+                entered.append(self)
+                return "entered"
+
+            wreq.Response.__aenter__ = aenter
+            try:
+                async with client.get(url) as value:
+                    assert value == "entered"
+            finally:
+                wreq.Response.__aenter__ = original
+            assert len(entered) == 1
+            with pytest.raises(RuntimeError, match="consumed"):
+                await entered[0].text()
+
             # The response exits even when the block fails.
             with pytest.raises(KeyError):
                 async with wreq.get(url, proxies=[]) as response:
@@ -200,8 +219,11 @@ async def test_request_coroutine_enters_its_result():
             with pytest.raises(RuntimeError, match="already awaited"):
                 async with coroutine:
                     pass
+            text = response.text()
+            with pytest.raises(RuntimeError, match="not entered"):
+                text.__aexit__(None, None, None)
             with pytest.raises(TypeError, match="context manager"):
-                async with response.text():
+                async with text:
                     pass
     finally:
         server.close()

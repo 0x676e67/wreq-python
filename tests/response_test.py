@@ -250,3 +250,33 @@ async def test_content_length_reports_the_received_length():
                     assert await response.bytes() == b"hello"
                     # The length describes the received body, not what is left to read.
                     assert response.content_length == length
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "head, frames",
+    [
+        (b"Content-Length: 5\r\n\r\nhello", [b"hello"]),
+        (
+            b"Transfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n5\r\nworld\r\n0\r\n\r\n",
+            [b"hello", b"world"],
+        ),
+    ],
+    ids=["length", "chunked"],
+)
+async def test_blocking_stream_survives_a_stalled_reader(head, frames):
+    # A reader pausing past the read timeout after a frame must still see the body end.
+    client = wreq.blocking.Client(proxies=[], read_timeout=timedelta(milliseconds=200))
+
+    def read(url):
+        with client.get(url) as response, response.stream() as streamer:
+            chunks = [bytes(next(streamer))]
+            time.sleep(0.5)
+            return chunks + [bytes(chunk) for chunk in streamer]
+
+    async with local_server() as (url, connections):
+        task = asyncio.create_task(asyncio.to_thread(read, url))
+        _, writer = await asyncio.wait_for(connections.get(), 5)
+        writer.write(b"HTTP/1.1 200 OK\r\n" + head)
+        await writer.drain()
+        assert await asyncio.wait_for(task, 5) == frames

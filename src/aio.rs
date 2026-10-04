@@ -52,8 +52,8 @@ where
     Bound::new(py, coroutine(qualname, fut))
 }
 
-/// Like [`local`], but `async with` may enter the coroutine directly, entering the
-/// async context manager it returns without a separate `await`.
+/// Like [`local`], but `async with` may enter the coroutine directly, as `async with await`
+/// would: its result must be an async context manager, whose `__aenter__` is awaited too.
 #[inline]
 pub fn managed<'py, F, T>(
     py: Python<'py>,

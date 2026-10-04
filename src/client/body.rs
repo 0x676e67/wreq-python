@@ -11,11 +11,7 @@ use pyo3::{
     types::{PyByteArray, PyBytes, PyDict, PyIterator, PyList, PyString, PyTuple},
 };
 
-pub use self::{
-    form::Form,
-    json::Json,
-    stream::{Pulls, PyStream},
-};
+pub use self::{form::Form, json::Json, stream::PyStream};
 use crate::{
     error::Error,
     extractor::{Binary, Text},

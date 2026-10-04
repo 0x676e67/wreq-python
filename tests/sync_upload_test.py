@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -122,7 +123,7 @@ async def test_sync_upload_iterator_errors(blocking, multipart):
 
 @pytest.mark.asyncio
 async def test_blocking_upload_iterator_can_send_requests():
-    # Past the read-ahead, the waiting caller pulls the iterator, which may itself block on requests.
+    # The iterator runs on a blocking thread, so it may itself block on requests.
     client = wreq.blocking.Client(proxies=[])
     try:
         async with upload_server() as (url, bodies):
@@ -245,6 +246,57 @@ async def test_blocking_upload_returns_on_early_response():
         assert set(await asyncio.wait_for(bodies.get(), 5)) == {ord("x")}
     finally:
         finished.set()
+        client.close()
+        server.close()
+        await server.wait_closed()
+
+
+
+@pytest.mark.asyncio
+async def test_blocking_upload_does_not_wait_for_the_iterator():
+    # A response or timeout must not wait for a `__next__` call that blocks.
+    async def accept(reader, writer):
+        try:
+            head = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 5)
+            if not head.startswith(b"POST /slow "):
+                writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
+                await writer.drain()
+            await asyncio.wait_for(reader.read(), 10)
+        except (asyncio.TimeoutError, ConnectionError):
+            pass
+        finally:
+            writer.close()
+
+    server = await asyncio.start_server(accept, "127.0.0.1", 0)
+    url = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}/"
+    client = wreq.blocking.Client(proxies=[])
+    released = threading.Event()
+
+    def chunks():
+        yield b"first"
+        released.wait(5)
+        yield b"second"
+
+    def send(path, **kwargs):
+        start = time.monotonic()
+        try:
+            with client.post(url + path, body=chunks(), **kwargs) as response:
+                outcome = response.status
+        except wreq.exceptions.TimeoutError:
+            outcome = "timeout"
+        return outcome, time.monotonic() - start
+
+    try:
+        # Full duplex: the iterator waits until the caller has the response.
+        assert await asyncio.to_thread(send, "") == (200, pytest.approx(0, abs=2))
+        released.set()
+        released.clear()
+        # A request timeout fires while `__next__` blocks.
+        timeout = datetime.timedelta(milliseconds=200)
+        outcome = await asyncio.to_thread(send, "slow", timeout=timeout)
+        assert outcome == ("timeout", pytest.approx(0, abs=2))
+    finally:
+        released.set()
         client.close()
         server.close()
         await server.wait_closed()

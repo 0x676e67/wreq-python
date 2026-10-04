@@ -1,8 +1,8 @@
 //! Request bodies streamed from Python iterators and async generators.
 
 use std::{
+    mem,
     pin::Pin,
-    sync::Arc,
     task::{Context, Poll},
 };
 
@@ -15,11 +15,7 @@ use pyo3::{
     sync::PyOnceLock,
     types::{PyIterator, PyString},
 };
-use tokio::{
-    runtime::Handle,
-    sync::mpsc::{self, error::SendError},
-    task::spawn_blocking,
-};
+use tokio::{runtime::Handle, sync::mpsc, task::spawn_blocking};
 
 use crate::{
     aio::{self, Coroutine},
@@ -29,9 +25,6 @@ use crate::{
 
 type Item = PyResult<PyBytesLike>;
 
-/// Pulls a blocked caller serves for its request body; see [`PyStream::feed`].
-pub type Pulls = mpsc::UnboundedReceiver<Pull>;
-
 /// A request body chunk: `bytes` or `bytearray` data, or a `str` sent as UTF-8.
 pub enum PyBytesLike {
     Bytes(Binary),
@@ -39,7 +32,7 @@ pub enum PyBytesLike {
 }
 
 /// A request body read from a Python iterator or async generator, for `body=` and
-/// multipart parts. A blocking request may [`feed`](Self::feed) it before sending.
+/// multipart parts.
 pub struct PyStream(Source);
 
 /// The source behind a [`PyStream`].
@@ -48,34 +41,14 @@ enum Source {
     Async(PyAsyncStream),
 }
 
-/// A request body from a Python iterator, never advanced on a Tokio worker.
+/// A request body from a Python iterator, advanced by a task on Tokio's blocking pool.
 ///
-/// Items arrive in pulls, each item sent on as soon as the iterator yields it. A blocking
-/// request serves pulls of up to [`PULL_BATCH`](Self::PULL_BATCH) bytes on its own waiting
-/// thread; without that caller, or once it returns, each item is pulled on Tokio's blocking
-/// pool as the body is polled.
-struct SyncStream {
-    iter: Arc<Py<PyAny>>,
-    pulling: Option<Pulling>,
-    done: bool,
-    caller: Option<mpsc::UnboundedSender<Pull>>,
-}
-
-/// The receiving end of a pull in flight.
-struct Pulling {
-    rx: mpsc::UnboundedReceiver<Option<Item>>,
-    by_caller: bool,
-    received: bool,
-}
-
-/// A pull of the next body items: they are sent one by one on `items`, followed by `None`
-/// once the iterator ends. Dropping it unserved closes `items` empty.
-pub struct Pull {
-    iter: Arc<Py<PyAny>>,
-    items: mpsc::UnboundedSender<Option<Item>>,
-    budget: usize,
-    read: usize,
-    ended: bool,
+/// Neither a Tokio worker nor a blocked caller runs the iterator, so a slow `__next__`
+/// cannot delay the response, a timeout or cancellation. The task reads an item only once
+/// the previous one is taken, staying at most one item ahead of the upload.
+enum SyncStream {
+    Idle(Py<PyAny>),
+    Pumping(mpsc::Receiver<Item>),
 }
 
 /// A request body from a Python async generator, forwarded with one chunk of buffering
@@ -105,16 +78,6 @@ impl FromPyObject<'_, '_> for PyBytesLike {
     }
 }
 
-impl PyBytesLike {
-    #[inline]
-    fn len(&self) -> usize {
-        match self {
-            PyBytesLike::Bytes(b) => b.0.len(),
-            PyBytesLike::String(s) => s.0.len(),
-        }
-    }
-}
-
 impl From<PyBytesLike> for Bytes {
     #[inline]
     fn from(value: PyBytesLike) -> Self {
@@ -127,17 +90,6 @@ impl From<PyBytesLike> for Bytes {
 
 // ===== impl PyStream =====
 
-impl PyStream {
-    /// Let the calling thread serve a sync iterator's pulls while it blocks on the request,
-    /// starting with the first, so the request goes out before any item is read.
-    pub fn feed(&mut self) -> Option<Pulls> {
-        match &mut self.0 {
-            Source::Sync(stream) => Some(stream.feed()),
-            Source::Async(_) => None,
-        }
-    }
-}
-
 impl FromPyObject<'_, '_> for PyStream {
     type Error = PyErr;
 
@@ -146,7 +98,7 @@ impl FromPyObject<'_, '_> for PyStream {
         let source = if ob.cast::<PyIterator>().is_err() && ob.hasattr(intern!(ob.py(), "asend"))? {
             Source::Async(PyAsyncStream::new(ob.to_owned())?)
         } else {
-            Source::Sync(SyncStream::new(ob.to_owned().unbind()))
+            Source::Sync(SyncStream::Idle(ob.to_owned().unbind()))
         };
         Ok(PyStream(source))
     }
@@ -166,125 +118,35 @@ impl Stream for PyStream {
 // ===== impl SyncStream =====
 
 impl SyncStream {
-    /// Bytes a pull may read before it ends and the next one starts.
-    const PULL_BATCH: usize = 256 * 1024;
-
-    fn new(iter: Py<PyAny>) -> Self {
-        SyncStream {
-            iter: Arc::new(iter),
-            pulling: None,
-            done: false,
-            caller: None,
-        }
-    }
-
-    fn feed(&mut self) -> Pulls {
-        let (tx, rx) = mpsc::unbounded_channel();
-        self.caller = Some(tx);
-        self.pulling = Some(Self::start(&self.iter, &mut self.caller));
-        rx
-    }
-
     fn poll_next(&mut self, cx: &mut Context<'_>) -> Poll<Option<Item>> {
-        while !self.done {
-            let pulling = self
-                .pulling
-                .get_or_insert_with(|| Self::start(&self.iter, &mut self.caller));
-            match pulling.rx.poll_recv(cx) {
-                Poll::Ready(Some(Some(item))) => {
-                    pulling.received = true;
-                    self.done = item.is_err();
-                    return Poll::Ready(Some(item));
-                }
-                Poll::Ready(Some(None)) => self.done = true,
-                // The pull ended; an empty one was never served.
-                Poll::Ready(None) => {
-                    let (received, by_caller) = (pulling.received, pulling.by_caller);
-                    self.pulling = None;
-                    if !received {
-                        if by_caller {
-                            // The caller returned first; the iterator did not advance.
-                            self.caller = None;
-                        } else {
-                            // Python is no longer available.
-                            self.done = true;
-                        }
-                    }
-                }
-                Poll::Pending => return Poll::Pending,
+        if let SyncStream::Idle(_) = self {
+            let (tx, rx) = mpsc::channel(1);
+            if let SyncStream::Idle(iter) = mem::replace(self, SyncStream::Pumping(rx)) {
+                spawn_blocking(move || Self::pump(iter, tx));
             }
         }
-        Poll::Ready(None)
+        match self {
+            SyncStream::Pumping(rx) => rx.poll_recv(cx),
+            SyncStream::Idle(_) => Poll::Ready(None),
+        }
     }
 
-    /// Send a pull to the blocked caller, or run it on the blocking pool once the caller
-    /// is gone. Acquiring the interpreter must not block a Tokio worker.
-    fn start(iter: &Arc<Py<PyAny>>, caller: &mut Option<mpsc::UnboundedSender<Pull>>) -> Pulling {
-        let (items, rx) = mpsc::unbounded_channel();
-        let mut pull = Pull {
-            iter: iter.clone(),
-            items,
-            budget: Self::PULL_BATCH,
-            read: 0,
-            ended: false,
-        };
-        if let Some(tx) = caller {
-            match tx.send(pull) {
-                Ok(()) => {
-                    return Pulling {
-                        rx,
-                        by_caller: true,
-                        received: false,
-                    };
-                }
-                Err(SendError(unsent)) => {
-                    *caller = None;
-                    pull = unsent;
-                }
-            }
-        }
-        // Without a waiting caller, read one item so the iterator advances only as the body
-        // is polled.
-        pull.budget = 1;
-        spawn_blocking(move || {
+    /// Send items until the iterator ends or raises, or the body is dropped.
+    fn pump(iter: Py<PyAny>, tx: mpsc::Sender<Item>) {
+        let handle = Handle::current();
+        // Read an item only once the body has room for it.
+        while let Ok(permit) = handle.block_on(tx.reserve()) {
             // Once Python is unavailable, stop reading without creating a PyErr that
             // could require another attachment to format.
-            Python::try_attach(|py| pull.serve(py, || false));
-        });
-        Pulling {
-            rx,
-            by_caller: false,
-            received: false,
+            let Some(Some(item)) = Python::try_attach(|py| next_item(py, &iter)) else {
+                return;
+            };
+            let failed = item.is_err();
+            permit.send(item);
+            if failed {
+                return;
+            }
         }
-    }
-}
-
-// ===== impl Pull =====
-
-impl Pull {
-    /// Read the next item and send it on. Returns `false` once the pull is over: its budget
-    /// is spent, the iterator ended or raised, or the body is gone.
-    fn step(&mut self, py: Python<'_>) -> bool {
-        // A dropped body must not advance the iterator.
-        if self.items.is_closed() {
-            return false;
-        }
-        let Some(item) = next_item(py, &self.iter) else {
-            self.ended = true;
-            let _ = self.items.send(None);
-            return false;
-        };
-        // Count at least a byte per item, so empty chunks also end the pull.
-        self.read += item.as_ref().map_or(0, PyBytesLike::len).max(1);
-        self.ended = item.is_err();
-        self.items.send(Some(item)).is_ok() && !self.ended && self.read < self.budget
-    }
-
-    /// Step until the pull is over, or until `stop` returns true before an item. Returns
-    /// whether the iterator has ended, so no further pull will follow.
-    pub fn serve(mut self, py: Python<'_>, stop: impl Fn() -> bool) -> bool {
-        while !stop() && self.step(py) {}
-        self.ended
     }
 }
 
