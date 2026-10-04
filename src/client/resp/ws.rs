@@ -8,7 +8,6 @@ use std::{
 
 use msg::Message;
 use pyo3::prelude::*;
-use tokio::sync::mpsc;
 use wreq::{header::HeaderValue, ws::WebSocketResponse};
 
 use crate::{
@@ -44,7 +43,7 @@ pub struct WebSocket {
     #[pyo3(get)]
     headers: HeaderMap,
     protocol: Option<HeaderValue>,
-    cmd: mpsc::UnboundedSender<cmd::Command>,
+    cmd: cmd::Handle,
     runtime: Runtime,
 }
 
@@ -66,8 +65,7 @@ impl WebSocket {
         );
         let websocket = response.into_websocket().await?;
         let protocol = websocket.protocol().cloned();
-        let (cmd, rx) = mpsc::unbounded_channel();
-        tokio::spawn(cmd::task(websocket, rx));
+        let cmd = cmd::spawn(websocket);
 
         Ok(WebSocket {
             runtime,
