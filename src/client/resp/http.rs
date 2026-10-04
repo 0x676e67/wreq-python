@@ -1,24 +1,26 @@
-use std::{fmt::Display, future::Future, sync::Arc};
+use std::{
+    fmt::{self, Display},
+    future::Future,
+    mem,
+    sync::{Arc, Mutex, MutexGuard, PoisonError},
+};
 
-use arc_swap::ArcSwapOption;
 use bytes::Bytes;
 use futures_util::{
-    TryFutureExt,
+    FutureExt, TryFutureExt,
     future::{self, BoxFuture},
 };
 use http::response::{Parts, Response as HttpResponse};
+use http_body::Body as _;
 use http_body_util::{BodyExt, Collected};
 use pyo3::{prelude::*, pybacked::PyBackedStr};
-use wreq::{self, Uri};
+use wreq::Uri;
 
+use super::{ext::ResponseExt, stream::Streamer};
 use crate::{
     aio::{self, Coroutine},
     buffer::PyBuffer,
-    client::{
-        SocketAddr,
-        body::{Json, Streamer},
-        resp::ext::ResponseExt,
-    },
+    client::{SocketAddr, body::Json, nogil},
     cookie::Cookie,
     error::Error,
     header::HeaderMap,
@@ -29,46 +31,73 @@ use crate::{
 };
 
 /// A response from a request.
+///
+/// Body reads are written once as futures ([`Response::read_body`]); the async methods
+/// run them on the runtime when awaited and [`BlockingResponse`] waits on the caller.
 #[pyclass(subclass, frozen, str, skip_from_py_object)]
 pub struct Response {
     uri: Uri,
+    /// Response head; rebuilt responses share its extensions, including the connection's
+    /// reuse flag.
     parts: Parts,
-    body: Arc<ArcSwapOption<Body>>,
+    /// Shared with a read in flight, so it can cache the bytes it reads.
+    body: Arc<Mutex<Body>>,
+    /// Runs body reads and keeps the runtime alive while the response does.
     runtime: Runtime,
+    /// Captured at receipt; `None` for a body without a known length.
+    content_length: Option<u64>,
+    remote_addr: Option<SocketAddr>,
+    local_addr: Option<SocketAddr>,
 }
 
-/// Represents the state of the HTTP response body.
+/// The response body slot.
 enum Body {
-    /// The body can be streamed once (not yet buffered).
-    Streamable(wreq::Body),
-    /// The body has been fully read into memory and can be reused.
-    Reusable(Bytes),
+    /// Unread; taken by the first read or `stream()`.
+    Unread(wreq::Body),
+    /// Taken by a read in flight or by `stream()`.
+    Taken,
+    /// Read in full and shared by later `text`, `json` and `bytes` calls.
+    Cached(Bytes),
+    /// Released by `close` or a context exit; later reads fail.
+    Released,
 }
 
 /// A blocking response from a request.
 #[pyclass(name = "Response", subclass, frozen, str, skip_from_py_object)]
 pub struct BlockingResponse(Response);
 
-/// Forbids connection reuse unless disarmed by taking the response parts.
+/// Forbids connection reuse on drop unless disarmed by taking the parts. Held while
+/// [`Response::cache_response`] collects the body, so a failed or cancelled read is not
+/// pooled.
 struct RecycleGuard(Option<Parts>);
 
 // ===== impl Response =====
 
 impl Response {
+    /// Bodies up to this size are read on a blocking caller without first releasing the GIL.
+    const READ_ATTACHED: u64 = 64 * 1024;
+
     /// Create a new [`Response`] instance.
     pub fn new(response: wreq::Response, runtime: Runtime) -> Self {
         let uri = response.uri().clone();
-        let response = HttpResponse::from(response)
-            .map(Body::Streamable)
-            .map(ArcSwapOption::from_pointee)
-            .map(Arc::new);
-        let (parts, body) = response.into_parts();
+        let content_length = response.content_length();
+        let remote_addr = response.remote_addr().map(SocketAddr);
+        let local_addr = response.local_addr().map(SocketAddr);
+        let (parts, body) = HttpResponse::from(response).into_parts();
         Response {
             uri,
             parts,
-            body,
+            body: Arc::new(Mutex::new(Body::Unread(body))),
             runtime,
+            content_length,
+            remote_addr,
+            local_addr,
         }
+    }
+
+    #[inline]
+    fn slot(&self) -> MutexGuard<'_, Body> {
+        lock(&self.body)
     }
 
     /// Builds a [`wreq::Response`] from the current response metadata and the given body.
@@ -78,55 +107,69 @@ impl Response {
         wreq::Response::from(response)
     }
 
-    /// Creates an empty [`wreq::Response`] with the same metadata but no body content.
-    #[inline]
-    fn empty_response(&self) -> wreq::Response {
-        self.build_response(Bytes::new())
-    }
-
-    /// Consumes the response [`Body`] and caches it in memory for reuse.
+    /// Take the body and return a future that reads it in full, caching the bytes for later
+    /// reads; a cached body is shared at once. While a first read runs, overlapping reads and
+    /// `stream()` fail with [`Error::Memory`], as do later ones if it fails or is dropped.
     fn cache_response(&self) -> BoxFuture<'static, Result<wreq::Response, Error>> {
-        if let Some(arc) = self.body.swap(None) {
-            let parts = self.parts.clone();
-            let body = self.body.clone();
-            match Arc::into_inner(arc) {
-                Some(Body::Streamable(stream)) => {
-                    return Box::pin(async move {
-                        // Conservatively keep the connection out of the pool unless the
-                        // body is read in full.
-                        let mut guard = RecycleGuard(Some(parts));
-                        let bytes = stream
-                            .collect()
-                            .await
-                            .map(Collected::to_bytes)
-                            .map_err(Error::Library)?;
-                        let parts = guard.0.take().ok_or(Error::Memory)?;
-
-                        body.store(Some(Arc::new(Body::Reusable(bytes.clone()))));
-                        let response = HttpResponse::from_parts(parts, bytes);
-                        Ok(wreq::Response::from(response))
-                    });
-                }
-                Some(Body::Reusable(bytes)) => {
-                    body.store(Some(Arc::new(Body::Reusable(bytes.clone()))));
-                    let response = HttpResponse::from_parts(parts, bytes);
-                    return Box::pin(future::ok(wreq::Response::from(response)));
-                }
-                None => unreachable!("Arc should never be empty here"),
+        let mut slot = self.slot();
+        let stream = match mem::replace(&mut *slot, Body::Taken) {
+            Body::Unread(stream) => stream,
+            other => {
+                let cached = match &other {
+                    Body::Cached(bytes) => Some(bytes.clone()),
+                    _ => None,
+                };
+                *slot = other;
+                drop(slot);
+                let response = cached.map(|bytes| self.build_response(bytes));
+                return future::ready(response.ok_or(Error::Memory)).boxed();
             }
+        };
+        drop(slot);
+        let parts = self.parts.clone();
+        let body = self.body.clone();
+        async move {
+            // Keep the connection out of the pool unless the body is read in full.
+            let mut guard = RecycleGuard(Some(parts));
+            let bytes = stream
+                .collect()
+                .await
+                .map(Collected::to_bytes)
+                .map_err(Error::Library)?;
+            let parts = guard.0.take().ok_or(Error::Memory)?;
+            // A release during the read wins over caching.
+            let mut slot = lock(&body);
+            if let Body::Taken = *slot {
+                *slot = Body::Cached(bytes.clone());
+            }
+            drop(slot);
+            Ok(wreq::Response::from(HttpResponse::from_parts(parts, bytes)))
         }
-
-        Box::pin(future::err(Error::Memory))
+        .boxed()
     }
 
-    /// Consumes the response [`Body`] for streaming without caching.
+    /// Take the unread body for a [`Streamer`]; fails with [`Error::Memory`] otherwise,
+    /// leaving any cached bytes readable.
     fn stream_response(&self) -> Result<wreq::Response, Error> {
-        if let Some(arc) = self.body.swap(None)
-            && let Ok(Body::Streamable(body)) = Arc::try_unwrap(arc)
-        {
-            return Ok(self.build_response(body));
-        }
-        Err(Error::Memory)
+        let mut slot = self.slot();
+        let body = match mem::replace(&mut *slot, Body::Taken) {
+            Body::Unread(body) => body,
+            other => {
+                *slot = other;
+                return Err(Error::Memory);
+            }
+        };
+        drop(slot);
+        Ok(self.build_response(body))
+    }
+
+    /// Read the body with `read`: the body is taken now and its bytes cached for later reads.
+    fn read_body<F, Fut, T>(&self, read: F) -> impl Future<Output = PyResult<T>> + Send + 'static
+    where
+        F: FnOnce(wreq::Response) -> Fut + Send + 'static,
+        Fut: Future<Output = Result<T, Error>> + Send + 'static,
+    {
+        self.cache_response().and_then(read).map_err(Into::into)
     }
 
     /// Read the body on the runtime once awaited; the body is taken on first await.
@@ -144,19 +187,50 @@ impl Response {
         let slf = slf.unbind();
         aio::local(py, qualname, async move {
             let this = slf.get();
-            let fut = this.cache_response().and_then(read).map_err(Into::into);
-            aio::run(this.runtime.clone(), fut).await
+            aio::run(this.runtime.clone(), this.read_body(read)).await
         })
     }
 
-    /// Forcefully destroys the response [`Body`], preventing any further reads.
-    fn destroy(&self) {
-        #[allow(clippy::option_map_unit_fn)]
-        self.body
-            .swap(None)
-            .and_then(Arc::into_inner)
-            .map(::std::mem::drop);
+    /// Whether the body is small enough for a blocking read to finish without first
+    /// releasing the GIL. An unknown length, as of a chunked or decompressed body, is not:
+    /// decoding everything already buffered could hold the GIL for long.
+    fn read_attached(&self) -> bool {
+        match &*self.slot() {
+            Body::Unread(body) => body
+                .size_hint()
+                .exact()
+                .is_some_and(|len| len <= Self::READ_ATTACHED),
+            Body::Cached(bytes) => bytes.len() as u64 <= Self::READ_ATTACHED,
+            Body::Taken | Body::Released => true,
+        }
     }
+
+    /// Keep the connection out of the pool; a rebuilt response shares its reuse flag.
+    fn forbid_recycle(&self) {
+        let mut response = HttpResponse::new(Bytes::new());
+        *response.extensions_mut() = self.parts.extensions.clone();
+        wreq::Response::from(response).forbid_recycle();
+    }
+
+    /// Drop the body if still held, so later reads fail. Unlike `close`, this keeps a fully
+    /// read connection reusable.
+    #[inline]
+    fn destroy(&self) {
+        let body = mem::replace(&mut *self.slot(), Body::Released);
+        drop(body);
+    }
+
+    /// Discard the body and keep its connection out of the pool.
+    fn discard(&self) {
+        self.forbid_recycle();
+        self.destroy();
+    }
+}
+
+/// Lock a body slot, recovering it from a panicked holder.
+#[inline]
+fn lock(body: &Mutex<Body>) -> MutexGuard<'_, Body> {
+    body.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 #[pymethods]
@@ -193,50 +267,50 @@ impl Response {
 
     /// Get the content length of the response.
     #[getter]
-    pub fn content_length(&self, py: Python) -> Option<u64> {
-        py.detach(|| self.empty_response().content_length())
+    pub fn content_length(&self) -> Option<u64> {
+        self.content_length
     }
 
     /// Get the remote address of the response.
     #[getter]
-    pub fn remote_addr(&self, py: Python) -> Option<SocketAddr> {
-        py.detach(|| self.empty_response().remote_addr().map(SocketAddr))
+    pub fn remote_addr(&self) -> Option<SocketAddr> {
+        self.remote_addr
     }
 
     /// Get the local address of the response.
     #[getter]
-    pub fn local_addr(&self, py: Python) -> Option<SocketAddr> {
-        py.detach(|| self.empty_response().local_addr().map(SocketAddr))
+    pub fn local_addr(&self) -> Option<SocketAddr> {
+        self.local_addr
     }
 
     /// Get the redirect history of the Response.
     #[getter]
-    pub fn history(&self, py: Python) -> Vec<History> {
-        py.detach(|| {
-            self.empty_response()
-                .extensions()
-                .get::<wreq::redirect::History>()
-                .map_or_else(Vec::new, |history| {
-                    history.into_iter().cloned().map(History).collect()
-                })
-        })
+    pub fn history(&self) -> Vec<History> {
+        self.parts
+            .extensions
+            .get::<wreq::redirect::History>()
+            .map_or_else(Vec::new, |history| {
+                history.into_iter().cloned().map(History).collect()
+            })
     }
 
     /// Get the TLS information of the response.
     #[getter]
-    pub fn tls_info(&self, py: Python) -> Option<TlsInfo> {
-        py.detach(|| {
-            self.empty_response()
-                .extensions()
-                .get::<wreq::tls::TlsInfo>()
-                .cloned()
-                .map(TlsInfo)
-        })
+    pub fn tls_info(&self) -> Option<TlsInfo> {
+        self.parts
+            .extensions
+            .get::<wreq::tls::TlsInfo>()
+            .cloned()
+            .map(TlsInfo)
     }
 
     /// Turn a response into an error if the server returned an error.
     pub fn raise_for_status(&self) -> PyResult<()> {
-        self.empty_response()
+        let status = self.parts.status;
+        if !status.is_client_error() && !status.is_server_error() {
+            return Ok(());
+        }
+        self.build_response(Bytes::new())
             .error_for_status()
             .map(|_| ())
             .map_err(Error::Library)
@@ -268,9 +342,7 @@ impl Response {
 
     /// Read the body as a read-only memoryview, retaining its data after the response closes.
     pub fn bytes(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
-        Self::read(slf, "Response.bytes", |resp| {
-            ResponseExt::bytes(resp).map_ok(PyBuffer::from)
-        })
+        Self::read(slf, "Response.bytes", ResponseExt::bytes)
     }
 
     /// Discard the retained body and mark its connection as non-reusable.
@@ -282,9 +354,7 @@ impl Response {
         let py = slf.py();
         let slf = slf.unbind();
         aio::local(py, "Response.close", async move {
-            let this = slf.get();
-            this.empty_response().forbid_recycle();
-            this.destroy();
+            slf.get().discard();
             Ok(())
         })
     }
@@ -314,7 +384,7 @@ impl Response {
 }
 
 impl Display for Response {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "<{}({}) [{}] >",
@@ -343,6 +413,27 @@ impl Drop for RecycleGuard {
 }
 
 // ===== impl BlockingResponse =====
+
+impl BlockingResponse {
+    /// Read the body with `read` on the calling thread, like [`Response::read`] on the
+    /// runtime. A small body is read without releasing the GIL unless it must wait.
+    fn read<F, Fut, T>(&self, py: Python, read: F) -> PyResult<T>
+    where
+        F: FnOnce(wreq::Response) -> Fut + Send + 'static,
+        Fut: Future<Output = Result<T, Error>> + Send + 'static,
+        T: Send,
+    {
+        let (response, runtime) = (&self.0, &self.0.runtime);
+        // Decide before the read takes the body.
+        let attached = response.read_attached();
+        let fut = response.read_body(read);
+        if attached {
+            nogil::run(py, runtime, fut)
+        } else {
+            py.detach(|| runtime.handle().block_on(fut))
+        }
+    }
+}
 
 #[pymethods]
 impl BlockingResponse {
@@ -378,32 +469,32 @@ impl BlockingResponse {
 
     /// Get the content length of the response.
     #[getter]
-    pub fn content_length(&self, py: Python) -> Option<u64> {
-        self.0.content_length(py)
+    pub fn content_length(&self) -> Option<u64> {
+        self.0.content_length()
     }
 
     /// Get the remote address of the response.
     #[getter]
-    pub fn remote_addr(&self, py: Python) -> Option<SocketAddr> {
-        self.0.remote_addr(py)
+    pub fn remote_addr(&self) -> Option<SocketAddr> {
+        self.0.remote_addr()
     }
 
     /// Get the local address of the response.
     #[getter]
-    pub fn local_addr(&self, py: Python) -> Option<SocketAddr> {
-        self.0.local_addr(py)
+    pub fn local_addr(&self) -> Option<SocketAddr> {
+        self.0.local_addr()
     }
 
     /// Get the redirect history of the Response.
     #[getter]
-    pub fn history(&self, py: Python) -> Vec<History> {
-        self.0.history(py)
+    pub fn history(&self) -> Vec<History> {
+        self.0.history()
     }
 
     /// Get the TLS information of the response.
     #[getter]
-    pub fn tls_info(&self, py: Python) -> Option<TlsInfo> {
-        self.0.tls_info(py)
+    pub fn tls_info(&self) -> Option<TlsInfo> {
+        self.0.tls_info()
     }
 
     /// Turn a response into an error if the server returned an error.
@@ -419,39 +510,17 @@ impl BlockingResponse {
     /// Get the text content with the response encoding, defaulting to utf-8 when unspecified.
     #[pyo3(signature = (encoding = None))]
     pub fn text(&self, py: Python, encoding: Option<PyBackedStr>) -> PyResult<String> {
-        py.detach(|| {
-            let fut = self
-                .0
-                .cache_response()
-                .and_then(|resp| ResponseExt::text(resp, encoding))
-                .map_err(Into::into);
-            crate::client::nogil::block_on(&self.0.runtime, fut)
-        })
+        self.read(py, |resp| ResponseExt::text(resp, encoding))
     }
 
     /// Get the JSON content of the response.
     pub fn json(&self, py: Python) -> PyResult<Json> {
-        py.detach(|| {
-            let fut = self
-                .0
-                .cache_response()
-                .and_then(ResponseExt::json::<Json>)
-                .map_err(Into::into);
-            crate::client::nogil::block_on(&self.0.runtime, fut)
-        })
+        self.read(py, ResponseExt::json::<Json>)
     }
 
     /// Read the body as a read-only memoryview, retaining its data after the response closes.
     pub fn bytes(&self, py: Python) -> PyResult<PyBuffer> {
-        py.detach(|| {
-            let fut = self
-                .0
-                .cache_response()
-                .and_then(ResponseExt::bytes)
-                .map_ok(PyBuffer::from)
-                .map_err(Into::into);
-            crate::client::nogil::block_on(&self.0.runtime, fut)
-        })
+        self.read(py, ResponseExt::bytes)
     }
 
     /// Discard the retained body and mark its connection as non-reusable.
@@ -459,11 +528,8 @@ impl BlockingResponse {
     /// Do not close concurrently with a body read. A body transferred to a Streamer
     /// is managed separately; previously returned memoryviews remain valid.
     /// `with` instead releases the body and keeps a fully read connection reusable.
-    pub fn close(&self, py: Python) {
-        py.detach(|| {
-            self.0.empty_response().forbid_recycle();
-            self.0.destroy();
-        });
+    pub fn close(&self) {
+        self.0.discard();
     }
 }
 
@@ -477,12 +543,11 @@ impl BlockingResponse {
     /// to the pool, while an unread HTTP/1 body drains or closes its connection.
     fn __exit__<'py>(
         &self,
-        py: Python<'py>,
         _exc_type: &Bound<'py, PyAny>,
         _exc_value: &Bound<'py, PyAny>,
         _traceback: &Bound<'py, PyAny>,
     ) {
-        py.detach(|| self.0.destroy())
+        self.0.destroy();
     }
 }
 
@@ -495,13 +560,7 @@ impl From<Response> for BlockingResponse {
 
 impl Display for BlockingResponse {
     #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
-    }
-}
-
-impl Drop for BlockingResponse {
-    fn drop(&mut self) {
-        self.0.destroy();
     }
 }

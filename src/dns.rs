@@ -5,6 +5,7 @@ use std::{
     sync::Arc,
 };
 
+use futures_util::FutureExt;
 use hickory_resolver::{
     TokioResolver,
     config::{CLOUDFLARE, ResolverConfig},
@@ -107,13 +108,14 @@ struct SocketAddrs {
 impl Resolve for HickoryResolver {
     fn resolve(&self, name: Name) -> Resolving {
         let resolver = self.clone();
-        Box::pin(async move {
+        async move {
             let lookup = resolver.resolver.lookup_ip(name.as_str()).await?;
             let addrs: Addrs = Box::new(SocketAddrs {
                 iter: lookup.into_iter(),
             });
             Ok(addrs)
-        })
+        }
+        .boxed()
     }
 }
 

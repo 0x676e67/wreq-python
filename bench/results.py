@@ -14,15 +14,62 @@ from urllib.parse import urlsplit
 if __package__:
     from .clients import (
         CAPABILITIES,
+        CLIENTS,
         CORE_PACKAGES,
         NATIVE_PACKAGES,
         PACKAGES,
         supports,
     )
+    from .workloads import BODY_CASES, CONCURRENCY_CASES
 else:
-    from clients import CAPABILITIES, CORE_PACKAGES, NATIVE_PACKAGES, PACKAGES, supports
+    from clients import (
+        CAPABILITIES,
+        CLIENTS,
+        CORE_PACKAGES,
+        NATIVE_PACKAGES,
+        PACKAGES,
+        supports,
+    )
+    from workloads import BODY_CASES, CONCURRENCY_CASES
 
 DIMENSIONS = ("client", "protocol", "body_kind", "payload_bytes", "concurrency")
+BLOCKING_CLIENTS = tuple(
+    client
+    for client, capability in CAPABILITIES.items()
+    if capability["api"] == "blocking"
+)
+
+
+def require_publish(config, *, blocking=False):
+    """Require the complete default suite or its independent blocking matrix."""
+    axes = {
+        "clients": BLOCKING_CLIENTS if blocking else CLIENTS,
+        "protocols": ("h1", "h2"),
+        "body_kinds": ("full", "stream"),
+        "payload_bytes": BODY_CASES,
+        "concurrency": CONCURRENCY_CASES,
+    }
+    message = (
+        f"Publishing requires the complete {'blocking' if blocking else 'default'} matrix, "
+        ">=300 requests, >=3 rounds, >=1 warm-up and timed sample"
+    )
+    try:
+        complete = all(
+            len(config[key]) == len(values) and set(config[key]) == set(values)
+            for key, values in axes.items()
+        ) and all(
+            type(config[key]) is int and config[key] >= minimum
+            for key, minimum in (
+                ("requests", 300),
+                ("rounds", 3),
+                ("warmup", 1),
+                ("samples", 1),
+            )
+        )
+    except (KeyError, TypeError) as exc:
+        raise ValueError(message) from exc
+    if not complete:
+        raise ValueError(message)
 
 
 def rates(requests, seconds, size):

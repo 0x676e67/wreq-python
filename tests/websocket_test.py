@@ -25,21 +25,24 @@ async def read_close(reader):
 
 
 async def serve(reader, writer, frames):
-    head = await reader.readuntil(b"\r\n\r\n")
-    key = next(
-        line.split(b":", 1)[1].strip()
-        for line in head.split(b"\r\n")
-        if line.lower().startswith(b"sec-websocket-key:")
-    )
-    accept = base64.b64encode(hashlib.sha1(key + GUID).digest())
-    writer.write(
-        b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
-        b"Connection: Upgrade\r\nSec-WebSocket-Accept: " + accept + b"\r\n\r\n"
-    )
-    frames.put_nowait(await read_close(reader))
-    writer.write(b"\x88\x00")
-    await writer.drain()
-    writer.close()
+    try:
+        head = await reader.readuntil(b"\r\n\r\n")
+        key = next(
+            line.split(b":", 1)[1].strip()
+            for line in head.split(b"\r\n")
+            if line.lower().startswith(b"sec-websocket-key:")
+        )
+        accept = base64.b64encode(hashlib.sha1(key + GUID).digest())
+        writer.write(
+            b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
+            b"Connection: Upgrade\r\nSec-WebSocket-Accept: " + accept + b"\r\n\r\n"
+        )
+        frames.put_nowait(await read_close(reader))
+        writer.write(b"\x88\x00")
+        await writer.drain()
+    finally:
+        # A failed handshake must not leave `wait_closed` waiting.
+        writer.close()
 
 
 @pytest.mark.asyncio
@@ -61,7 +64,7 @@ async def test_websocket_close_frame(code, reason, expected):
     try:
         async with wreq.Client(proxies=[]) as client:
             # Leaving the block after an explicit close must not fail.
-            async with await client.websocket(url) as ws:
+            async with client.websocket(url) as ws:
                 await ws.close(code, reason)
             assert await asyncio.wait_for(frames.get(), 5) == expected
     finally:
@@ -87,5 +90,5 @@ def test_blocking_websocket_exit_after_close():
         loop.call_soon_threadsafe(loop.stop)
         thread.join(5)
         server.close()
-        loop.run_until_complete(server.wait_closed())
+        loop.run_until_complete(asyncio.wait_for(server.wait_closed(), 5))
         loop.close()

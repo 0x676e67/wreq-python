@@ -55,14 +55,16 @@ requires CMake, Clang, and the usual native build tools.
 ```bash
 uv venv --python 3.14
 uv pip install -r bench/requirements.txt
-uv run --no-sync maturin develop --release --uv --locked
+uv run --no-sync maturin develop --release --uv --locked --features jemalloc
 cargo build --release --locked --manifest-path bench/server/Cargo.toml
 uv run --no-sync python bench/run.py \
   --server bench/server/target/release/wreq-benchmark-server
 ```
 
-On Windows, the server executable ends in `.exe`. If Cargo uses a custom target
-directory, pass the actual executable path to `--server`.
+The build command above uses jemalloc on macOS and Linux. On Windows, use the
+platform allocator or the supported `mimalloc` feature instead; do not enable
+both allocator features. The server executable ends in `.exe` on Windows. If
+Cargo uses a custom target directory, pass the actual executable path to `--server`.
 
 `bench/run.py` passes workload options to the measurement runner. Before it
 starts, it prints the number of cases and batches. It saves stdout/stderr logs
@@ -73,9 +75,10 @@ number of warm-up batches. Allow several hours for a full run. The setup command
 above prepare the dependencies and native binaries; the runner won't install or
 build them for you. Publishing the results to the docs is optional.
 
-The saved WSL measurements built wreq with `--features jemalloc` in addition
-to the release flags above. Check a run's build records for its allocator and
-toolchain. The setup command above uses the platform's default allocator.
+Use the same allocator and release flags for both wreq revisions in a comparison,
+and record them in the run's build provenance. jemalloc controls Rust allocations
+in the wreq extension, not Python's allocator or those of the other clients.
+The saved WSL measurements also used `--features jemalloc`.
 
 For an integration check, use the same clients and protocols with fewer
 requests. This smoke run checks behavior; it isn't enough to rank performance:
@@ -85,7 +88,7 @@ uv run --no-sync python bench/run.py \
   --server bench/server/target/release/wreq-benchmark-server \
   --sizes 10240,1048576 --concurrency 2 --requests 4 \
   --rounds 1 --warmup 0 --samples 1 --output bench/data/smoke/RUN.json
-uv run --no-sync python -m pytest bench
+uv run --no-sync python -m pytest bench/tests
 ```
 
 Default `pytest` runs only `tests/`. The explicit command above checks the
@@ -124,6 +127,10 @@ also doesn't isolate TLS I/O improvements; check the build and harness records
 before attributing a change. Omit `--output` to print UTF-8 Markdown to stdout.
 File exports refuse to overwrite any existing path, including the input JSON.
 
+Add `--api blocking` to compare a full snapshot with a blocking-only rerun.
+Both original snapshots are validated; only the report is filtered. Workload,
+environment, server and the selected client metadata must still match.
+
 ## Stored data and documentation
 
 We run the benchmarks locally, outside GitHub Actions, and keep JSON snapshots
@@ -140,14 +147,26 @@ uv run --no-sync python bench/run.py --input bench/data/RUN.json --publish
 
 `--input` reads a saved run and generates its report, or reuses the report if its
 contents match. It never starts a measurement. With `--publish`, the runner also
-freezes the candidate JSON and builds the docs. Only a successful build lets it
-atomically select the original bytes as `bench/data/latest.json`. Historical
-JSON, logs and reports stay untouched.
+freezes the candidate JSON and any selected blocking snapshot, then builds the docs.
+After a successful build, it atomically selects the original bytes as
+`bench/data/latest.json`. Historical JSON, logs and reports stay untouched.
+
+To update only the blocking results without rerunning the async clients:
+
+```bash
+uv run --no-sync python bench/run.py --input bench/data/BLOCKING.json --publish-blocking
+```
+
+This requires all seven blocking clients and the same complete workload and
+batch minimums. It freezes the candidate and existing `latest.json` for the docs
+build, then selects `bench/data/latest-blocking.json` only if the build succeeds.
+The async source and all historical files stay unchanged. The two publication
+options cannot be combined.
 
 Smoke runs belong in `bench/data/smoke/` and cannot be published. Publication
-requires the complete default matrix, at least 300 requests per batch and
-three rounds, with at least one warm-up and timed sample per round. These checks
-confirm coverage; you still need to review the quality of the measurements.
+requires the complete default or blocking matrix, at least 300 requests per
+batch and three rounds, with at least one warm-up and timed sample per round.
+These checks confirm coverage; you still need to review the quality of the measurements.
 
 Use `--build-docs` instead of `--publish` to preview a complete recorded matrix
 without changing `latest.json`. If your docs dependencies are in a separate
@@ -155,7 +174,9 @@ virtual environment, add `--docs-python PATH/TO/python`. You can also pass
 `--publish` to a new measurement to run those steps after it finishes. The
 runner doesn't commit, push or enable benchmarks in CI.
 
-`python docs/build.py` reads and validates the checked-in `bench/data/latest.json`.
+`python docs/build.py` reads and validates the checked-in `bench/data/latest.json`
+and, when present, `latest-blocking.json`. The page keeps each source's revision
+and environment separate; no combined measurement JSON is created.
 It generates responsive light/dark SVG charts and fills
 `docs/templates/benchmark.md` with body-size controls and measurement details.
 The built site includes a frozen raw JSON copy. The build won't fetch
@@ -163,5 +184,7 @@ measurements or start a benchmark, and missing or invalid data stops it.
 Read the Docs uses this same entry point.
 
 Use `python docs/build.py --data bench/data/RUN.json` to preview another run.
+This standalone preview does not load the selected blocking overlay.
+For blocking-only data, use `--blocking-data bench/data/BLOCKING.json` instead.
 Each measurement shows its source revision and whether the checkout had
 uncommitted changes. Saving data on `main` doesn't change which code was tested.

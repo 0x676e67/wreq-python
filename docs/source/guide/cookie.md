@@ -60,10 +60,9 @@ from wreq import Client
 
 async def main():
     client = Client()
-    response = await client.get("https://httpbin.org/cookies/set?token=xyz")
-
-    for cookie in response.cookies:
-        print(cookie.name, cookie.value)
+    async with client.get("https://httpbin.org/cookies/set?token=xyz") as response:
+        for cookie in response.cookies:
+            print(cookie.name, cookie.value)
 
 asyncio.run(main())
 ```
@@ -85,11 +84,11 @@ from wreq import Client
 async def main():
     client = Client()
 
-    response = await client.get(
+    async with client.get(
         "https://httpbin.org/cookies",
         cookies={"session": "abc123", "lang": "en"},
-    )
-    print(await response.json())
+    ) as response:
+        print(await response.json())
 ```
 
 Cookies passed this way apply only to that request and are not persisted.
@@ -117,8 +116,8 @@ async def main():
     await client.get("https://httpbin.org/cookies/set?token=abc")
 
     # The cookie is sent back automatically here
-    response = await client.get("https://httpbin.org/cookies")
-    print(await response.json())
+    async with client.get("https://httpbin.org/cookies") as response:
+        print(await response.json())
 
 asyncio.run(main())
 ```
@@ -142,8 +141,8 @@ async def main():
     )
 
     client = Client(cookie_provider=jar)
-    response = await client.get("https://httpbin.org/cookies")
-    print(await response.json())
+    async with client.get("https://httpbin.org/cookies") as response:
+        print(await response.json())
 
 asyncio.run(main())
 ```

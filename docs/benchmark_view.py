@@ -11,6 +11,18 @@ def escape(value):
     return html.escape(str(value), quote=True)
 
 
+def provenance(document, label=""):
+    source = document["source"]
+    date = datetime.fromisoformat(document["generated_at"]).astimezone(timezone.utc)
+    prefix = f"{escape(label)} · " if label else ""
+    dirty = " · Local checkout had uncommitted changes" if source["dirty"] else ""
+    return (
+        f'<p class="wreq-bench-provenance">{prefix}Measured '
+        f'<a href="{REPOSITORY}/commit/{source["commit"]}">{source["commit"][:12]}</a>'
+        f" · {date:%Y-%m-%d %H:%M UTC}{dirty}</p>"
+    )
+
+
 def render_explorer(document, catalog, asset_prefix="assets/benchmark/charts"):
     cases = catalog["cases"]
     first = next((case for case in cases if case["api"] == "async"), cases[0])
@@ -47,9 +59,15 @@ def render_explorer(document, catalog, asset_prefix="assets/benchmark/charts"):
     # This is inert JSON, not script. Escape HTML delimiters so metadata cannot end the tag.
     data = json.dumps(catalog, ensure_ascii=True, separators=(",", ":"))
     data = data.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
-    source = document["source"]
-    date = datetime.fromisoformat(document["generated_at"]).astimezone(timezone.utc)
-    dirty = " · Local checkout had uncommitted changes" if source["dirty"] else ""
+    measurements = catalog.get("measurements")
+    captions = (
+        "\n".join(
+            provenance(measurements[api], labels["api"][api])
+            for api in ("async", "blocking")
+        )
+        if measurements is not None
+        else provenance(document)
+    )
     unsupported = (
         "N/A: " + ", ".join(first["unsupported"])
         if first["unsupported"]
@@ -61,14 +79,10 @@ def render_explorer(document, catalog, asset_prefix="assets/benchmark/charts"):
     )
     alt = f"{first['title']}. Throughput in requests per second. {values}."
     return f"""<section class="wreq-bench" data-bench-explorer aria-label="Benchmark chart explorer">
-<p class="wreq-bench-provenance">Measured <a href="{REPOSITORY}/commit/{source['commit']}">{source['commit'][:12]}</a> · {date:%Y-%m-%d %H:%M UTC}{dirty}</p>
+{captions}
 <div class="wreq-bench-heading"><p class="wreq-bench-eyebrow">THROUGHPUT BY WORKLOAD</p><h3>Compare clients</h3></div>
 <p class="wreq-bench-intro">Pick a body size, then adjust the filters to compare clients. Full and Stream refer to the upload; we read every response to the end.</p>
-<div class="wreq-bench-body-controls" data-chart-controls hidden>
-<button type="button" data-chart-previous aria-label="Previous body size">←</button>
-<div class="wreq-bench-payloads" role="group" aria-label="Upload and echo body size">{buttons}</div>
-<button type="button" data-chart-next aria-label="Next body size">→</button>
-</div>
+<div class="wreq-bench-payloads" role="group" aria-label="Upload and echo body size" data-chart-controls hidden>{buttons}</div>
 <div class="wreq-bench-filters" data-chart-controls hidden>{''.join(controls)}</div>
 <p class="wreq-bench-selection" data-chart-caption aria-live="polite">{escape(first['title'])}</p>
 <figure class="wreq-bench-figure">

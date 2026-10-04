@@ -3,11 +3,11 @@ import wreq
 
 
 async def main():
-    resp = await wreq.get(
+    async with wreq.get(
         "https://httpbin.io/anything",
         auth="token",
-    )
-    print(await resp.text())
+    ) as resp:
+        print(await resp.text())
 
 
 if __name__ == "__main__":

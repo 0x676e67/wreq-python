@@ -12,7 +12,7 @@ async def file_to_bytes_stream(file_path):
 
 
 async def main():
-    resp = await wreq.post(
+    async with wreq.post(
         "https://httpbin.io/anything",
         multipart=Multipart(
             # Upload text data
@@ -34,9 +34,8 @@ async def main():
                 mime="text/plain",
             ),
         ),
-    )
-
-    print(await resp.text())
+    ) as resp:
+        print(await resp.text())
 
 
 if __name__ == "__main__":

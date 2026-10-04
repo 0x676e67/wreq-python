@@ -36,7 +36,7 @@ use crate::{
     tls::{Identity, KeyLog, TlsOptions, TlsVerify, TlsVersion},
 };
 
-/// A IP socket address.
+/// An IP socket address.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[pyclass(eq, str, frozen, skip_from_py_object)]
 pub struct SocketAddr(pub std::net::SocketAddr);
@@ -235,8 +235,11 @@ impl FromPyObject<'_, '_> for Builder {
 #[pyclass(subclass, frozen, skip_from_py_object)]
 pub struct Client {
     inner: wreq::Client,
+    /// Runs this client's requests and response reads, keeping the runtime alive.
     runtime: runtime::Runtime,
+    /// Cancelled by `close()`; pending and new requests then fail with `CancelledError`.
     cancel: CancellationToken,
+    /// Turn error statuses into exceptions for every request.
     raise_for_status: bool,
 
     /// Get the cookie jar of the client.
@@ -249,7 +252,7 @@ pub struct Client {
 #[pyclass(name = "Client", subclass, frozen, skip_from_py_object)]
 pub struct BlockingClient(Client);
 
-// ====== Client =====
+// ===== impl Client =====
 
 impl Client {
     /// Return a coroutine named `qualname` that sends the request when awaited.
@@ -262,7 +265,7 @@ impl Client {
         kwds: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, Coroutine>> {
         let kwds = kwds.map(Bound::unbind);
-        aio::local(py, qualname, self.clone().execute(method, url, kwds))
+        aio::managed(py, qualname, self.clone().execute(method, url, kwds))
     }
 
     /// Send a request on the client's runtime, extracting options on first await so an
@@ -660,7 +663,7 @@ impl Client {
         kwds: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, Coroutine>> {
         let kwds = kwds.map(Bound::unbind);
-        aio::local(py, "Client.websocket", self.clone().connect(url, kwds))
+        aio::managed(py, "Client.websocket", self.clone().connect(url, kwds))
     }
 }
 
@@ -803,7 +806,7 @@ impl BlockingClient {
         self.request(py, Method::TRACE, url, kwds)
     }
 
-    /// Make a rqeuest with the specified method and URL.
+    /// Make a request with the specified method and URL.
     #[pyo3(signature = (method, url, **kwds))]
     pub fn request(
         &self,

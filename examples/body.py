@@ -15,11 +15,11 @@ async def gen():
 
 
 async def main():
-    resp = await wreq.post(
+    async with wreq.post(
         "https://httpbin.io/anything",
         body=gen(),
-    )
-    print(await resp.text())
+    ) as resp:
+        print(await resp.text())
 
 
 if __name__ == "__main__":

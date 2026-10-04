@@ -3,11 +3,11 @@ import wreq
 
 
 async def main():
-    resp = await wreq.post(
+    async with wreq.post(
         "https://httpbin.io/anything",
         json={"key": "value"},
-    )
-    print(await resp.json())
+    ) as resp:
+        print(await resp.json())
 
 
 if __name__ == "__main__":

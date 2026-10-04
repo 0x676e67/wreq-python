@@ -1,0 +1,5 @@
+Matrix: 728 supported cells; 2,184 timed batches; 2,184 warm-up batches; 300 requests/batch.
+Raw JSON: /home/gngpp/.cache/wreq-python/bench-18/results/20261004T111716Z-80b48db8b274-wsl-blocking-full.json
+Logs: /home/gngpp/.cache/wreq-python/bench-18/results/20261004T111716Z-80b48db8b274-wsl-blocking-full-stdout.log
+      /home/gngpp/.cache/wreq-python/bench-18/results/20261004T111716Z-80b48db8b274-wsl-blocking-full-stderr.log
+Report: /home/gngpp/.cache/wreq-python/bench-18/results/20261004T111716Z-80b48db8b274-wsl-blocking-full.report.md

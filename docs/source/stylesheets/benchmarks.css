@@ -25,18 +25,11 @@
 .wreq-bench .wreq-bench-heading h3 { margin: .3rem 0; }
 .wreq-bench-intro { font-size: .72rem; }
 
-.wreq-bench-body-controls {
-  align-items: center;
-  display: flex;
-  gap: .5rem;
-  margin: 1.1rem 0;
-}
-
 .wreq-bench-payloads {
   display: flex;
-  flex: 1;
   flex-wrap: wrap;
   gap: .35rem;
+  margin: 1.1rem 0;
 }
 
 .wreq-bench button {

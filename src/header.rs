@@ -8,7 +8,7 @@ use wreq::header::{self, HeaderName, HeaderValue};
 use crate::{
     buffer::PyBuffer,
     error::Error,
-    extractor::{BytesInput, StrInput},
+    extractor::{Binary, Text},
 };
 
 /// An HTTP header map whose names and values are exposed as read-only memoryviews.
@@ -46,7 +46,7 @@ impl HeaderMap {
                 };
 
                 let value = match value
-                    .extract::<StrInput>()
+                    .extract::<Text>()
                     .map(|value| value.0)
                     .map(HeaderValue::from_maybe_shared)
                 {
@@ -67,99 +67,67 @@ impl HeaderMap {
     /// is returned. Use `get_all` to get all values associated with a given
     /// key. Returns `None` if there are no values associated with the key.
     #[pyo3(signature = (key, default=None))]
-    fn get<'py>(
-        &self,
-        py: Python<'py>,
-        key: PyBackedStr,
-        default: Option<BytesInput>,
-    ) -> Option<PyBuffer> {
-        py.detach(|| {
-            self.0.get::<&str>(key.as_ref()).cloned().or_else(|| {
-                match default
-                    .map(|value| value.0)
-                    .map(HeaderValue::from_maybe_shared)
-                {
-                    Some(Ok(v)) => Some(v),
-                    _ => None,
-                }
-            })
-        })
-        .map(PyBuffer::from)
+    fn get(&self, key: PyBackedStr, default: Option<Binary>) -> Option<PyBuffer> {
+        self.0
+            .get::<&str>(key.as_ref())
+            .cloned()
+            .or_else(|| HeaderValue::from_maybe_shared(default?.0).ok())
+            .map(PyBuffer::from)
     }
 
     /// Returns a list of read-only memoryviews for the values associated with a key.
     #[pyo3(signature = (key))]
-    fn get_all<'py>(&self, py: Python<'py>, key: PyBackedStr) -> Vec<PyBuffer> {
-        py.detach(|| {
-            self.0
-                .get_all::<&str>(key.as_ref())
-                .iter()
-                .cloned()
-                .map(PyBuffer::from)
-                .collect()
-        })
+    fn get_all(&self, key: PyBackedStr) -> Vec<PyBuffer> {
+        self.0
+            .get_all::<&str>(key.as_ref())
+            .iter()
+            .cloned()
+            .map(PyBuffer::from)
+            .collect()
     }
 
     /// Insert a key-value pair into the header map.
     #[pyo3(signature = (key, value))]
-    fn insert(&mut self, py: Python, key: PyBackedStr, value: StrInput) {
-        py.detach(|| {
-            if let (Ok(name), Ok(value)) = (
-                HeaderName::from_bytes(key.as_bytes()),
-                HeaderValue::from_maybe_shared(value.0),
-            ) {
-                self.0.insert(name, value);
-            }
-        })
+    fn insert(&mut self, key: PyBackedStr, value: Text) {
+        if let (Ok(name), Ok(value)) = (
+            HeaderName::from_bytes(key.as_bytes()),
+            HeaderValue::from_maybe_shared(value.0),
+        ) {
+            self.0.insert(name, value);
+        }
     }
 
     /// Append a key-value pair to the header map.
     #[pyo3(signature = (key, value))]
-    fn append(&mut self, py: Python, key: PyBackedStr, value: StrInput) {
-        py.detach(|| {
-            if let (Ok(name), Ok(value)) = (
-                HeaderName::from_bytes(key.as_bytes()),
-                HeaderValue::from_maybe_shared(value.0),
-            ) {
-                self.0.append(name, value);
-            }
-        })
+    fn append(&mut self, key: PyBackedStr, value: Text) {
+        if let (Ok(name), Ok(value)) = (
+            HeaderName::from_bytes(key.as_bytes()),
+            HeaderValue::from_maybe_shared(value.0),
+        ) {
+            self.0.append(name, value);
+        }
     }
 
     /// Remove a key-value pair from the header map.
     #[pyo3(signature = (key))]
-    fn remove(&mut self, py: Python, key: PyBackedStr) {
-        py.detach(|| {
-            self.0.remove::<&str>(key.as_ref());
-        })
+    fn remove(&mut self, key: PyBackedStr) {
+        self.0.remove::<&str>(key.as_ref());
     }
 
     /// Returns true if the map contains a value for the specified key.
     #[pyo3(signature = (key))]
-    fn contains_key(&self, py: Python, key: PyBackedStr) -> bool {
-        py.detach(|| self.0.contains_key::<&str>(key.as_ref()))
+    fn contains_key(&self, key: PyBackedStr) -> bool {
+        self.0.contains_key::<&str>(key.as_ref())
     }
 
     /// Returns a list of read-only memoryviews for all keys.
-    fn keys<'py>(&self, py: Python<'py>) -> Vec<PyBuffer> {
-        py.detach(|| {
-            self.0
-                .keys()
-                .cloned()
-                .map(PyBuffer::from)
-                .collect::<Vec<_>>()
-        })
+    fn keys(&self) -> Vec<PyBuffer> {
+        self.0.keys().cloned().map(PyBuffer::from).collect()
     }
 
     /// Returns a list of read-only memoryviews for all values.
-    fn values<'py>(&self, py: Python<'py>) -> Vec<PyBuffer> {
-        py.detach(|| {
-            self.0
-                .values()
-                .cloned()
-                .map(PyBuffer::from)
-                .collect::<Vec<_>>()
-        })
+    fn values(&self) -> Vec<PyBuffer> {
+        self.0.values().cloned().map(PyBuffer::from).collect()
     }
 
     /// Returns the number of headers stored in the map.
@@ -192,20 +160,20 @@ impl HeaderMap {
 
 #[pymethods]
 impl HeaderMap {
-    fn __getitem__<'py>(&self, py: Python<'py>, key: PyBackedStr) -> Option<PyBuffer> {
-        self.get(py, key, None)
+    fn __getitem__(&self, key: PyBackedStr) -> Option<PyBuffer> {
+        self.get(key, None)
     }
 
-    fn __setitem__(&mut self, py: Python, key: PyBackedStr, value: StrInput) {
-        self.insert(py, key, value);
+    fn __setitem__(&mut self, key: PyBackedStr, value: Text) {
+        self.insert(key, value);
     }
 
-    fn __delitem__(&mut self, py: Python, key: PyBackedStr) {
-        self.remove(py, key);
+    fn __delitem__(&mut self, key: PyBackedStr) {
+        self.remove(key);
     }
 
-    fn __contains__(&self, py: Python, key: PyBackedStr) -> bool {
-        self.contains_key(py, key)
+    fn __contains__(&self, key: PyBackedStr) -> bool {
+        self.contains_key(key)
     }
 
     fn __len__(&self) -> usize {
@@ -213,12 +181,10 @@ impl HeaderMap {
     }
 
     fn __iter__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyIterator>> {
-        let items: Vec<_> = py.detach(|| {
-            self.0
-                .iter()
-                .map(|(k, v)| (PyBuffer::from(k.clone()), PyBuffer::from(v.clone())))
-                .collect()
-        });
+        let items = self
+            .0
+            .iter()
+            .map(|(k, v)| (PyBuffer::from(k.clone()), PyBuffer::from(v.clone())));
         let pylist = PyList::new(py, items)?;
         PyIterator::from_object(&pylist)
     }
@@ -245,7 +211,7 @@ impl FromPyObject<'_, '_> for HeaderMap {
                     };
 
                     let value = {
-                        let value = value.extract::<StrInput>()?;
+                        let value = value.extract::<Text>()?;
                         HeaderValue::from_maybe_shared(value.0).map_err(Error::from)?
                     };
 
@@ -273,7 +239,7 @@ impl OrigHeaderMap {
         // and we want to prevent Python's garbage collector from managing it.
         if let Some(init) = init {
             for name in init.iter() {
-                let name = match name.extract::<StrInput>() {
+                let name = match name.extract::<Text>() {
                     Ok(name) => name.0,
                     _ => continue,
                 };
@@ -294,7 +260,7 @@ impl OrigHeaderMap {
     /// of the list of values currently associated with the key. The key is not
     /// updated, though; this matters for types that can be `==` without being
     /// identical.
-    pub fn insert(&mut self, value: StrInput) -> bool {
+    pub fn insert(&mut self, value: Text) -> bool {
         self.0.insert(value.0)
     }
 
@@ -311,15 +277,11 @@ impl OrigHeaderMap {
     }
 
     fn __iter__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyIterator>> {
-        let items: Vec<_> = py.detach(|| {
-            self.0
-                .iter()
-                .map(|(name, orig_name)| {
-                    let name = PyBuffer::from(name.clone());
-                    let orig_name = PyBuffer::from(orig_name.clone());
-                    (name, orig_name)
-                })
-                .collect()
+        let items = self.0.iter().map(|(name, orig_name)| {
+            (
+                PyBuffer::from(name.clone()),
+                PyBuffer::from(orig_name.clone()),
+            )
         });
         let pylist = PyList::new(py, items)?;
         PyIterator::from_object(&pylist)
@@ -342,7 +304,7 @@ impl FromPyObject<'_, '_> for OrigHeaderMap {
                 header::OrigHeaderMap::with_capacity(list.len()),
                 |mut headers, name| {
                     let name = {
-                        let name = name.extract::<StrInput>()?;
+                        let name = name.extract::<Text>()?;
                         name.0
                     };
                     headers.insert(name);

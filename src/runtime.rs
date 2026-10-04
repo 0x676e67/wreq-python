@@ -1,5 +1,6 @@
 use std::{
     sync::{Arc, OnceLock},
+    thread,
     time::Duration,
 };
 
@@ -14,7 +15,9 @@ use tokio::runtime::Handle;
 #[derive(Clone)]
 #[pyclass(frozen, skip_from_py_object)]
 pub struct Runtime {
+    /// Shared owner; `None` only once `Drop` has taken it to shut the runtime down.
     inner: Option<Arc<PingoraRuntime>>,
+    /// The worker this copy runs on; without work stealing its client's tasks stay there.
     handle: Handle,
 }
 
@@ -79,8 +82,7 @@ impl Runtime {
         max_blocking_threads: Option<usize>,
         thread_keep_alive: Option<Duration>,
     ) -> PyResult<Self> {
-        let workers =
-            workers.unwrap_or_else(|| std::thread::available_parallelism().map_or(1, usize::from));
+        let workers = workers.unwrap_or_else(parallelism);
         if workers == 0
             || max_blocking_threads == Some(0)
             || workers
@@ -120,13 +122,17 @@ impl Drop for Runtime {
     }
 }
 
+/// Workers used when none are given: one per available CPU.
+fn parallelism() -> usize {
+    thread::available_parallelism().map_or(1, usize::from)
+}
+
 /// Create the shared runtime on first use and retain it for the process lifetime.
 pub fn get() -> &'static Runtime {
     static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 
     fn create() -> Runtime {
-        let workers = std::thread::available_parallelism().map_or(1, usize::from);
-        let runtime = RuntimeBuilder::new(workers, env!("CARGO_PKG_NAME")).build();
+        let runtime = RuntimeBuilder::new(parallelism(), env!("CARGO_PKG_NAME")).build();
         runtime.into()
     }
 

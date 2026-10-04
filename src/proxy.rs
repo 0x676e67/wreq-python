@@ -1,7 +1,7 @@
 use pyo3::{prelude::*, pybacked::PyBackedStr};
 use wreq::header::HeaderValue;
 
-use crate::{error::Error, extractor::StrInput, header::HeaderMap};
+use crate::{error::Error, extractor::Text, header::HeaderMap};
 
 /// A builder for `Proxy`.
 #[derive(Default)]
@@ -13,7 +13,7 @@ struct Builder {
     password: Option<PyBackedStr>,
 
     // Optional custom HTTP authentication header.
-    custom_http_auth: Option<StrInput>,
+    custom_http_auth: Option<Text>,
 
     /// Optional custom HTTP headers for the proxy.
     custom_http_headers: Option<HeaderMap>,

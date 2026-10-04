@@ -1,0 +1,5 @@
+Matrix: 48 supported cells; 144 timed batches; 144 warm-up batches; 300 requests/batch.
+Raw JSON: /home/gngpp/.cache/wreq-python/bench-18/results/after-wsl-three-blocking-short.json
+Logs: /home/gngpp/.cache/wreq-python/bench-18/results/after-wsl-three-blocking-short-stdout.log
+      /home/gngpp/.cache/wreq-python/bench-18/results/after-wsl-three-blocking-short-stderr.log
+Report: /home/gngpp/.cache/wreq-python/bench-18/results/after-wsl-three-blocking-short.report.md

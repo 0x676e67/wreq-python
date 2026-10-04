@@ -7,18 +7,22 @@
 
 use std::time::Duration;
 
-use futures_util::{SinkExt, StreamExt, TryStreamExt};
+use futures_util::{SinkExt, StreamExt, TryStreamExt, stream};
 use pyo3::prelude::*;
-use tokio::sync::{
-    mpsc::{UnboundedReceiver, UnboundedSender},
-    oneshot::{self, Sender},
+use tokio::{
+    sync::{
+        mpsc::{UnboundedReceiver, UnboundedSender},
+        oneshot::{self, Sender},
+    },
+    time,
+};
+use wreq::ws::{
+    WebSocket,
+    message::{self, CloseCode, CloseFrame, Utf8Bytes},
 };
 
-use super::{
-    Error, Message, Utf8Bytes,
-    ws::{self, WebSocket},
-};
-use crate::extractor::StrInput;
+use super::Message;
+use crate::{error::Error, extractor::Text};
 
 /// Commands for WebSocket operations.
 pub enum Command {
@@ -40,7 +44,7 @@ pub enum Command {
     /// Close the WebSocket connection.
     ///
     /// Contains an optional close code, optional reason, and a oneshot sender for the result.
-    Close(Option<u16>, Option<StrInput>, Sender<PyResult<()>>),
+    Close(Option<u16>, Option<Text>, Sender<PyResult<()>>),
 }
 
 /// The main background task that processes incoming [`Command`]s and interacts with the WebSocket.
@@ -60,9 +64,9 @@ pub async fn task(ws: WebSocket, mut cmd: UnboundedReceiver<Command>) {
                 let _ = tx.send(res);
             }
             Command::SendMany(many_msg, tx) => {
-                let stream = many_msg.into_iter().map(|m| Ok(m.0));
+                let messages = many_msg.into_iter().map(|m| Ok(m.0));
                 let res = writer
-                    .send_all(&mut futures_util::stream::iter(stream))
+                    .send_all(&mut stream::iter(messages))
                     .await
                     .map_err(Error::Library)
                     .map_err(Into::into);
@@ -80,7 +84,7 @@ pub async fn task(ws: WebSocket, mut cmd: UnboundedReceiver<Command>) {
                 };
 
                 if let Some(timeout) = timeout {
-                    match tokio::time::timeout(timeout, fut).await {
+                    match time::timeout(timeout, fut).await {
                         Ok(res) => {
                             let _ = tx.send(res);
                         }
@@ -100,19 +104,15 @@ pub async fn task(ws: WebSocket, mut cmd: UnboundedReceiver<Command>) {
 
                 // A reason requires a code (RFC 6455 §5.5.1), so a lone reason closes normally.
                 let close_frame = match reason {
-                    Ok(reason) if code.is_some() || reason.is_some() => {
-                        Some(ws::message::CloseFrame {
-                            code: code
-                                .map(ws::message::CloseCode::from)
-                                .unwrap_or(ws::message::CloseCode::NORMAL),
-                            reason: reason.unwrap_or_default(),
-                        })
-                    }
+                    Ok(reason) if code.is_some() || reason.is_some() => Some(CloseFrame {
+                        code: code.map(CloseCode::from).unwrap_or(CloseCode::NORMAL),
+                        reason: reason.unwrap_or_default(),
+                    }),
                     _ => None,
                 };
 
                 let res = writer
-                    .send(ws::message::Message::Close(close_frame))
+                    .send(message::Message::Close(close_frame))
                     .await
                     .map_err(Error::Library)
                     .map_err(Into::into);
@@ -168,7 +168,7 @@ pub async fn send_all(cmd: UnboundedSender<Command>, messages: Vec<Message>) -> 
 pub async fn close(
     cmd: UnboundedSender<Command>,
     code: Option<u16>,
-    reason: Option<StrInput>,
+    reason: Option<Text>,
 ) -> PyResult<()> {
     send_command(cmd, |tx| Command::Close(code, reason, tx))
         .await

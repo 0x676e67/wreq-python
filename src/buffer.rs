@@ -24,6 +24,7 @@ use wreq::header::{HeaderCaseName, HeaderName, HeaderValue};
 /// Exposes owned Rust bytes as a read-only Python memoryview without copying.
 pub struct PyBuffer(BufferView);
 
+/// The exporter behind each memoryview; views keep it, and so its bytes, alive.
 #[pyclass(frozen, skip_from_py_object)]
 struct BufferView(Bytes);
 
@@ -124,7 +125,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::extractor::{BytesInput, StrInput};
+    use crate::extractor::{Binary, Text};
 
     #[test]
     fn memoryview_shares_owned_bytes() {
@@ -140,7 +141,7 @@ mod tests {
             assert_eq!(buffer.to_vec(py).unwrap(), [0, 1, 255]);
 
             let binary = PyBytes::new(py, b"builtin bytes");
-            let input = binary.extract::<BytesInput>().unwrap();
+            let input = binary.extract::<Binary>().unwrap();
             assert_eq!(input.0.as_ptr(), binary.as_bytes().as_ptr());
             let view = PyBuffer::from(input.0).into_pyobject(py).unwrap();
             let buffer = PythonBuffer::<u8>::get(view.as_any()).unwrap();
@@ -150,7 +151,7 @@ mod tests {
             );
 
             let text = PyString::new(py, "builtin text");
-            let input = text.extract::<StrInput>().unwrap();
+            let input = text.extract::<Text>().unwrap();
             assert_eq!(input.0.as_ptr(), text.to_str().unwrap().as_ptr());
         });
     }

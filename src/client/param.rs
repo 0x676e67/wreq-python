@@ -5,69 +5,21 @@ use serde::{
     ser::{SerializeMap, SerializeSeq},
 };
 
-/// Represents HTTP parameters from Python as either a mapping or a sequence of key-value pairs.
-///
-/// This enum is used for both URL query parameters and form-encoded data. It supports extracting
-/// parameter data from Python objects such as:
-/// - Dictionaries (`dict`): `{"name": "value", "count": 42}`
-/// - Sequences of tuples (`list` or `tuple`): `[("name", "value"), ("count", 42)]`
-///
-/// The sequence form allows duplicate keys, which is useful for multi-value parameters:
-/// ```python
-/// params = [("tag", "rust"), ("tag", "python"), ("tag", "http")]
-/// # Results in: ?tag=rust&tag=python&tag=http
-/// ```
-///
-/// # Variants
-///
-/// - `Map`: A dictionary-like mapping of keys to values. Each key is unique.
-/// - `List`: A sequence of key-value pairs. Allows duplicate keys for multi-value parameters.
+/// Query or form parameters from a `dict`, or from a sequence of pairs that may repeat keys,
+/// such as `[("tag", "rust"), ("tag", "http")]`.
 #[derive(FromPyObject)]
 pub enum Params {
-    /// A mapping of unique keys to values, extracted from Python `dict` objects.
     Map(IndexMap<PyBackedStr, ParamValue>),
-    /// A sequence of key-value pairs, extracted from Python sequences like `list` or `tuple`.
-    /// Preserves order and allows duplicate keys.
     List(Vec<(PyBackedStr, ParamValue)>),
 }
 
-/// Represents a single parameter value that can be automatically converted from Python types.
-///
-/// This enum supports the most common Python types used in HTTP parameters:
-/// - Integers (`int`)
-/// - Floating-point numbers (`float`)
-/// - Booleans (`bool`)
-/// - Strings (`str`)
-///
-/// # Type Conversion
-///
-/// When serialized to HTTP parameters, values are converted as follows:
-/// - `Number(123)` → `"123"`
-/// - `Float64(3.14)` → `"3.14"`
-/// - `Boolean(true)` → `"true"` (lowercase)
-/// - `String("hello")` → `"hello"`
-///
-/// # Examples
-///
-/// ```python
-/// # All these values are automatically converted to ParamValue:
-/// params = {
-///     "page": 1,              # Number
-///     "limit": 10,            # Number
-///     "price": 19.99,         # Float64
-///     "active": True,         # Boolean
-///     "name": "product",      # String
-/// }
-/// ```
+/// A scalar parameter value: `bool`, `int`, `float` or `str`, serialized as its text form
+/// (`true`/`false` for booleans).
 #[derive(FromPyObject)]
 pub enum ParamValue {
-    /// A boolean value from Python `bool`.
     Boolean(bool),
-    /// An integer value from Python `int`.
     Number(isize),
-    /// A floating-point value from Python `float`.
     Float64(f64),
-    /// A string value from Python `str`.
     String(PyBackedStr),
 }
 

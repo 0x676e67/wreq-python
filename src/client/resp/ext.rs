@@ -1,22 +1,19 @@
-use bytes::Bytes;
 use pyo3::pybacked::PyBackedStr;
+use serde::de::DeserializeOwned;
 
-use crate::error::Error;
+use crate::{buffer::PyBuffer, error::Error};
 
-/// Extension trait for [`wreq::Response`] that provides convenient methods for consuming response
-/// bodies.
-///
-/// This trait wraps the underlying [`wreq::Response`] methods and converts their errors to our
-/// custom `Error` type.
+/// Body readers for [`wreq::Response`] that return crate [`Error`]s, shared by the sync
+/// and async responses.
 pub trait ResponseExt {
-    /// Returns an error if the encoding is unsupported or decoding fails.
+    /// Decode the body with `encoding`, or the response charset defaulting to UTF-8.
     async fn text(self, encoding: Option<PyBackedStr>) -> Result<String, Error>;
 
-    /// Returns an error if the body is not valid JSON or cannot be deserialized into `T`.
-    async fn json<T: serde::de::DeserializeOwned>(self) -> Result<T, Error>;
+    /// Deserialize the body as JSON.
+    async fn json<T: DeserializeOwned>(self) -> Result<T, Error>;
 
-    /// This method consumes the response and returns all body data as a [`Bytes`] buffer.
-    async fn bytes(self) -> Result<Bytes, Error>;
+    /// Read the whole body as a read-only buffer.
+    async fn bytes(self) -> Result<PyBuffer, Error>;
 }
 
 impl ResponseExt for wreq::Response {
@@ -30,12 +27,15 @@ impl ResponseExt for wreq::Response {
     }
 
     #[inline]
-    async fn json<T: serde::de::DeserializeOwned>(self) -> Result<T, Error> {
+    async fn json<T: DeserializeOwned>(self) -> Result<T, Error> {
         self.json::<T>().await.map_err(Error::Library)
     }
 
     #[inline]
-    async fn bytes(self) -> Result<Bytes, Error> {
-        self.bytes().await.map_err(Error::Library)
+    async fn bytes(self) -> Result<PyBuffer, Error> {
+        self.bytes()
+            .await
+            .map(PyBuffer::from)
+            .map_err(Error::Library)
     }
 }

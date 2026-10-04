@@ -33,11 +33,23 @@ def comparable_client(metadata):
     return result
 
 
-def render_comparison(before: dict, after: dict) -> str:
+def render_comparison(before: dict, after: dict, *, api: str | None = None) -> str:
     for document in (before, after):
         validate_document(document)
-    config = before["configuration"]
-    if config != after["configuration"]:
+    if api not in (None, "async", "blocking"):
+        raise ValueError("Comparison API must be async or blocking")
+    configurations = [dict(document["configuration"]) for document in (before, after)]
+    if api is not None:
+        for config in configurations:
+            config["clients"] = sorted(
+                client
+                for client in config["clients"]
+                if CAPABILITIES[client]["api"] == api
+            )
+            if not config["clients"]:
+                raise ValueError(f"Snapshot contains no {api} clients")
+    config = configurations[0]
+    if config != configurations[1]:
         raise ValueError("Benchmark configurations do not match")
     fields = (
         "python",
@@ -60,7 +72,11 @@ def render_comparison(before: dict, after: dict) -> str:
         ):
             raise ValueError(f"Benchmark client metadata does not match: {client}")
     cells = [
-        {tuple(cell[key] for key in DIMENSIONS): cell for cell in document["results"]}
+        {
+            tuple(cell[key] for key in DIMENSIONS): cell
+            for cell in document["results"]
+            if cell["client"] in config["clients"]
+        }
         for document in (before, after)
     ]
     if cells[0].keys() != cells[1].keys():
@@ -76,8 +92,8 @@ def render_comparison(before: dict, after: dict) -> str:
         date = datetime.fromisoformat(document["generated_at"]).astimezone(timezone.utc)
         wreq = [
             metadata
-            for metadata in document["clients"].values()
-            if metadata["package"] == "wreq"
+            for client, metadata in document["clients"].items()
+            if client in config["clients"] and metadata["package"] == "wreq"
         ]
         versions = ", ".join(sorted({metadata["version"] for metadata in wreq}))
         hashes = ", ".join(
@@ -95,10 +111,16 @@ def render_comparison(before: dict, after: dict) -> str:
             f"{'Yes' if source['dirty'] else 'No'} | {escape(date.isoformat())} | "
             f"{escape(versions or 'Not recorded')} | {escape(hashes or 'Not recorded')} |"
         )
+    if api is not None:
+        lines += [
+            "",
+            f"Comparison scope: {api} clients only; original snapshots are unchanged.",
+        ]
     requests = config["requests"] * config["samples"] * config["rounds"]
     lines += [
         "",
-        f"Each snapshot contains {len(cells[0]):,} supported cells, with "
+        f"Each snapshot {'contributes' if api is not None else 'contains'} "
+        f"{len(cells[0]):,} supported cells{' to this comparison' if api is not None else ''}, with "
         f"{requests:,} timed requests per cell across {config['rounds']} rounds. "
         "Counts come from the cases recorded in these snapshots.",
         "",
@@ -186,13 +208,16 @@ def main(argv=None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--before", type=Path, required=True)
     parser.add_argument("--after", type=Path, required=True)
+    parser.add_argument(
+        "--api", choices=("async", "blocking"), help="Compare only this API group"
+    )
     parser.add_argument("--output", type=Path, help="Write a new UTF-8 Markdown file")
     args = parser.parse_args(argv)
     documents = [
         json.loads(path.read_text(encoding="utf-8"))
         for path in (args.before, args.after)
     ]
-    content = render_comparison(*documents)
+    content = render_comparison(*documents, api=args.api)
     if args.output is not None:
         with args.output.open("x", encoding="utf-8", newline="\n") as handle:
             handle.write(content)

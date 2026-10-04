@@ -1,7 +1,11 @@
+use std::io;
+
+use hickory_resolver::net::NetError;
 use pyo3::{
     PyErr, Python, create_exception,
     exceptions::{PyException, PyRuntimeError, PyStopAsyncIteration, PyStopIteration},
 };
+use tokio::time::error::Elapsed;
 use wreq::header;
 
 const RACE_CONDITION_ERROR_MSG: &str = r#"Due to Rust's memory management with borrowing,
@@ -72,10 +76,10 @@ pub enum Error {
     WebSocketDisconnected,
     InvalidHeaderName(header::InvalidHeaderName),
     InvalidHeaderValue(header::InvalidHeaderValue),
-    Timeout(tokio::time::error::Elapsed),
+    Timeout(Elapsed),
     Builder(http::Error),
-    Dns(hickory_resolver::net::NetError),
-    IO(std::io::Error),
+    Dns(NetError),
+    IO(io::Error),
     Decode(cookie::ParseError),
     Json(serde_json::Error),
     Form(serde_urlencoded::ser::Error),
@@ -136,8 +140,8 @@ impl From<header::InvalidHeaderValue> for Error {
     }
 }
 
-impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Self {
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Self {
         Error::IO(err)
     }
 }
@@ -148,8 +152,8 @@ impl From<wreq::Error> for Error {
     }
 }
 
-impl From<tokio::time::error::Elapsed> for Error {
-    fn from(err: tokio::time::error::Elapsed) -> Self {
+impl From<Elapsed> for Error {
+    fn from(err: Elapsed) -> Self {
         Error::Timeout(err)
     }
 }

@@ -21,8 +21,8 @@ import asyncio
 import wreq
  
 async def main():
-    response = await wreq.get("https://httpbin.org/get")
-    print(response.status)
+    async with wreq.get("https://httpbin.org/get") as response:
+        print(response.status)
  
 asyncio.run(main())
 ```
@@ -31,14 +31,14 @@ If you need access to the full response metadata, all of it is available on the 
  
 ```python
 async def main():
-    response = await wreq.get("https://httpbin.org/get")
-    print(response.status)
-    print(response.version)
-    print(response.url)
-    print(response.headers)
-    print(response.cookies)
-    print(response.content_length)
-    print(response.remote_addr)
+    async with wreq.get("https://httpbin.org/get") as response:
+        print(response.status)
+        print(response.version)
+        print(response.url)
+        print(response.headers)
+        print(response.cookies)
+        print(response.content_length)
+        print(response.remote_addr)
 ```
  
 ### POST with JSON
@@ -47,11 +47,11 @@ Pass a dictionary to the `json` argument. wreq will serialize it and set the `Co
  
 ```python
 async def main():
-    response = await wreq.post(
+    async with wreq.post(
         "https://httpbin.org/post",
         json={"key": "value"},
-    )
-    print(await response.json())
+    ) as response:
+        print(await response.json())
 ```
  
 ---
@@ -67,26 +67,26 @@ async def main():
     client = Client()
  
     # List of tuples — preserves key order and allows duplicate keys
-    response = await client.post(
+    async with client.post(
         "https://httpbin.org/post",
         form=[
             ("key1", "value1"),
             ("key2", "value2"),
             ("count", 3),
         ],
-    )
-    print(await response.text())
+    ) as response:
+        print(await response.text())
  
     # Dictionary — simpler when keys are unique
-    response = await client.post(
+    async with client.post(
         "https://httpbin.org/post",
         form={
             "key1": "value1",
             "key2": "value2",
             "count": 3,
         },
-    )
-    print(await response.text())
+    ) as response:
+        print(await response.text())
 ```
  
 Non-string values such as integers, booleans, and floats are accepted and will be serialized automatically.
@@ -100,26 +100,26 @@ Use the `query` argument to append parameters to the URL. Like `form`, it accept
 ```python
 async def main():
     # List of tuples
-    response = await wreq.get(
+    async with wreq.get(
         "https://httpbin.org/get",
         query=[
             ("search", "wreq"),
             ("page", 1),
             ("active", True),
         ],
-    )
-    print(await response.text())
+    ) as response:
+        print(await response.text())
  
     # Dictionary
-    response = await wreq.get(
+    async with wreq.get(
         "https://httpbin.org/get",
         query={
             "search": "wreq",
             "page": 1,
             "active": True,
         },
-    )
-    print(await response.text())
+    ) as response:
+        print(await response.text())
 ```
  
 ---
@@ -171,9 +171,7 @@ from wreq import Client, HeaderMap
  
 async def main():
     client = Client()
-    response = await client.get("https://httpbin.org/stream/10")
- 
-    async with response:
+    async with client.get("https://httpbin.org/stream/10") as response:
         async with response.stream() as streamer:
             async for chunk in streamer:
                 if isinstance(chunk, memoryview):

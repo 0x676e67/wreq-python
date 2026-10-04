@@ -1,6 +1,10 @@
-use std::{fmt::Display, sync::Arc};
+use std::{
+    fmt::{self, Display},
+    sync::Arc,
+};
 
 use pyo3::prelude::*;
+use tokio::task::spawn_blocking;
 
 use crate::{header::HeaderMap, http::StatusCode};
 
@@ -98,11 +102,11 @@ impl Policy {
     #[pyo3(signature = (callback))]
     pub fn custom(callback: Py<PyAny>) -> Self {
         let callback = Arc::new(callback);
-        let polciy = wreq::redirect::Policy::custom(move |attempt| {
+        let policy = wreq::redirect::Policy::custom(move |attempt| {
             let callback = callback.clone();
             attempt.pending(|attempt| async move {
                 let args = Attempt::from(&attempt);
-                let kind = tokio::task::spawn_blocking(move || {
+                let kind = spawn_blocking(move || {
                     Python::try_attach(|py| {
                         callback
                             .call1(py, (args,))
@@ -125,7 +129,7 @@ impl Policy {
             })
         });
 
-        Self(polciy)
+        Self(policy)
     }
 }
 
@@ -173,7 +177,7 @@ impl From<&wreq::redirect::Attempt<'static, false>> for Attempt {
 }
 
 impl Display for Attempt {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "Attempt {{ status: {}, next: {}, previous: {:?} }}",
@@ -185,7 +189,7 @@ impl Display for Attempt {
 // ===== impl Action =====
 
 impl Display for Action {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.kind {
             ActionKind::Follow => write!(f, "Action::Follow"),
             ActionKind::Stop => write!(f, "Action::Stop"),

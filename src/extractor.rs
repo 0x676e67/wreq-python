@@ -8,20 +8,22 @@ use pyo3::{
     types::{PyBytes, PyString},
 };
 
-/// A generic extractor for various types.
+/// Extracts a foreign type with custom rules, such as an `(IPv4, IPv6)` pair that drops the
+/// wrong family.
 pub struct Extractor<T>(pub T);
 
-/// Byte input with no hidden references to Python subclasses.
+/// Data of a `bytes` or `bytearray`. Exact `bytes` are shared without copying; subclasses
+/// are copied so a cycle through the `Bytes` owner cannot hide from the GC.
 #[derive(Clone)]
-pub struct BytesInput(pub Bytes);
+pub struct Binary(pub Bytes);
 
-/// UTF-8 input with no hidden references to Python subclasses.
+/// UTF-8 data of a `str`, shared for an exact `str` and copied for a subclass.
 #[derive(Clone)]
-pub struct StrInput(pub Bytes);
+pub struct Text(pub Bytes);
 
-// ===== impl BytesInput =====
+// ===== impl Binary =====
 
-impl FromPyObject<'_, '_> for BytesInput {
+impl FromPyObject<'_, '_> for Binary {
     type Error = PyErr;
 
     fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
@@ -36,9 +38,9 @@ impl FromPyObject<'_, '_> for BytesInput {
     }
 }
 
-// ===== impl StrInput =====
+// ===== impl Text =====
 
-impl FromPyObject<'_, '_> for StrInput {
+impl FromPyObject<'_, '_> for Text {
     type Error = PyErr;
 
     fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {

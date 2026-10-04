@@ -42,7 +42,7 @@ async def main():
     async with Client(
         emulation=Emulation.Chrome154,
     ) as client:
-        async with await client.get(
+        async with client.get(
             "https://example.com"
         ) as response:
             print(await response.text())

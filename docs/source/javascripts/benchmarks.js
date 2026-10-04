@@ -54,8 +54,6 @@
           payloadButtons.find((item) => Number(item.dataset.chartPayload) === payload).focus();
         });
       });
-      section.querySelector("[data-chart-previous]").addEventListener("click", () => move(-1));
-      section.querySelector("[data-chart-next]").addEventListener("click", () => move(1));
       selects.forEach((select) => select.addEventListener("change", update));
       section.querySelectorAll("[data-chart-controls]").forEach((controls) => { controls.hidden = false; });
       update();

@@ -5,7 +5,7 @@ Demonstrates how to use custom redirect policies with Python callbacks.
 """
 
 import asyncio
-from wreq import Client, Response, redirect
+from wreq import Client, redirect
 from wreq.redirect import Attempt, Action
 
 
@@ -33,9 +33,9 @@ async def main():
     client = Client(redirect=policy)
 
     # Test with a URL that redirects
-    response: Response = await client.get("http://httpbin.io/redirect/3")
-    print(f"Final URL: {response.url}")
-    print(f"Status: {response.status}")
+    async with client.get("http://httpbin.io/redirect/3") as response:
+        print(f"Final URL: {response.url}")
+        print(f"Status: {response.status}")
 
 
 if __name__ == "__main__":

@@ -9,27 +9,27 @@
 
 use std::fmt::Debug;
 
-use pyo3::prelude::*;
+use pyo3::{exceptions::PyValueError, prelude::*};
 use wreq::ws::message::{self, CloseCode, CloseFrame, Utf8Bytes};
 
 use crate::{
     buffer::PyBuffer,
     client::body::Json,
     error::Error,
-    extractor::{BytesInput, StrInput},
+    extractor::{Binary, Text},
 };
 
 /// An enum representing either a bytes message or a JSON message.
 #[derive(FromPyObject)]
 pub enum BytesLike {
-    Bytes(BytesInput),
+    Bytes(Binary),
     Json(Json),
 }
 
 /// An enum representing either a text message or a JSON message.
 #[derive(FromPyObject)]
 pub enum TextLike {
-    Text(StrInput),
+    Text(Text),
     Json(Json),
 }
 
@@ -112,54 +112,54 @@ impl Message {
 
 #[pymethods]
 impl Message {
-    /// Creates a new text message from the JSON representation.
+    /// Creates a text message from a string, or from a JSON value serialized as text.
     #[staticmethod]
     #[pyo3(signature = (like))]
-    pub fn from_text(py: Python, like: TextLike) -> PyResult<Self> {
-        py.detach(|| match like {
-            TextLike::Text(text) => {
-                // If the string is not valid UTF-8, this will panic.
-                let msg = message::Message::text(Utf8Bytes::try_from(text.0).expect("valid UTF-8"));
-                Ok(Self(msg))
-            }
+    pub fn from_text(like: TextLike) -> PyResult<Self> {
+        match like {
+            // A Python str is always valid UTF-8.
+            TextLike::Text(text) => Utf8Bytes::try_from(text.0)
+                .map(message::Message::text)
+                .map(Self)
+                .map_err(|err| PyValueError::new_err(err.to_string())),
             TextLike::Json(json) => message::Message::text_from_json(&json)
                 .map(Self)
                 .map_err(Error::Library)
                 .map_err(Into::into),
-        })
+        }
     }
 
-    /// Creates a new binary message from the JSON representation.
+    /// Creates a binary message from bytes, or from a JSON value serialized as binary.
     #[staticmethod]
     #[pyo3(signature = (like))]
-    pub fn from_binary(py: Python, like: BytesLike) -> PyResult<Self> {
-        py.detach(|| match like {
+    pub fn from_binary(like: BytesLike) -> PyResult<Self> {
+        match like {
             BytesLike::Bytes(bytes) => Ok(Self(message::Message::binary(bytes.0))),
             BytesLike::Json(json) => message::Message::binary_from_json(&json)
                 .map(Message)
                 .map_err(Error::Library)
                 .map_err(Into::into),
-        })
+        }
     }
 
     /// Creates a new ping message.
     #[staticmethod]
     #[pyo3(signature = (data))]
-    pub fn from_ping(data: BytesInput) -> Self {
+    pub fn from_ping(data: Binary) -> Self {
         Self(message::Message::ping(data.0))
     }
 
     /// Creates a new pong message.
     #[staticmethod]
     #[pyo3(signature = (data))]
-    pub fn from_pong(data: BytesInput) -> Self {
+    pub fn from_pong(data: Binary) -> Self {
         Self(message::Message::pong(data.0))
     }
 
     /// Creates a new close message.
     #[staticmethod]
     #[pyo3(signature = (code, reason=None))]
-    pub fn from_close(code: u16, reason: Option<StrInput>) -> Self {
+    pub fn from_close(code: u16, reason: Option<Text>) -> Self {
         let reason = reason
             .map(|reason| reason.0)
             .and_then(|b| Utf8Bytes::try_from(b).ok())

@@ -92,6 +92,8 @@ def render_markdown(
     data_link: str | None = None,
     *,
     environment_only: bool = False,
+    environment_heading: str | None = "Measurement environment",
+    include_source: bool = True,
 ) -> str:
     validate_document(document)
     config = document["configuration"]
@@ -103,21 +105,23 @@ def render_markdown(
     generated = datetime.fromisoformat(document["generated_at"]).astimezone(
         timezone.utc
     )
-    lines = [
-        f"Measured revision: [{commit[:12]}]({REPOSITORY}/commit/{commit}). "
-        f"Collected {generated:%Y-%m-%d %H:%M UTC}.",
-        "",
-    ]
-    if source["dirty"]:
+    lines = []
+    if include_source:
         lines += [
-            "**Local measurement: the source checkout had uncommitted changes.**",
+            f"Measured revision: [{commit[:12]}]({REPOSITORY}/commit/{commit}). "
+            f"Collected {generated:%Y-%m-%d %H:%M UTC}.",
             "",
         ]
+        if source["dirty"]:
+            lines += [
+                "**Local measurement: the source checkout had uncommitted changes.**",
+                "",
+            ]
     if data_link is not None:
         lines += [f"[Download this build's raw JSON]({safe_data_link(data_link)}).", ""]
+    if environment_heading is not None:
+        lines += [f"### {escape(environment_heading)}", ""]
     lines += [
-        "### Measurement environment",
-        "",
         "| Item | Value |",
         "| --- | --- |",
         f"| Python | {escape(environment.get('implementation', 'Not recorded'))} "
