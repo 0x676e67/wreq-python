@@ -19,7 +19,7 @@ from wreq import Client, Emulation
 
 async def main():
     async with Client(emulation=Emulation.Chrome154) as client:
-        async with await client.get("https://example.com") as response:
+        async with client.get("https://example.com") as response:
             print(response.status)
             print(await response.text())
 
