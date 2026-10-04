@@ -14,9 +14,7 @@ use crate::{
 /// A multipart form for a request.
 #[pyclass(subclass)]
 pub struct Multipart {
-    /// The built form, set only on the copy extracted for a request.
     pub form: Option<multipart::Form>,
-    /// Parts as built from Python; a stream part moves into the first form built from them.
     pub parts: Vec<Part>,
 }
 
