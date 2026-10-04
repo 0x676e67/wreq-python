@@ -7,7 +7,7 @@ use std::{
 
 use bytes::Bytes;
 use futures_util::{
-    TryFutureExt,
+    FutureExt, TryFutureExt,
     future::{self, BoxFuture},
 };
 use http::response::{Parts, Response as HttpResponse};
@@ -122,13 +122,13 @@ impl Response {
                 *slot = other;
                 drop(slot);
                 let response = cached.map(|bytes| self.build_response(bytes));
-                return Box::pin(future::ready(response.ok_or(Error::Memory)));
+                return future::ready(response.ok_or(Error::Memory)).boxed();
             }
         };
         drop(slot);
         let parts = self.parts.clone();
         let body = self.body.clone();
-        Box::pin(async move {
+        async move {
             // Keep the connection out of the pool unless the body is read in full.
             let mut guard = RecycleGuard(Some(parts));
             let bytes = stream
@@ -144,7 +144,8 @@ impl Response {
             }
             drop(slot);
             Ok(wreq::Response::from(HttpResponse::from_parts(parts, bytes)))
-        })
+        }
+        .boxed()
     }
 
     /// Take the unread body for a [`Streamer`]; fails with [`Error::Memory`] otherwise,
