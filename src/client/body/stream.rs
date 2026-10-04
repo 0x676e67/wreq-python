@@ -55,22 +55,16 @@ enum Source {
 /// thread; without that caller, or once it returns, each item is pulled on Tokio's blocking
 /// pool as the body is polled.
 struct SyncStream {
-    /// Shared with the pull in flight, which runs on another thread.
     iter: Arc<Py<PyAny>>,
-    /// Items of the pull in flight.
     pulling: Option<Pulling>,
-    /// Set once the iterator ends or raises; nothing is pulled after.
     done: bool,
-    /// Sends pulls to the blocked caller; cleared once it returns.
     caller: Option<mpsc::UnboundedSender<Pull>>,
 }
 
 /// The receiving end of a pull in flight.
 struct Pulling {
     rx: mpsc::UnboundedReceiver<Option<Item>>,
-    /// Served by the blocked caller rather than the blocking pool.
     by_caller: bool,
-    /// Whether the pull has sent an item yet.
     received: bool,
 }
 
@@ -79,19 +73,15 @@ struct Pulling {
 pub struct Pull {
     iter: Arc<Py<PyAny>>,
     items: mpsc::UnboundedSender<Option<Item>>,
-    /// Bytes read before the pull ends: a batch for the caller, one item on the pool.
     budget: usize,
     read: usize,
-    /// Set once the iterator has ended or raised, so no further pull will follow.
     ended: bool,
 }
 
 /// A request body from a Python async generator, forwarded with one chunk of buffering
 /// by a task on the loop that was running at extraction. Dropping it cancels that task.
 struct PyAsyncStream {
-    /// Chunks from [`Sender`]; `None` marks the end, as does a closed channel.
     rx: mpsc::Receiver<Option<Item>>,
-    /// The forwarding task and its loop, kept until forwarding ends.
     task: Option<(Py<PyAny>, Py<PyAny>)>,
 }
 

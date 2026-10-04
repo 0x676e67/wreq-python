@@ -23,10 +23,9 @@ where
     F: Future<Output = PyResult<T>> + Send + 'static,
     T: Send + 'static,
 {
-    let task = runtime.handle().spawn(future);
     runtime
         .handle()
-        .block_on(task)
+        .block_on(runtime.handle().spawn(future))
         .map_err(|err| PyRuntimeError::new_err(err.to_string()))?
 }
 
@@ -68,17 +67,19 @@ where
     let Some(mut pulls) = pulls else {
         return py.detach(|| block_on(runtime, future));
     };
+
     let mut task = runtime.handle().spawn(future);
-    let ended = pulls
+    if pulls
         .try_recv()
-        .is_ok_and(|pull| pull.serve(py, || task.is_finished()));
-    if ended {
+        .is_ok_and(|pull| pull.serve(py, || task.is_finished()))
+    {
         // The body is fully queued and asks for nothing more; watching `pulls` would only
         // wake this thread when the body drops them.
         return py
             .detach(|| runtime.handle().block_on(task))
             .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
     }
+
     py.detach(|| {
         let output = park_on(poll_fn(|cx| {
             loop {

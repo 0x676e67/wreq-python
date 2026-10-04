@@ -9,10 +9,7 @@ use serde::{
 /// such as `[("tag", "rust"), ("tag", "http")]`.
 #[derive(FromPyObject)]
 pub enum Params {
-    /// A mapping of unique keys to values, extracted from Python `dict` objects.
     Map(IndexMap<PyBackedStr, ParamValue>),
-    /// A sequence of key-value pairs, extracted from Python sequences like `list` or `tuple`.
-    /// Preserves order and allows duplicate keys.
     List(Vec<(PyBackedStr, ParamValue)>),
 }
 
@@ -20,13 +17,9 @@ pub enum Params {
 /// (`true`/`false` for booleans).
 #[derive(FromPyObject)]
 pub enum ParamValue {
-    /// A boolean value from Python `bool`.
     Boolean(bool),
-    /// An integer value from Python `int`.
     Number(isize),
-    /// A floating-point value from Python `float`.
     Float64(f64),
-    /// A string value from Python `str`.
     String(PyBackedStr),
 }
 
