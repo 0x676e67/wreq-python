@@ -112,7 +112,7 @@ impl Streamer {
             .is_err()
         {
             let panicked = Err(PyRuntimeError::new_err("response body reader panicked"));
-            let _ = burst(tx.send(panicked), &end.0).await;
+            let _ = burst(tx.send(panicked), &end.0, &mut true).await;
         }
         // Readers wake only after the sender drops, so they see the end.
         drop(tx);
@@ -120,14 +120,20 @@ impl Streamer {
 
     /// Send frames until the body ends, a frame fails or the reader is gone.
     async fn pump(mut resp: wreq::Response, tx: &mpsc::Sender<PyResult<Frame>>, arrived: &Notify) {
-        while let Some(frame) = burst(resp.frame(), arrived).await {
+        let mut unannounced = false;
+        while let Some(frame) = burst(resp.frame(), arrived, &mut unannounced).await {
             let Some(frame) = Self::convert(frame, &mut resp) else {
                 continue;
             };
             let failed = frame.is_err();
-            if burst(tx.send(frame), arrived).await.is_err() || failed {
+            if burst(tx.send(frame), arrived, &mut unannounced)
+                .await
+                .is_err()
+                || failed
+            {
                 break;
             }
+            unannounced = true;
         }
     }
 
@@ -321,13 +327,14 @@ impl Streamer {
     }
 }
 
-/// Await `fut`, notifying readers whenever it suspends, so a burst of ready
-/// frames costs one wake while a slow stream still delivers each frame at once.
-async fn burst<F: Future>(fut: F, arrived: &Notify) -> F::Output {
+/// Await `fut`, waking readers when it suspends with frames sent since the last wake, so
+/// a burst of ready frames costs one wake while a slow stream still delivers each at once.
+/// Waking with nothing sent would make a reader yield to the loop for no frame.
+async fn burst<F: Future>(fut: F, arrived: &Notify, unannounced: &mut bool) -> F::Output {
     let mut fut = pin!(fut);
     poll_fn(|cx| {
         let poll = fut.as_mut().poll(cx);
-        if poll.is_pending() {
+        if poll.is_pending() && mem::take(unannounced) {
             arrived.notify_waiters();
         }
         poll
