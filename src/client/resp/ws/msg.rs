@@ -119,7 +119,8 @@ impl Message {
         match like {
             // A Python str is always valid UTF-8.
             TextLike::Text(text) => Utf8Bytes::try_from(text.0)
-                .map(|text| Self(message::Message::text(text)))
+                .map(message::Message::text)
+                .map(Self)
                 .map_err(|err| PyValueError::new_err(err.to_string())),
             TextLike::Json(json) => message::Message::text_from_json(&json)
                 .map(Self)
