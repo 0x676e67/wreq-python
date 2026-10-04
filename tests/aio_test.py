@@ -38,8 +38,14 @@ async def exchange():
     hanging = asyncio.Event()
     abandoned = asyncio.Event()
     handlers = set()
+    stopping = False
 
     async def serve(reader, writer):
+        # A pooled connection accepted during teardown would otherwise idle until
+        # `wait_closed` times out.
+        if stopping:
+            writer.close()
+            return
         handlers.add(asyncio.current_task())
         try:
             while True:
@@ -110,6 +116,7 @@ async def exchange():
                 await pending
             await asyncio.wait_for(abandoned.wait(), 5)
     finally:
+        stopping = True
         server.close()
         for handler in handlers:
             handler.cancel()
