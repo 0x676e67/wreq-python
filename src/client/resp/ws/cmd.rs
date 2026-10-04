@@ -22,7 +22,7 @@ use wreq::ws::{
 };
 
 use super::Message;
-use crate::{error::Error, extractor::StrInput};
+use crate::{error::Error, extractor::Text};
 
 /// Commands for WebSocket operations.
 pub enum Command {
@@ -44,7 +44,7 @@ pub enum Command {
     /// Close the WebSocket connection.
     ///
     /// Contains an optional close code, optional reason, and a oneshot sender for the result.
-    Close(Option<u16>, Option<StrInput>, Sender<PyResult<()>>),
+    Close(Option<u16>, Option<Text>, Sender<PyResult<()>>),
 }
 
 /// The main background task that processes incoming [`Command`]s and interacts with the WebSocket.
@@ -168,7 +168,7 @@ pub async fn send_all(cmd: UnboundedSender<Command>, messages: Vec<Message>) -> 
 pub async fn close(
     cmd: UnboundedSender<Command>,
     code: Option<u16>,
-    reason: Option<StrInput>,
+    reason: Option<Text>,
 ) -> PyResult<()> {
     send_command(cmd, |tx| Command::Close(code, reason, tx))
         .await

@@ -125,7 +125,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::extractor::{BytesInput, StrInput};
+    use crate::extractor::{Binary, Text};
 
     #[test]
     fn memoryview_shares_owned_bytes() {
@@ -141,7 +141,7 @@ mod tests {
             assert_eq!(buffer.to_vec(py).unwrap(), [0, 1, 255]);
 
             let binary = PyBytes::new(py, b"builtin bytes");
-            let input = binary.extract::<BytesInput>().unwrap();
+            let input = binary.extract::<Binary>().unwrap();
             assert_eq!(input.0.as_ptr(), binary.as_bytes().as_ptr());
             let view = PyBuffer::from(input.0).into_pyobject(py).unwrap();
             let buffer = PythonBuffer::<u8>::get(view.as_any()).unwrap();
@@ -151,7 +151,7 @@ mod tests {
             );
 
             let text = PyString::new(py, "builtin text");
-            let input = text.extract::<StrInput>().unwrap();
+            let input = text.extract::<Text>().unwrap();
             assert_eq!(input.0.as_ptr(), text.to_str().unwrap().as_ptr());
         });
     }

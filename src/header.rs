@@ -8,7 +8,7 @@ use wreq::header::{self, HeaderName, HeaderValue};
 use crate::{
     buffer::PyBuffer,
     error::Error,
-    extractor::{BytesInput, StrInput},
+    extractor::{Binary, Text},
 };
 
 /// An HTTP header map whose names and values are exposed as read-only memoryviews.
@@ -46,7 +46,7 @@ impl HeaderMap {
                 };
 
                 let value = match value
-                    .extract::<StrInput>()
+                    .extract::<Text>()
                     .map(|value| value.0)
                     .map(HeaderValue::from_maybe_shared)
                 {
@@ -67,7 +67,7 @@ impl HeaderMap {
     /// is returned. Use `get_all` to get all values associated with a given
     /// key. Returns `None` if there are no values associated with the key.
     #[pyo3(signature = (key, default=None))]
-    fn get(&self, key: PyBackedStr, default: Option<BytesInput>) -> Option<PyBuffer> {
+    fn get(&self, key: PyBackedStr, default: Option<Binary>) -> Option<PyBuffer> {
         self.0
             .get::<&str>(key.as_ref())
             .cloned()
@@ -88,7 +88,7 @@ impl HeaderMap {
 
     /// Insert a key-value pair into the header map.
     #[pyo3(signature = (key, value))]
-    fn insert(&mut self, key: PyBackedStr, value: StrInput) {
+    fn insert(&mut self, key: PyBackedStr, value: Text) {
         if let (Ok(name), Ok(value)) = (
             HeaderName::from_bytes(key.as_bytes()),
             HeaderValue::from_maybe_shared(value.0),
@@ -99,7 +99,7 @@ impl HeaderMap {
 
     /// Append a key-value pair to the header map.
     #[pyo3(signature = (key, value))]
-    fn append(&mut self, key: PyBackedStr, value: StrInput) {
+    fn append(&mut self, key: PyBackedStr, value: Text) {
         if let (Ok(name), Ok(value)) = (
             HeaderName::from_bytes(key.as_bytes()),
             HeaderValue::from_maybe_shared(value.0),
@@ -164,7 +164,7 @@ impl HeaderMap {
         self.get(key, None)
     }
 
-    fn __setitem__(&mut self, key: PyBackedStr, value: StrInput) {
+    fn __setitem__(&mut self, key: PyBackedStr, value: Text) {
         self.insert(key, value);
     }
 
@@ -211,7 +211,7 @@ impl FromPyObject<'_, '_> for HeaderMap {
                     };
 
                     let value = {
-                        let value = value.extract::<StrInput>()?;
+                        let value = value.extract::<Text>()?;
                         HeaderValue::from_maybe_shared(value.0).map_err(Error::from)?
                     };
 
@@ -239,7 +239,7 @@ impl OrigHeaderMap {
         // and we want to prevent Python's garbage collector from managing it.
         if let Some(init) = init {
             for name in init.iter() {
-                let name = match name.extract::<StrInput>() {
+                let name = match name.extract::<Text>() {
                     Ok(name) => name.0,
                     _ => continue,
                 };
@@ -260,7 +260,7 @@ impl OrigHeaderMap {
     /// of the list of values currently associated with the key. The key is not
     /// updated, though; this matters for types that can be `==` without being
     /// identical.
-    pub fn insert(&mut self, value: StrInput) -> bool {
+    pub fn insert(&mut self, value: Text) -> bool {
         self.0.insert(value.0)
     }
 
@@ -304,7 +304,7 @@ impl FromPyObject<'_, '_> for OrigHeaderMap {
                 header::OrigHeaderMap::with_capacity(list.len()),
                 |mut headers, name| {
                     let name = {
-                        let name = name.extract::<StrInput>()?;
+                        let name = name.extract::<Text>()?;
                         name.0
                     };
                     headers.insert(name);

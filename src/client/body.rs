@@ -18,15 +18,15 @@ pub use self::{
 };
 use crate::{
     error::Error,
-    extractor::{BytesInput, StrInput},
+    extractor::{Binary, Text},
 };
 
 /// A `body=` argument, matched by type before trying form, JSON and then a stream.
 /// Mappings and pair sequences with scalar values are form-encoded and other containers
 /// JSON-encoded, without the `Content-Type` that `form=` and `json=` set.
 pub enum Body {
-    Text(StrInput),
-    Bytes(BytesInput),
+    Text(Text),
+    Bytes(Binary),
     Form(Form),
     Json(Json),
     Stream(PyStream),

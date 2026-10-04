@@ -16,20 +16,20 @@ use crate::{
     buffer::PyBuffer,
     client::body::Json,
     error::Error,
-    extractor::{BytesInput, StrInput},
+    extractor::{Binary, Text},
 };
 
 /// An enum representing either a bytes message or a JSON message.
 #[derive(FromPyObject)]
 pub enum BytesLike {
-    Bytes(BytesInput),
+    Bytes(Binary),
     Json(Json),
 }
 
 /// An enum representing either a text message or a JSON message.
 #[derive(FromPyObject)]
 pub enum TextLike {
-    Text(StrInput),
+    Text(Text),
     Json(Json),
 }
 
@@ -145,21 +145,21 @@ impl Message {
     /// Creates a new ping message.
     #[staticmethod]
     #[pyo3(signature = (data))]
-    pub fn from_ping(data: BytesInput) -> Self {
+    pub fn from_ping(data: Binary) -> Self {
         Self(message::Message::ping(data.0))
     }
 
     /// Creates a new pong message.
     #[staticmethod]
     #[pyo3(signature = (data))]
-    pub fn from_pong(data: BytesInput) -> Self {
+    pub fn from_pong(data: Binary) -> Self {
         Self(message::Message::pong(data.0))
     }
 
     /// Creates a new close message.
     #[staticmethod]
     #[pyo3(signature = (code, reason=None))]
-    pub fn from_close(code: u16, reason: Option<StrInput>) -> Self {
+    pub fn from_close(code: u16, reason: Option<Text>) -> Self {
         let reason = reason
             .map(|reason| reason.0)
             .and_then(|b| Utf8Bytes::try_from(b).ok())

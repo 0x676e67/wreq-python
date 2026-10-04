@@ -15,7 +15,7 @@ use crate::{
     aio::{self, Coroutine},
     client::{SocketAddr, nogil},
     cookie::Cookie,
-    extractor::StrInput,
+    extractor::Text,
     header::HeaderMap,
     http::{StatusCode, Version},
     runtime::Runtime,
@@ -148,7 +148,7 @@ impl WebSocket {
         &self,
         py: Python<'py>,
         code: Option<u16>,
-        reason: Option<StrInput>,
+        reason: Option<Text>,
     ) -> PyResult<Bound<'py, Coroutine>> {
         aio::spawn(
             py,
@@ -258,7 +258,7 @@ impl BlockingWebSocket {
 
     /// Close the WebSocket connection.
     #[pyo3(signature = (code=None, reason=None))]
-    pub fn close(&self, py: Python, code: Option<u16>, reason: Option<StrInput>) -> PyResult<()> {
+    pub fn close(&self, py: Python, code: Option<u16>, reason: Option<Text>) -> PyResult<()> {
         nogil::run(
             py,
             &self.0.runtime,

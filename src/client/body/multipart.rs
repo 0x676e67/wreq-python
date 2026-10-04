@@ -6,7 +6,7 @@ use wreq::{Body, multipart};
 use crate::{
     client::body::PyStream,
     error::Error,
-    extractor::{BytesInput, StrInput},
+    extractor::{Binary, Text},
     header::HeaderMap,
     runtime,
 };
@@ -23,8 +23,8 @@ pub struct Multipart {
 /// The data for a part value of a multipart form.
 #[derive(FromPyObject)]
 pub enum Value {
-    Text(StrInput),
-    Bytes(BytesInput),
+    Text(Text),
+    Bytes(Binary),
     File(PathBuf),
     Stream(PyStream),
 }

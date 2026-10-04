@@ -23,7 +23,7 @@ use tokio::{
 
 use crate::{
     aio::{self, Coroutine},
-    extractor::{BytesInput, StrInput},
+    extractor::{Binary, Text},
     runtime,
 };
 
@@ -34,8 +34,8 @@ pub type Pulls = mpsc::UnboundedReceiver<Pull>;
 
 /// A request body chunk: `bytes` or `bytearray` data, or a `str` sent as UTF-8.
 pub enum PyBytesLike {
-    Bytes(BytesInput),
-    String(StrInput),
+    Bytes(Binary),
+    String(Text),
 }
 
 /// A request body read from a Python iterator or async generator, for `body=` and
