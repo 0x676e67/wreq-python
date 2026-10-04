@@ -61,7 +61,7 @@ async def test_websocket_close_frame(code, reason, expected):
     try:
         async with wreq.Client(proxies=[]) as client:
             # Leaving the block after an explicit close must not fail.
-            async with await client.websocket(url) as ws:
+            async with client.websocket(url) as ws:
                 await ws.close(code, reason)
             assert await asyncio.wait_for(frames.get(), 5) == expected
     finally:

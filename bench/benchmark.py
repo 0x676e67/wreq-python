@@ -274,7 +274,7 @@ async def aiohttp_async_session_test(url: str, count: int) -> None:
     async with aiohttp.ClientSession() as s:
 
         async def _fetch() -> None:
-            async with await s.get(url) as resp:
+            async with s.get(url) as resp:
                 await resp.read()
 
         await asyncio.gather(*[_fetch() for _ in range(count)])
@@ -348,7 +348,7 @@ async def httpx_async_non_session_test(url: str, count: int) -> None:
 async def aiohttp_async_non_session_test(url: str, count: int) -> None:
     async def _fetch() -> None:
         async with aiohttp.ClientSession() as s:
-            async with await s.get(url) as resp:
+            async with s.get(url) as resp:
                 await resp.read()
 
     await asyncio.gather(*[_fetch() for _ in range(count)])

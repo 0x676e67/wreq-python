@@ -179,7 +179,7 @@ mod r#async {
         kwds: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, Coroutine>> {
         let kwds = kwds.map(Bound::unbind);
-        aio::local(py, "websocket", async move {
+        aio::managed(py, "websocket", async move {
             Client::default().connect(url, kwds).await
         })
     }
@@ -194,7 +194,7 @@ mod r#async {
         kwds: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, Coroutine>> {
         let kwds = kwds.map(Bound::unbind);
-        aio::local(py, qualname, async move {
+        aio::managed(py, qualname, async move {
             Client::default().execute(method, url, kwds).await
         })
     }

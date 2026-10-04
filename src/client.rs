@@ -265,7 +265,7 @@ impl Client {
         kwds: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, Coroutine>> {
         let kwds = kwds.map(Bound::unbind);
-        aio::local(py, qualname, self.clone().execute(method, url, kwds))
+        aio::managed(py, qualname, self.clone().execute(method, url, kwds))
     }
 
     /// Send a request on the client's runtime, extracting options on first await so an
@@ -663,7 +663,7 @@ impl Client {
         kwds: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, Coroutine>> {
         let kwds = kwds.map(Bound::unbind);
-        aio::local(py, "Client.websocket", self.clone().connect(url, kwds))
+        aio::managed(py, "Client.websocket", self.clone().connect(url, kwds))
     }
 }
 

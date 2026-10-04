@@ -43,8 +43,7 @@ async def recv_message(ws: WebSocket):
 
 async def main():
     client = wreq.Client()
-    ws: WebSocket = await client.websocket("wss://echo.websocket.org")
-    async with ws:
+    async with client.websocket("wss://echo.websocket.org") as ws:
         print("Status Code: ", ws.status)
         print("Version: ", ws.version)
         print("Headers: ", ws.headers)
@@ -67,7 +66,7 @@ if __name__ == "__main__":
 import asyncio
 import datetime
 import wreq
-from wreq import Message, WebSocket
+from wreq import Message, Version
 from wreq import exceptions
 
 
@@ -99,11 +98,10 @@ async def recv_message(ws):
 async def main():
     # Connect to HTTP/2 WebSocket server
     client = wreq.Client(tls_verify=False)
-    ws: WebSocket = await client.websocket(
+    async with client.websocket(
         "wss://127.0.0.1:3000/ws",
         version=Version.HTTP_2
-    )
-    async with ws:
+    ) as ws:
         print("Status Code: ", ws.status)
         print("Version: ", ws.version)
         print("Headers: ", ws.headers)

@@ -12,16 +12,15 @@ async def print_response_info(resp: Response):
     Args:
         resp: Response object from the request
     """
-    async with resp:
-        print("\n=== Response Information ===")
-        print(f"Status Code: {resp.status}")
-        print(f"Version: {resp.version}")
-        print(f"Response URL: {resp.url}")
-        print(f"Headers: {resp.headers}")
-        print(f"Content-Length: {resp.content_length}")
-        print(f"Remote Address: {resp.remote_addr}")
-        print(f"Content: {await resp.text()}")
-        print("========================\n")
+    print("\n=== Response Information ===")
+    print(f"Status Code: {resp.status}")
+    print(f"Version: {resp.version}")
+    print(f"Response URL: {resp.url}")
+    print(f"Headers: {resp.headers}")
+    print(f"Content-Length: {resp.content_length}")
+    print(f"Remote Address: {resp.remote_addr}")
+    print(f"Content: {await resp.text()}")
+    print("========================\n")
 
 
 async def request_firefox():
@@ -33,8 +32,8 @@ async def request_firefox():
     client = Client(
         emulation=Emulation.Firefox135,
     )
-    resp = await client.get("https://tls.peet.ws/api/all")
-    await print_response_info(resp)
+    async with client.get("https://tls.peet.ws/api/all") as resp:
+        await print_response_info(resp)
     return client
 
 
@@ -47,7 +46,7 @@ async def request_chrome_android(client: Client):
         client: Existing client instance to update
     """
     print("\n[Testing Chrome on Android Emulation]")
-    resp = await client.get(
+    async with client.get(
         "https://tls.peet.ws/api/all",
         emulation=Emulation(
             profile=Profile.Chrome134,
@@ -55,8 +54,8 @@ async def request_chrome_android(client: Client):
         ),
         # Disable client default headers
         default_headers=False,
-    )
-    await print_response_info(resp)
+    ) as resp:
+        await print_response_info(resp)
 
 
 async def request_advanced_configuration():
@@ -149,8 +148,8 @@ async def request_advanced_configuration():
     )
 
     # Make request to TLS fingerprinting service
-    resp = await client.post("https://pingly.us.kg/api/all")
-    await print_response_info(resp)
+    async with client.post("https://pingly.us.kg/api/all") as resp:
+        await print_response_info(resp)
 
     return client
 

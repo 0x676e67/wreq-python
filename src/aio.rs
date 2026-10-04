@@ -49,13 +49,22 @@ where
     F: Future<Output = PyResult<T>> + Send + 'static,
     T: for<'a> IntoPyObject<'a>,
 {
-    Bound::new(
-        py,
-        Coroutine::new(qualname, async move {
-            let value = fut.await?;
-            Python::attach(|py| value.into_py_any(py))
-        }),
-    )
+    Bound::new(py, coroutine(qualname, fut))
+}
+
+/// Like [`local`], but `async with` may enter the coroutine directly, entering the
+/// async context manager it returns without a separate `await`.
+#[inline]
+pub fn managed<'py, F, T>(
+    py: Python<'py>,
+    qualname: &'static str,
+    fut: F,
+) -> PyResult<Bound<'py, Coroutine>>
+where
+    F: Future<Output = PyResult<T>> + Send + 'static,
+    T: for<'a> IntoPyObject<'a>,
+{
+    Bound::new(py, coroutine(qualname, fut).managed())
 }
 
 /// A coroutine that returns `value` without suspending.
@@ -82,6 +91,18 @@ pub async fn yield_now() {
         Poll::Pending
     })
     .await;
+}
+
+/// A coroutine awaiting `fut` and converting its output to a Python object.
+fn coroutine<F, T>(qualname: &'static str, fut: F) -> Coroutine
+where
+    F: Future<Output = PyResult<T>> + Send + 'static,
+    T: for<'a> IntoPyObject<'a>,
+{
+    Coroutine::new(qualname, async move {
+        let value = fut.await?;
+        Python::attach(|py| value.into_py_any(py))
+    })
 }
 
 /// Spawn `fut` on the runtime and wait for it; dropping the wait aborts the task.

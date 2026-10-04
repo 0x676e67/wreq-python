@@ -6,7 +6,7 @@ async def main():
     client = wreq.Client()
 
     # use a list of tuples
-    resp = await client.post(
+    async with client.post(
         "https://httpbin.io/anything",
         form=[
             ("key1", "value1"),
@@ -15,11 +15,11 @@ async def main():
             ("flag", True),
             ("float", 45.67),
         ],
-    )
-    print(await resp.text())
+    ) as resp:
+        print(await resp.text())
 
     # OR use a dictionary
-    resp = await client.post(
+    async with client.post(
         "https://httpbin.io/anything",
         form={
             "keyA": "valueA",
@@ -28,8 +28,8 @@ async def main():
             "flag": False,
             "float": 12.34,
         },
-    )
-    print(await resp.text())
+    ) as resp:
+        print(await resp.text())
 
 
 if __name__ == "__main__":

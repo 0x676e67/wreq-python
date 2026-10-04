@@ -19,9 +19,9 @@ async def main():
     client = Client(
         emulation=Emulation.Firefox152,
     )
-    resp = await client.get("https://tls.peet.ws/api/all")
-    print(f"Status: {resp.status}")
-    print(f"Content: {await resp.text()}")
+    async with client.get("https://tls.peet.ws/api/all") as resp:
+        print(f"Status: {resp.status}")
+        print(f"Content: {await resp.text()}")
 
 
 if __name__ == "__main__":
@@ -38,7 +38,7 @@ from wreq.emulation import Emulation, Profile, Platform
 
 async def main():
     client = Client()
-    resp = await client.get(
+    async with client.get(
         "https://tls.peet.ws/api/all",
         emulation=Emulation(
             profile=Profile.Chrome154,
@@ -46,9 +46,9 @@ async def main():
         ),
         # Disable client default headers
         default_headers=False,
-    )
-    print(f"Status: {resp.status}")
-    print(f"Content: {await resp.text()}")
+    ) as resp:
+        print(f"Status: {resp.status}")
+        print(f"Content: {await resp.text()}")
 
 
 if __name__ == "__main__":
@@ -125,9 +125,9 @@ async def main():
         orig_headers=orig_headers,
     )
 
-    resp = await client.post("https://tls.peet.ws/api/all")
-    print(f"Status: {resp.status}")
-    print(f"Content: {await resp.text()}")
+    async with client.post("https://tls.peet.ws/api/all") as resp:
+        print(f"Status: {resp.status}")
+        print(f"Content: {await resp.text()}")
 
 
 if __name__ == "__main__":

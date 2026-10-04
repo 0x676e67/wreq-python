@@ -4,7 +4,7 @@ import wreq
 
 async def main():
     # Send list of tuples as query parameters
-    resp = await wreq.get(
+    async with wreq.get(
         "https://httpbin.io/anything",
         query=[
             ("key1", "value1"),
@@ -13,11 +13,11 @@ async def main():
             ("flag", True),
             ("float", 45.67),
         ],
-    )
-    print(await resp.text())
+    ) as resp:
+        print(await resp.text())
 
     # OR send dictionary as query parameters
-    resp = await wreq.get(
+    async with wreq.get(
         "https://httpbin.io/anything",
         query={
             "keyA": "valueA",
@@ -26,8 +26,8 @@ async def main():
             "flag": False,
             "float": 12.34,
         },
-    )
-    print(await resp.text())
+    ) as resp:
+        print(await resp.text())
 
 
 if __name__ == "__main__":

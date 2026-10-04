@@ -1,5 +1,6 @@
 use std::{
     future::Future,
+    mem,
     pin::Pin,
     sync::{
         Arc, Mutex, MutexGuard, PoisonError,
@@ -10,7 +11,7 @@ use std::{
 
 use pyo3::{
     PyTraverseError, PyVisit,
-    exceptions::{PyRuntimeError, PyStopIteration},
+    exceptions::{PyRuntimeError, PyStopIteration, PyTypeError},
     intern,
     prelude::*,
 };
@@ -24,6 +25,9 @@ type BoxFuture = Pin<Box<dyn Future<Output = PyResult<Py<PyAny>>> + Send>>;
 /// Each suspension hands the task a real asyncio future, so task cancellation and
 /// the C task fast path work unchanged. A throw or close drops the Rust future,
 /// which aborts any spawned work. PyO3's borrow flag rejects reentrant polls.
+///
+/// A coroutine built with [`managed`](Self::managed) also works as `async with`: entering
+/// awaits it and keeps the result, an async context manager, for `__aexit__`.
 #[pyclass(module = "wreq")]
 pub struct Coroutine {
     qualname: &'static str,
@@ -31,6 +35,19 @@ pub struct Coroutine {
     future: Mutex<Option<BoxFuture>>,
     slot: Arc<Slot>,
     waker: Waker,
+    scope: Scope,
+}
+
+/// The `async with` state of a coroutine.
+enum Scope {
+    /// `async with` is unsupported.
+    Unsupported,
+    /// The result is an async context manager that `async with` may enter.
+    Ready,
+    /// Awaited by `__aenter__`; the result is kept once ready.
+    Entering,
+    /// The entered result, kept until `__aexit__`.
+    Entered(Py<PyAny>),
 }
 
 /// Wake state shared with Rust wakers for the coroutine's whole life.
@@ -64,7 +81,21 @@ impl Coroutine {
             future: Mutex::new(Some(Box::pin(future))),
             waker: Waker::from(slot.clone()),
             slot,
+            scope: Scope::Unsupported,
         }
+    }
+
+    /// Let `async with` enter the coroutine, whose result must be an async context manager.
+    pub(super) fn managed(mut self) -> Self {
+        self.scope = Scope::Ready;
+        self
+    }
+
+    #[inline]
+    fn future(&mut self) -> &mut Option<BoxFuture> {
+        self.future
+            .get_mut()
+            .unwrap_or_else(PoisonError::into_inner)
     }
 
     fn step(&mut self, py: Python<'_>) -> PyResult<Py<PyAny>> {
@@ -94,17 +125,18 @@ impl Coroutine {
         self.slot.state.store(POLLING, Ordering::Release);
         if let Poll::Ready(result) = future.as_mut().poll(&mut Context::from_waker(&self.waker)) {
             self.finish();
-            return Err(PyStopIteration::new_err((result?,)));
+            let value = result?;
+            if let Scope::Entering = self.scope {
+                self.scope = Scope::Entered(value.clone_ref(py));
+            }
+            return Err(PyStopIteration::new_err((value,)));
         }
         // A coroutine that cannot wait ends here, releasing any spawned work.
         self.slot.suspend(py).inspect_err(|_| self.finish())
     }
 
     fn finish(&mut self) {
-        *self
-            .future
-            .get_mut()
-            .unwrap_or_else(PoisonError::into_inner) = None;
+        *self.future() = None;
         self.slot.state.store(DONE, Ordering::Release);
         // A finished coroutine must not keep its loop's port open.
         let port = self.slot.lock_port().take();
@@ -148,7 +180,43 @@ impl Coroutine {
         self.step(py)
     }
 
+    /// Enter by awaiting the coroutine itself, which yields the entered result.
+    fn __aenter__(mut slf: PyRefMut<'_, Self>) -> PyResult<PyRefMut<'_, Self>> {
+        let pending = slf.future().is_some();
+        match slf.scope {
+            Scope::Unsupported => Err(PyTypeError::new_err(
+                "coroutine does not support the asynchronous context manager protocol",
+            )),
+            Scope::Ready if pending => {
+                slf.scope = Scope::Entering;
+                Ok(slf)
+            }
+            _ => Err(PyRuntimeError::new_err(
+                "cannot reuse already awaited coroutine",
+            )),
+        }
+    }
+
+    /// Exit the entered result, returning its `__aexit__` awaitable.
+    fn __aexit__<'py>(
+        &mut self,
+        py: Python<'py>,
+        exc_type: Bound<'py, PyAny>,
+        exc_val: Bound<'py, PyAny>,
+        traceback: Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let Scope::Entered(value) = mem::replace(&mut self.scope, Scope::Ready) else {
+            return Err(PyRuntimeError::new_err("coroutine was not entered"));
+        };
+        value
+            .into_bound(py)
+            .call_method1(intern!(py, "__aexit__"), (exc_type, exc_val, traceback))
+    }
+
     fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {
+        if let Scope::Entered(value) = &self.scope {
+            visit.call(value)?;
+        }
         // Pending Rust work owns the waiter until its loop closes the port; only then
         // can a cycle through the waiter be collected without aborting live requests.
         let closed = self
@@ -164,6 +232,9 @@ impl Coroutine {
 
     fn __clear__(&mut self) {
         self.finish();
+        if let Scope::Entered(_) = self.scope {
+            self.scope = Scope::Ready;
+        }
     }
 }
 
