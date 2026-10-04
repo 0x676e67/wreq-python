@@ -33,8 +33,7 @@ async def recv_message(ws: WebSocket):
 
 async def main():
     client = wreq.Client()
-    ws: WebSocket = await client.websocket("wss://echo.websocket.org")
-    async with ws:
+    async with client.websocket("wss://echo.websocket.org") as ws:
         print("Status Code: ", ws.status)
         print("Version: ", ws.version)
         print("Headers: ", ws.headers)

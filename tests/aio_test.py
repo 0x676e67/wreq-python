@@ -75,7 +75,7 @@ async def exchange():
         async with wreq.Client(proxies=[]) as client:
 
             async def fetch(i):
-                async with await client.get(f"{url}/{i}") as response:
+                async with client.get(f"{url}/{i}") as response:
                     return bytes(await response.bytes())
 
             # Concurrent completions resume their tasks through the loop's wake port.
@@ -89,7 +89,7 @@ async def exchange():
 
             # Short streams end right after their last frame; readers must see the end.
             async def drain_chunks():
-                async with await client.get(f"{url}/chunks") as response:
+                async with client.get(f"{url}/chunks") as response:
                     return b"".join([bytes(c) async for c in response.stream()])
 
             assert (
@@ -157,3 +157,52 @@ def test_closed_loop_releases_pending_requests(new_loop, woken):
         del task
         gc.collect()
         assert ref() is None
+
+
+@pytest.mark.asyncio
+async def test_request_coroutine_enters_its_result():
+    async def serve(reader, writer):
+        try:
+            while True:
+                await reader.readuntil(b"\r\n\r\n")
+                writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
+        except (asyncio.IncompleteReadError, ConnectionError):
+            pass
+        finally:
+            writer.close()
+
+    server = await asyncio.start_server(serve, "127.0.0.1", 0)
+    url = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}/"
+    try:
+        async with wreq.Client(proxies=[]) as client:
+            # Entering awaits the request; exiting releases the response body.
+            async with client.get(url) as response:
+                assert isinstance(response, wreq.Response)
+                assert await response.text() == "ok"
+            with pytest.raises(RuntimeError, match="consumed"):
+                await response.text()
+
+            # The response exits even when the block fails.
+            with pytest.raises(KeyError):
+                async with wreq.get(url, proxies=[]) as response:
+                    raise KeyError
+            with pytest.raises(RuntimeError, match="consumed"):
+                await response.text()
+
+            # A request failure propagates from entering, before any exit.
+            with pytest.raises(wreq.exceptions.BuilderError):
+                async with client.get("http://"):
+                    pass
+
+            # The coroutine is entered or awaited once; plain coroutines cannot be entered.
+            coroutine = client.get(url)
+            assert await coroutine is not None
+            with pytest.raises(RuntimeError, match="already awaited"):
+                async with coroutine:
+                    pass
+            with pytest.raises(TypeError, match="context manager"):
+                async with response.text():
+                    pass
+    finally:
+        server.close()
+        await server.wait_closed()

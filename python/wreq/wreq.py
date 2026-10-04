@@ -12,9 +12,12 @@ from typing import (
     Mapping,
     Tuple,
     TypedDict,
+    TypeVar,
     Unpack,
     final,
+    type_check_only,
 )
+from collections.abc import Coroutine
 
 from . import redirect
 from . import emulation
@@ -298,14 +301,14 @@ class Streamer:
     from wreq import Method, Emulation, HeaderMap
 
     async def main():
-        resp = await wreq.get("https://example.com/stream-with-trailers")
-        async with resp.stream() as streamer:
-            async for chunk in streamer:
-                if isinstance(chunk, memoryview):
-                    sys.stdout.buffer.write(chunk)
-                elif isinstance(chunk, HeaderMap):
-                    print("Trailers: ", chunk)
-                await asyncio.sleep(0.1)
+        async with wreq.get("https://example.com/stream-with-trailers") as resp:
+            async with resp.stream() as streamer:
+                async for chunk in streamer:
+                    if isinstance(chunk, memoryview):
+                        sys.stdout.buffer.write(chunk)
+                    elif isinstance(chunk, HeaderMap):
+                        print("Trailers: ", chunk)
+                    await asyncio.sleep(0.1)
 
     if __name__ == "__main__":
         asyncio.run(main())
@@ -346,16 +349,16 @@ class Response:
     import wreq
 
     async def main():
-        response = await wreq.get("https://www.rust-lang.org")
-        print("Status Code: ", response.status)
-        print("Version: ", response.version)
-        print("Response URL: ", response.url)
-        print("Headers: ", response.headers)
-        print("Content-Length: ", response.content_length)
-        print("Remote Address: ", response.remote_addr)
+        async with wreq.get("https://www.rust-lang.org") as response:
+            print("Status Code: ", response.status)
+            print("Version: ", response.version)
+            print("Response URL: ", response.url)
+            print("Headers: ", response.headers)
+            print("Content-Length: ", response.content_length)
+            print("Remote Address: ", response.remote_addr)
 
-        text_content = await response.text()
-        print("Text: ", text_content)
+            text_content = await response.text()
+            print("Text: ", text_content)
 
     if __name__ == "__main__":
         asyncio.run(main())
@@ -1122,6 +1125,20 @@ class WebSocketRequest(TypedDict):
     """
 
 
+_T = TypeVar("_T")
+
+
+@type_check_only
+class _RequestCoroutine(Coroutine[Any, Any, _T]):
+    r"""
+    A request coroutine. Await it for the result, or use `async with` to enter the
+    result directly without a separate `await`.
+    """
+
+    async def __aenter__(self) -> _T: ...
+    async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> Any: ...
+
+
 class Client:
     r"""
     A client for making HTTP requests.
@@ -1157,8 +1174,8 @@ class Client:
                 user_agent="Mozilla/5.0",
                 timeout=10,
             )
-            response = await client.get('https://httpbin.io/get')
-            print(await response.text())
+            async with client.get('https://httpbin.io/get') as response:
+                print(await response.text())
 
         asyncio.run(main())
         ```
@@ -1179,8 +1196,8 @@ class Client:
         async def main():
             client = wreq.Client()
 
-            response = await client.get('https://httpbin.io/get')
-            print(await response.text())
+            async with client.get('https://httpbin.io/get') as response:
+                print(await response.text())
 
             client.close()
 
@@ -1189,12 +1206,12 @@ class Client:
         """
         ...
 
-    async def request(
+    def request(
         self,
         method: Method,
         url: str,
         **kwargs: Unpack[Request],
-    ) -> Response:
+    ) -> _RequestCoroutine[Response]:
         r"""
         Sends a request with the given method and URL.
 
@@ -1207,19 +1224,19 @@ class Client:
 
         async def main():
             client = wreq.Client()
-            response = await client.request(Method.GET, "https://httpbin.io/anything")
-            print(await response.text())
+            async with client.request(Method.GET, "https://httpbin.io/anything") as response:
+                print(await response.text())
 
         asyncio.run(main())
         ```
         """
         ...
 
-    async def websocket(
+    def websocket(
         self,
         url: str,
         **kwargs: Unpack[WebSocketRequest],
-    ) -> WebSocket:
+    ) -> _RequestCoroutine[WebSocket]:
         r"""
         Sends a WebSocket request.
 
@@ -1231,22 +1248,22 @@ class Client:
 
         async def main():
             client = wreq.Client()
-            ws = await client.websocket("wss://echo.websocket.org")
-            await ws.send(wreq.Message.from_text("Hello, WebSocket!"))
-            message = await ws.recv()
-            print("Received:", message.data)
-            await ws.close()
+            async with client.websocket("wss://echo.websocket.org") as ws:
+                await ws.send(wreq.Message.from_text("Hello, WebSocket!"))
+                message = await ws.recv()
+                print("Received:", message.data)
+                await ws.close()
 
         asyncio.run(main())
         ```
         """
         ...
 
-    async def trace(
+    def trace(
         self,
         url: str,
         **kwargs: Unpack[Request],
-    ) -> Response:
+    ) -> _RequestCoroutine[Response]:
         r"""
         Sends a request with the given URL
 
@@ -1259,19 +1276,19 @@ class Client:
 
         async def main():
             client = wreq.Client()
-            response = await client.trace("https://httpbin.io/anything")
-            print(await response.text())
+            async with client.trace("https://httpbin.io/anything") as response:
+                print(await response.text())
 
         asyncio.run(main())
         ```
         """
         ...
 
-    async def options(
+    def options(
         self,
         url: str,
         **kwargs: Unpack[Request],
-    ) -> Response:
+    ) -> _RequestCoroutine[Response]:
         r"""
         Sends a request with the given URL
 
@@ -1284,19 +1301,19 @@ class Client:
 
         async def main():
             client = wreq.Client()
-            response = await client.options("https://httpbin.io/anything")
-            print(await response.text())
+            async with client.options("https://httpbin.io/anything") as response:
+                print(await response.text())
 
         asyncio.run(main())
         ```
         """
         ...
 
-    async def patch(
+    def patch(
         self,
         url: str,
         **kwargs: Unpack[Request],
-    ) -> Response:
+    ) -> _RequestCoroutine[Response]:
         r"""
         Sends a request with the given URL
 
@@ -1309,19 +1326,19 @@ class Client:
 
         async def main():
             client = wreq.Client()
-            response = await client.patch("https://httpbin.io/anything", json={"key": "value"})
-            print(await response.text())
+            async with client.patch("https://httpbin.io/anything", json={"key": "value"}) as response:
+                print(await response.text())
 
         asyncio.run(main())
         ```
         """
         ...
 
-    async def delete(
+    def delete(
         self,
         url: str,
         **kwargs: Unpack[Request],
-    ) -> Response:
+    ) -> _RequestCoroutine[Response]:
         r"""
         Sends a request with the given URL
 
@@ -1334,19 +1351,19 @@ class Client:
 
         async def main():
             client = wreq.Client()
-            response = await client.delete("https://httpbin.io/anything")
-            print(await response.text())
+            async with client.delete("https://httpbin.io/anything") as response:
+                print(await response.text())
 
         asyncio.run(main())
         ```
         """
         ...
 
-    async def put(
+    def put(
         self,
         url: str,
         **kwargs: Unpack[Request],
-    ) -> Response:
+    ) -> _RequestCoroutine[Response]:
         r"""
         Sends a request with the given URL
 
@@ -1359,19 +1376,19 @@ class Client:
 
         async def main():
             client = wreq.Client()
-            response = await client.put("https://httpbin.io/anything", json={"key": "value"})
-            print(await response.text())
+            async with client.put("https://httpbin.io/anything", json={"key": "value"}) as response:
+                print(await response.text())
 
         asyncio.run(main())
         ```
         """
         ...
 
-    async def post(
+    def post(
         self,
         url: str,
         **kwargs: Unpack[Request],
-    ) -> Response:
+    ) -> _RequestCoroutine[Response]:
         r"""
         Sends a request with the given URL
 
@@ -1384,19 +1401,19 @@ class Client:
 
         async def main():
             client = wreq.Client()
-            response = await client.post("https://httpbin.io/anything", json={"key": "value"})
-            print(await response.text())
+            async with client.post("https://httpbin.io/anything", json={"key": "value"}) as response:
+                print(await response.text())
 
         asyncio.run(main())
         ```
         """
         ...
 
-    async def head(
+    def head(
         self,
         url: str,
         **kwargs: Unpack[Request],
-    ) -> Response:
+    ) -> _RequestCoroutine[Response]:
         r"""
         Sends a request with the given URL
 
@@ -1409,19 +1426,19 @@ class Client:
 
         async def main():
             client = wreq.Client()
-            response = await client.head("https://httpbin.io/anything")
-            print(response.status)
+            async with client.head("https://httpbin.io/anything") as response:
+                print(response.status)
 
         asyncio.run(main())
         ```
         """
         ...
 
-    async def get(
+    def get(
         self,
         url: str,
         **kwargs: Unpack[Request],
-    ) -> Response:
+    ) -> _RequestCoroutine[Response]:
         r"""
         Sends a request with the given URL
 
@@ -1434,8 +1451,8 @@ class Client:
 
         async def main():
             client = wreq.Client()
-            response = await client.get("https://httpbin.io/anything")
-            print(await response.text())
+            async with client.get("https://httpbin.io/anything") as response:
+                print(await response.text())
 
         asyncio.run(main())
         ```
@@ -1449,10 +1466,10 @@ class Client:
         """
 
 
-async def delete(
+def delete(
     url: str,
     **kwargs: Unpack[Request],
-) -> Response:
+) -> _RequestCoroutine[Response]:
     r"""
     Shortcut method to quickly make a request.
 
@@ -1463,9 +1480,9 @@ async def delete(
     import asyncio
 
     async def run():
-        response = await wreq.delete("https://httpbin.io/anything")
-        body = await response.text()
-        print(body)
+        async with wreq.delete("https://httpbin.io/anything") as response:
+            body = await response.text()
+            print(body)
 
     asyncio.run(run())
     ```
@@ -1473,10 +1490,10 @@ async def delete(
     ...
 
 
-async def get(
+def get(
     url: str,
     **kwargs: Unpack[Request],
-) -> Response:
+) -> _RequestCoroutine[Response]:
     r"""
     Shortcut method to quickly make a request.
 
@@ -1487,9 +1504,9 @@ async def get(
     import asyncio
 
     async def run():
-        response = await wreq.get("https://httpbin.io/anything")
-        body = await response.text()
-        print(body)
+        async with wreq.get("https://httpbin.io/anything") as response:
+            body = await response.text()
+            print(body)
 
     asyncio.run(run())
     ```
@@ -1497,10 +1514,10 @@ async def get(
     ...
 
 
-async def head(
+def head(
     url: str,
     **kwargs: Unpack[Request],
-) -> Response:
+) -> _RequestCoroutine[Response]:
     r"""
     Shortcut method to quickly make a request.
 
@@ -1511,8 +1528,8 @@ async def head(
     import asyncio
 
     async def run():
-        response = await wreq.head("https://httpbin.io/anything")
-        print(response.status)
+        async with wreq.head("https://httpbin.io/anything") as response:
+            print(response.status)
 
     asyncio.run(run())
     ```
@@ -1520,10 +1537,10 @@ async def head(
     ...
 
 
-async def options(
+def options(
     url: str,
     **kwargs: Unpack[Request],
-) -> Response:
+) -> _RequestCoroutine[Response]:
     r"""
     Shortcut method to quickly make a request.
 
@@ -1534,8 +1551,8 @@ async def options(
     import asyncio
 
     async def run():
-        response = await wreq.options("https://httpbin.io/anything")
-        print(response.status)
+        async with wreq.options("https://httpbin.io/anything") as response:
+            print(response.status)
 
     asyncio.run(run())
     ```
@@ -1543,10 +1560,10 @@ async def options(
     ...
 
 
-async def patch(
+def patch(
     url: str,
     **kwargs: Unpack[Request],
-) -> Response:
+) -> _RequestCoroutine[Response]:
     r"""
     Shortcut method to quickly make a request.
 
@@ -1557,9 +1574,9 @@ async def patch(
     import asyncio
 
     async def run():
-        response = await wreq.patch("https://httpbin.io/anything")
-        body = await response.text()
-        print(body)
+        async with wreq.patch("https://httpbin.io/anything") as response:
+            body = await response.text()
+            print(body)
 
     asyncio.run(run())
     ```
@@ -1567,10 +1584,10 @@ async def patch(
     ...
 
 
-async def post(
+def post(
     url: str,
     **kwargs: Unpack[Request],
-) -> Response:
+) -> _RequestCoroutine[Response]:
     r"""
     Shortcut method to quickly make a request.
 
@@ -1581,9 +1598,9 @@ async def post(
     import asyncio
 
     async def run():
-        response = await wreq.post("https://httpbin.io/anything")
-        body = await response.text()
-        print(body)
+        async with wreq.post("https://httpbin.io/anything") as response:
+            body = await response.text()
+            print(body)
 
     asyncio.run(run())
     ```
@@ -1591,10 +1608,10 @@ async def post(
     ...
 
 
-async def put(
+def put(
     url: str,
     **kwargs: Unpack[Request],
-) -> Response:
+) -> _RequestCoroutine[Response]:
     r"""
     Shortcut method to quickly make a request.
 
@@ -1605,9 +1622,9 @@ async def put(
     import asyncio
 
     async def run():
-        response = await wreq.put("https://httpbin.io/anything")
-        body = await response.text()
-        print(body)
+        async with wreq.put("https://httpbin.io/anything") as response:
+            body = await response.text()
+            print(body)
 
     asyncio.run(run())
     ```
@@ -1615,11 +1632,11 @@ async def put(
     ...
 
 
-async def request(
+def request(
     method: Method,
     url: str,
     **kwargs: Unpack[Request],
-) -> Response:
+) -> _RequestCoroutine[Response]:
     r"""
     Make a request with the given parameters.
 
@@ -1637,9 +1654,9 @@ async def request(
     from wreq import Method
 
     async def run():
-        response = await wreq.request(Method.GET, "https://www.rust-lang.org")
-        body = await response.text()
-        print(body)
+        async with wreq.request(Method.GET, "https://www.rust-lang.org") as response:
+            body = await response.text()
+            print(body)
 
     asyncio.run(run())
     ```
@@ -1647,10 +1664,10 @@ async def request(
     ...
 
 
-async def trace(
+def trace(
     url: str,
     **kwargs: Unpack[Request],
-) -> Response:
+) -> _RequestCoroutine[Response]:
     r"""
     Shortcut method to quickly make a request.
 
@@ -1661,8 +1678,8 @@ async def trace(
     import asyncio
 
     async def run():
-        response = await wreq.trace("https://httpbin.io/anything")
-        print(response.status)
+        async with wreq.trace("https://httpbin.io/anything") as response:
+            print(response.status)
 
     asyncio.run(run())
     ```
@@ -1670,10 +1687,10 @@ async def trace(
     ...
 
 
-async def websocket(
+def websocket(
     url: str,
     **kwargs: Unpack[WebSocketRequest],
-) -> WebSocket:
+) -> _RequestCoroutine[WebSocket]:
     r"""
     Make a WebSocket connection with the given parameters.
 
@@ -1685,11 +1702,11 @@ async def websocket(
     from wreq import Message
 
     async def run():
-        ws = await wreq.websocket("wss://echo.websocket.org")
-        await ws.send(Message.from_text("Hello, World!"))
-        message = await ws.recv()
-        print("Received:", message.data)
-        await ws.close()
+        async with wreq.websocket("wss://echo.websocket.org") as ws:
+            await ws.send(Message.from_text("Hello, World!"))
+            message = await ws.recv()
+            print("Received:", message.data)
+            await ws.close()
 
     asyncio.run(run())
     ```

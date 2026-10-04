@@ -10,11 +10,11 @@ async def main():
     )
 
     # Send request via the client proxy
-    resp = await client.get("https://httpbin.io/anything")
-    print(await resp.text())
+    async with client.get("https://httpbin.io/anything") as resp:
+        print(await resp.text())
 
     # Send request via custom proxy
-    resp = await wreq.get(
+    async with wreq.get(
         "https://httpbin.io/anything",
         proxy=Proxy.all(
             url="http://127.0.0.1:6152",
@@ -25,15 +25,15 @@ async def main():
                 "x-proxy": "wreq",
             },
         ),
-    )
-    print(await resp.text())
+    ) as resp:
+        print(await resp.text())
 
     # Send request via Unix socket proxy
-    resp = await wreq.get(
+    async with wreq.get(
         "http://localhost/v1.41/containers/json",
         proxy=Proxy.unix("/var/run/docker.sock"),
-    )
-    print(await resp.text())
+    ) as resp:
+        print(await resp.text())
 
 
 if __name__ == "__main__":

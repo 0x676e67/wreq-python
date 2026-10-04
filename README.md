@@ -47,12 +47,9 @@ from wreq import Client, Emulation
 
 
 async def main():
-    # Build a client
-    client = Client(emulation=Emulation.Chrome153)
-
-    # Use the API you're already familiar with
-    resp = await client.get("https://pingly.us.kg/api/all")
-    print(await resp.text())
+    async with Client(emulation=Emulation.Chrome154) as client:
+        async with client.get("https://pingly.us.kg/api/all") as response:
+            print(await response.text())
 
 
 if __name__ == "__main__":

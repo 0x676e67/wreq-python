@@ -5,8 +5,7 @@ from wreq.tls import KeyLog
 
 async def main():
     client = Client(tls_keylog=KeyLog.file("keylog.log"))
-    resp = await client.get("https://www.google.com")
-    async with resp:
+    async with client.get("https://www.google.com") as resp:
         print(await resp.text())
 
 

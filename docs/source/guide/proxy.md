@@ -35,8 +35,8 @@ async def main():
         proxies=[Proxy.all("http://proxy.example.com:8080")]
     )
 
-    resp = await client.get("https://httpbin.io/ip")
-    print(await resp.text())
+    async with client.get("https://httpbin.io/ip") as resp:
+        print(await resp.text())
 
 asyncio.run(main())
 ```
@@ -98,7 +98,7 @@ import wreq
 from wreq import Proxy
 
 async def main():
-    resp = await wreq.get(
+    async with wreq.get(
         "https://httpbin.io/anything",
         proxy=Proxy.all(
                 url="http://127.0.0.1:6152",
@@ -109,8 +109,8 @@ async def main():
                     "x-proxy": "wreq",
                 },
             )
-    )
-    print(await resp.text())
+    ) as resp:
+        print(await resp.text())
 
 asyncio.run(main())
 ```
@@ -129,11 +129,11 @@ import wreq
 from wreq import Proxy
 
 async def main():
-    resp = await wreq.get(
+    async with wreq.get(
         "http://localhost/v1.41/containers/json",
         proxies=[Proxy.unix("/var/run/docker.sock")],
-    )
-    print(await resp.text())
+    ) as resp:
+        print(await resp.text())
 
 asyncio.run(main())
 ```

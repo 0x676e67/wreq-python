@@ -54,7 +54,7 @@ async def test_dns_options(dns_http_server, blocking_api):
             body = await asyncio.to_thread(request)
         else:
             async with wreq.Client(**kwargs) as client:
-                async with await client.get(url) as response:
+                async with client.get(url) as response:
                     body = await response.text()
         assert body == "DNS resolved"
 

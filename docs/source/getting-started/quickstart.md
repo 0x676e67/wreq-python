@@ -15,8 +15,8 @@ wreq supports both async and blocking usage. The async client is the default and
 
     async def main():
         client = Client()
-        response = await client.get("https://httpbin.org/get")
-        print(response.status)
+        async with client.get("https://httpbin.org/get") as response:
+            print(response.status)
 
     asyncio.run(main())
     ```
@@ -47,9 +47,9 @@ To append query parameters to a URL, pass a dictionary to the `query` argument:
 
 ```python
 query = {"search": "wreq", "page": "1"}
-response = await client.get("https://httpbin.org/get", query=query)
-print(response.url)
-# https://httpbin.org/get?search=wreq&page=1
+async with client.get("https://httpbin.org/get", query=query) as response:
+    print(response.url)
+    # https://httpbin.org/get?search=wreq&page=1
 ```
 
 ---
@@ -59,9 +59,9 @@ print(response.url)
 ### Status code
 
 ```python
-response = await client.get("https://httpbin.org/get")
-print(response.status)
-# 200
+async with client.get("https://httpbin.org/get") as response:
+    print(response.status)
+    # 200
 ```
 
 ### Text
@@ -76,9 +76,9 @@ print(text)
 If the server returns a JSON body, parse it directly with `.json()`:
 
 ```python
-response = await client.get("https://httpbin.org/json")
-data = await response.json()
-print(data)
+async with client.get("https://httpbin.org/json") as response:
+    data = await response.json()
+    print(data)
 ```
 
 ### Binary data
@@ -143,9 +143,9 @@ Once created, you pass it to the `Client` and all requests will go through it au
 
 ```python
 payload = {"name": "John", "age": 30}
-response = await client.post("https://httpbin.org/post", json=payload)
-result = await response.json()
-print(result)
+async with client.post("https://httpbin.org/post", json=payload) as response:
+    result = await response.json()
+    print(result)
 ```
 
 ### Form-encoded data
@@ -170,8 +170,8 @@ headers = HeaderMap()
 headers["User-Agent"] = "MyApp/1.0"
 headers["Accept"] = "application/json"
 
-response = await client.get("https://httpbin.org/headers", headers=headers)
-print(await response.text())
+async with client.get("https://httpbin.org/headers", headers=headers) as response:
+    print(await response.text())
 ```
 
 ---
@@ -190,8 +190,8 @@ Pass the proxy to the `Client` and every subsequent request will use it:
 from wreq import Client, Proxy
 
 client = Client(proxies=[Proxy.all("http://proxy.example.com:8080")])
-response = await client.get("https://httpbin.org/ip")
-print(await response.text())
+async with client.get("https://httpbin.org/ip") as response:
+    print(await response.text())
 ```
 
 ---
@@ -204,8 +204,8 @@ wreq can emulate the TLS fingerprint and headers of real browsers, which is usef
 from wreq import Client, Emulation
 
 client = Client(emulation=Emulation.Safari26)
-response = await client.get("https://tls.peet.ws/api/all")
-print(await response.text())
+async with client.get("https://tls.peet.ws/api/all") as response:
+    print(await response.text())
 ```
 
 Available profiles are listed in the [Emulation API](../api/emulation.md).
@@ -217,12 +217,11 @@ Available profiles are listed in the [Emulation API](../api/emulation.md).
 Check the status code manually, or call `raise_for_status()` to raise an exception on any 4xx or 5xx response:
 
 ```python
-response = await client.get("https://httpbin.org/status/404")
-
-try:
-    response.raise_for_status()
-except Exception as exc:
-    print(f"Request failed with status {response.status}")
+async with client.get("https://httpbin.org/status/404") as response:
+    try:
+        response.raise_for_status()
+    except Exception as exc:
+        print(f"Request failed with status {response.status}")
 ```
 
 ---

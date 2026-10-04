@@ -35,11 +35,11 @@ async def gen():
 
 
 async def main():
-    resp = await wreq.post(
+    async with wreq.post(
         "https://httpbin.io/anything",
         body=gen(),
-    )
-    print(await resp.text())
+    ) as resp:
+        print(await resp.text())
 
 
 if __name__ == "__main__":
@@ -65,7 +65,7 @@ async def file_to_bytes_stream(file_path):
 
 
 async def main():
-    resp = await wreq.post(
+    async with wreq.post(
         "https://httpbin.io/anything",
         multipart=Multipart(
             # Upload text data
@@ -87,9 +87,8 @@ async def main():
                 mime="text/plain",
             ),
         ),
-    )
-
-    print(await resp.text())
+    ) as resp:
+        print(await resp.text())
 
 
 if __name__ == "__main__":
@@ -162,8 +161,7 @@ from wreq.tls import KeyLog
 
 async def main():
     client = Client(keylog=KeyLog.file("keylog.log"))
-    resp = await client.get("https://www.google.com")
-    async with resp:
+    async with client.get("https://www.google.com") as resp:
         print(await resp.text())
 
 
@@ -182,7 +180,7 @@ from wreq.emulation import Emulation
 
 
 async def main():
-    ws = await wreq.websocket(
+    async with wreq.websocket(
         "wss://gateway.discord.gg/",
         emulation=Emulation.Chrome137,
         headers={"Origin": "https://discord.com"},
@@ -195,12 +193,11 @@ async def main():
             "Accept-Encoding",
             "Accept-Language",
         ],
-    )
-
-    msg = await ws.recv()
-    if msg is not None:
-        print(msg.json())
-    await ws.close()
+    ) as ws:
+        msg = await ws.recv()
+        if msg is not None:
+            print(msg.json())
+        await ws.close()
 
 
 if __name__ == "__main__":
