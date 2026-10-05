@@ -81,7 +81,7 @@ wreq = { git = "https://github.com/0x676e67/wreq", rev = "54fdc7c9e0c1290e2f70f3
 btls = { git = "https://github.com/0x676e67/btls", branch = "main" }
 btls-sys = { git = "https://github.com/0x676e67/btls", branch = "main" }
 tokio-btls = { git = "https://github.com/0x676e67/btls", branch = "main" }
-netty = { git = "https://github.com/0x676e67/netty", branch = "main" }
+netty = { git = "https://github.com/0x676e67/netty", branch = "demo/skip-stale-drop-wake" }
 
 [profile.release]
 codegen-units = 1
