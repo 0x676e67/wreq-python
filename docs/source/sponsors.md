@@ -32,7 +32,7 @@ NodeMaven is the most efficient proxy provider for web scraping and automation, 
 
 Unique free tools include the **Proxy Bandwidth Checker**, **Meta Tag Checker**, **IP Lookup**, and more.
 
-**Special discounts for wreq-python users:** `WREQ35` gives 35% off mobile and residential proxies • `WREQ40` gives 40% off ISP (static) proxies
+**Special discounts for wreq users:** `WREQ35` gives 35% off mobile and residential proxies • `WREQ40` gives 40% off ISP (static) proxies
 
 **[Dashboard](https://dashboard.nodemaven.com/accounts/login/)** | **[Docs](https://docs.nodemaven.com/en/)** | **[LinkedIn](https://www.linkedin.com/company/nodemaven/)**
 
@@ -41,7 +41,7 @@ Unique free tools include the **Proxy Bandwidth Checker**, **Meta Tag Checker**,
 
 ## [Scrape.do](https://scrape.do/?utm_source=github&utm_medium=wreq)
 
-[![Scrape.do](https://raw.githubusercontent.com/0x676e67/wreq-python/main/.github/assets/scrapedo.svg){ width="149" height="47" }](https://scrape.do/?utm_source=github&utm_medium=wreq){ target="_blank" }
+[![Scrape.do](https://raw.githubusercontent.com/0x676e67/wreq-python/main/.github/assets/scrapedo.svg){ width="170" height="47" }](https://scrape.do/?utm_source=github&utm_medium=wreq){ target="_blank" }
 
 Scrape.do is the ultimate toolkit for collecting public data at scale. Unmatched speed, unbeatable prices, unblocked access.
 
@@ -56,7 +56,7 @@ One line of code. Instant data access
 
 ## [EzCaptcha](https://www.ez-captcha.com/?r=github-wreq)
 
-[![EzCaptcha](https://raw.githubusercontent.com/0x676e67/wreq-python/main/.github/assets/ezcaptcha.svg){ width="47" height="47" }](https://www.ez-captcha.com){ target="_blank" }
+[![EzCaptcha](https://raw.githubusercontent.com/0x676e67/wreq-python/main/.github/assets/ezcaptcha-wordmark.svg){ width="149" height="47" }](https://www.ez-captcha.com){ target="_blank" }
 
 Captcha solving can be slow and unreliable, but EzCaptcha delivers fast, reliable solving through a simple API — supporting a wide range of captcha types with no complex integration required.  
 
@@ -71,7 +71,7 @@ Designed for developers, it offers high accuracy, low price, low latency, and ea
 
 ## [Hyper Solutions](https://hypersolutions.co?utm_source=github&utm_medium=readme&utm_campaign=wreq)
 
-<a href="https://hypersolutions.co/?utm_source=github&utm_medium=readme&utm_campaign=wreq" target="_blank"><img src="https://raw.githubusercontent.com/0x676e67/wreq-python/main/.github/assets/hypersolutions.jpg" height="47" width="149"></a>
+[![Hyper Solutions](https://raw.githubusercontent.com/0x676e67/wreq-python/main/.github/assets/hypersolutions.svg){ width="149" height="47" }](https://hypersolutions.co/?utm_source=github&utm_medium=readme&utm_campaign=wreq){ target="_blank" }
 
 TLS fingerprinting alone isn't enough for modern bot protection. Hyper Solutions provides the missing piece - API endpoints that generate valid antibot tokens for:
 

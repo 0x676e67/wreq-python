@@ -1,0 +1,23 @@
+{
+  "source": "82b372d0006a5ef71e82b1bcde9df80acba01bb0",
+  "dirty": false,
+  "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+  "file_sha256": {
+    "Cargo.toml": "4a736e99c5db784351926e92220cd47fd646118e5684ebe7b2370e7afa3eaa33",
+    "Cargo.lock": "c00786032cc16319e830dcc92b11b38918bbfde113d882c64d802cec22549a12",
+    "pyproject.toml": "40b1138b1fc23f16900aaf0608db9d41fc54e62e4026d6caf8b770cfb52178dc",
+    "bench/async_clients.py": "de82158552109aa3ab11924df80408f3801ffcbc10376814647a965eeaf86f7e",
+    "bench/benchmark.py": "9915f969f0844bf6fa3754013589aecb15208cecf1aa0b0d6750673ee64fc6e2",
+    "bench/blocking_clients.py": "d46455bef6934960c2df92d80aa9c5eea4f354837e1b7492fe893525ca8810ee",
+    "bench/charts.py": "e10e14fcd26b278ff62cf7543c61dfad87b6d2dd36e154868be32d50c079ae9a",
+    "bench/clients.py": "49b6328d713d80e1cf51c7c92d55948af74a89f6f400b561828f1e2b5cf55c06",
+    "bench/compare.py": "c3f4baa0326e07c7bcceeb50e827a0b9a492046553f9469cb14cc68fd0092e9e",
+    "bench/processes.py": "fbe639c10d211ca22998e4619e893edeed4d3863b3636626dec09e6314b40ba7",
+    "bench/registry.py": "3a9a5e97f44dfc0564aef64108653fb1b6923983661c53a08b96c6c795c3836b",
+    "bench/report.py": "6c650767ab585ef02611c6a7a515a64fde8a2f7d6b38b261fbbc9b89e6c7a17c",
+    "bench/results.py": "bef7847d97c7307d8258e87131ac51ed917fd0b2cbb2afccd3a04204e7b2db47",
+    "bench/run.py": "7cba9af8e51f31efc9cdeffba542aa987f067f3ac398313e1f01aeee68d70a1d",
+    "bench/workloads.py": "daa650fda5203d6440323c17a34967ba4a59b67024ce4a150109d7f85aee9457"
+  },
+  "owned_processes_remaining": []
+}

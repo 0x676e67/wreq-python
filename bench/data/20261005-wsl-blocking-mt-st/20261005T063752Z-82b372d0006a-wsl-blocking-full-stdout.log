@@ -1,0 +1,2521 @@
+h1 stream wreq_blocking   2097152 B c=150 round=1/3    1186.7 req/s
+h1 stream wreq_blocking_st  2097152 B c= 50 round=1/3     468.6 req/s
+h1 full   ry_blocking       10240 B c= 50 round=1/3    8372.9 req/s
+h1 full   httpx_blocking    10240 B c= 50 round=1/3    1841.7 req/s
+h1 full   curl_cffi_blocking     1024 B c= 10 round=1/3     575.2 req/s
+h1 stream requests         131072 B c= 10 round=1/3     649.9 req/s
+h1 full   httpx_blocking     1024 B c= 10 round=1/3    1866.0 req/s
+h1 full   curl_cffi_blocking    10240 B c=150 round=1/3     563.2 req/s
+h1 stream pycurl            10240 B c= 10 round=1/3    7088.0 req/s
+h1 full   httpx_blocking  1048576 B c=100 round=1/3     183.9 req/s
+h1 full   niquests_blocking    65536 B c= 10 round=1/3    1102.3 req/s
+h1 full   wreq_blocking_st  2097152 B c= 50 round=1/3     876.1 req/s
+h1 stream httpx_blocking    10240 B c=100 round=1/3    1514.1 req/s
+h1 stream niquests_blocking     1024 B c= 50 round=1/3    1423.5 req/s
+h1 stream pycurl          2097152 B c= 50 round=1/3     161.6 req/s
+h1 stream pycurl             1024 B c=150 round=1/3    5648.7 req/s
+h1 full   curl_cffi_blocking    65536 B c=100 round=1/3     524.5 req/s
+h1 full   pycurl          4194304 B c= 50 round=1/3     114.7 req/s
+h1 full   pycurl             1024 B c=150 round=1/3    9905.6 req/s
+h1 stream requests          10240 B c=100 round=1/3    1291.8 req/s
+h1 stream ry_blocking     4194304 B c=100 round=1/3     755.9 req/s
+h1 stream wreq_blocking     10240 B c= 10 round=1/3    8032.2 req/s
+h1 stream httpx_blocking  4194304 B c=150 round=1/3      47.4 req/s
+h1 stream httpx_blocking    10240 B c= 50 round=1/3    1547.9 req/s
+h1 stream curl_cffi_blocking    10240 B c= 10 round=1/3     540.2 req/s
+h1 stream httpx_blocking  1048576 B c= 50 round=1/3     144.0 req/s
+h1 stream niquests_blocking  1048576 B c=150 round=1/3     160.0 req/s
+h1 full   curl_cffi_blocking    10240 B c= 50 round=1/3     578.5 req/s
+h1 full   wreq_blocking     10240 B c=150 round=1/3   11323.8 req/s
+h1 stream wreq_blocking_st    65536 B c= 10 round=1/3    4016.9 req/s
+h1 stream requests          65536 B c= 50 round=1/3     795.7 req/s
+h1 stream pycurl            10240 B c=150 round=1/3    6058.6 req/s
+h1 stream niquests_blocking    65536 B c=150 round=1/3     782.1 req/s
+h1 stream wreq_blocking   1048576 B c=150 round=1/3    1326.2 req/s
+h1 full   ry_blocking      131072 B c= 50 round=1/3    7932.1 req/s
+h1 stream httpx_blocking     1024 B c=100 round=1/3    1487.4 req/s
+h1 full   requests        1048576 B c=100 round=1/3     195.0 req/s
+h1 stream httpx_blocking     1024 B c= 10 round=1/3    1591.9 req/s
+h1 stream ry_blocking     1048576 B c= 10 round=1/3    1243.8 req/s
+h1 stream curl_cffi_blocking  4194304 B c=100 round=1/3      67.6 req/s
+h1 full   requests        4194304 B c=100 round=1/3      55.2 req/s
+h1 full   pycurl          1048576 B c=150 round=1/3     424.7 req/s
+h1 stream wreq_blocking   1048576 B c=100 round=1/3    1339.2 req/s
+h1 full   pycurl          2097152 B c= 50 round=1/3     226.0 req/s
+h1 full   ry_blocking        1024 B c= 10 round=1/3    9191.5 req/s
+h1 stream wreq_blocking   4194304 B c=100 round=1/3     880.1 req/s
+h1 full   httpx_blocking  2097152 B c= 50 round=1/3      98.2 req/s
+h1 full   curl_cffi_blocking  4194304 B c=100 round=1/3      85.9 req/s
+h1 full   wreq_blocking_st    65536 B c= 50 round=1/3   14634.9 req/s
+h1 stream wreq_blocking     65536 B c= 50 round=1/3    4105.9 req/s
+h1 full   wreq_blocking    131072 B c= 50 round=1/3   14388.1 req/s
+h1 full   pycurl            10240 B c= 50 round=1/3   12259.4 req/s
+h1 full   wreq_blocking   1048576 B c=100 round=1/3    4097.1 req/s
+h1 stream pycurl           131072 B c=100 round=1/3    1811.9 req/s
+h1 stream wreq_blocking_st  2097152 B c=100 round=1/3     449.5 req/s
+h1 full   niquests_blocking    65536 B c= 50 round=1/3    1094.4 req/s
+h1 full   curl_cffi_blocking  1048576 B c=100 round=1/3     242.7 req/s
+h1 stream wreq_blocking   1048576 B c= 50 round=1/3    1376.2 req/s
+h1 stream pycurl            10240 B c=100 round=1/3    6285.0 req/s
+h1 stream niquests_blocking  4194304 B c=150 round=1/3      51.3 req/s
+h1 stream wreq_blocking      1024 B c=150 round=1/3    6308.0 req/s
+h1 full   curl_cffi_blocking  4194304 B c= 50 round=1/3      88.2 req/s
+h1 stream niquests_blocking     1024 B c=100 round=1/3    1358.3 req/s
+h1 full   curl_cffi_blocking   131072 B c=100 round=1/3     489.5 req/s
+h1 stream requests        4194304 B c= 50 round=1/3      50.9 req/s
+h1 full   curl_cffi_blocking  1048576 B c= 50 round=1/3     239.7 req/s
+h1 stream requests        1048576 B c=150 round=1/3     157.5 req/s
+h1 full   niquests_blocking  2097152 B c=150 round=1/3     101.8 req/s
+h1 stream ry_blocking     2097152 B c=150 round=1/3     971.6 req/s
+h1 stream httpx_blocking  4194304 B c= 50 round=1/3      46.7 req/s
+h1 full   niquests_blocking    65536 B c=100 round=1/3    1024.8 req/s
+h1 stream wreq_blocking   2097152 B c= 50 round=1/3    1263.2 req/s
+h1 stream pycurl          2097152 B c=100 round=1/3     160.0 req/s
+h1 full   curl_cffi_blocking     1024 B c= 50 round=1/3     573.4 req/s
+h1 full   requests          10240 B c=100 round=1/3    1444.7 req/s
+h1 full   ry_blocking     1048576 B c= 50 round=1/3    4387.7 req/s
+h1 stream wreq_blocking_st    10240 B c= 50 round=1/3    7347.1 req/s
+h1 full   requests           1024 B c= 10 round=1/3    1527.2 req/s
+h1 stream pycurl            65536 B c=150 round=1/3    2393.7 req/s
+h1 stream curl_cffi_blocking    65536 B c=100 round=1/3     473.7 req/s
+h1 full   niquests_blocking  1048576 B c=150 round=1/3     191.9 req/s
+h1 stream ry_blocking       10240 B c= 10 round=1/3    5637.6 req/s
+h1 full   requests         131072 B c= 50 round=1/3     786.9 req/s
+h1 full   requests           1024 B c=150 round=1/3    1406.5 req/s
+h1 stream niquests_blocking    10240 B c=150 round=1/3    1302.9 req/s
+h1 stream pycurl          4194304 B c=100 round=1/3      84.4 req/s
+h1 full   wreq_blocking     65536 B c=100 round=1/3   12642.8 req/s
+h1 stream pycurl          2097152 B c=150 round=1/3     159.6 req/s
+h1 stream requests          65536 B c= 10 round=1/3     797.4 req/s
+h1 full   requests          65536 B c=100 round=1/3     983.5 req/s
+h1 full   wreq_blocking   1048576 B c=150 round=1/3    3827.4 req/s
+h1 stream wreq_blocking     10240 B c=100 round=1/3    6682.0 req/s
+h1 full   curl_cffi_blocking  4194304 B c=150 round=1/3      89.6 req/s
+h1 full   httpx_blocking   131072 B c=100 round=1/3     825.2 req/s
+h1 stream requests           1024 B c=100 round=1/3    1282.6 req/s
+h1 stream ry_blocking        1024 B c=100 round=1/3    5049.7 req/s
+h1 stream wreq_blocking_st   131072 B c=100 round=1/3    2929.1 req/s
+h1 full   wreq_blocking_st     1024 B c=150 round=1/3   12681.5 req/s
+h1 stream wreq_blocking_st    65536 B c=100 round=1/3    3445.2 req/s
+h1 stream requests        2097152 B c= 10 round=1/3      92.6 req/s
+h1 full   wreq_blocking_st   131072 B c= 10 round=1/3   11850.5 req/s
+h1 stream niquests_blocking  4194304 B c= 50 round=1/3      50.4 req/s
+h1 stream requests        2097152 B c=100 round=1/3      94.2 req/s
+h1 full   ry_blocking        1024 B c=100 round=1/3    7551.8 req/s
+h1 full   curl_cffi_blocking    10240 B c=100 round=1/3     569.7 req/s
+h1 stream ry_blocking      131072 B c= 50 round=1/3    3385.1 req/s
+h1 full   pycurl           131072 B c= 50 round=1/3    2791.5 req/s
+h1 full   wreq_blocking_st  4194304 B c= 50 round=1/3     473.8 req/s
+h1 full   pycurl          2097152 B c= 10 round=1/3     219.9 req/s
+h1 stream niquests_blocking  4194304 B c= 10 round=1/3      50.6 req/s
+h1 full   curl_cffi_blocking  2097152 B c=100 round=1/3     151.3 req/s
+h1 full   pycurl             1024 B c= 50 round=1/3   12084.0 req/s
+h1 stream pycurl            65536 B c= 50 round=1/3    2634.8 req/s
+h1 stream curl_cffi_blocking  1048576 B c=100 round=1/3     182.9 req/s
+h1 stream curl_cffi_blocking  2097152 B c= 10 round=1/3     119.5 req/s
+h1 stream requests           1024 B c=150 round=1/3    1283.3 req/s
+h1 stream httpx_blocking    65536 B c=150 round=1/3     765.8 req/s
+h1 full   ry_blocking      131072 B c= 10 round=1/3    8834.7 req/s
+h1 stream wreq_blocking_st    10240 B c=150 round=1/3    6579.1 req/s
+h1 full   wreq_blocking   4194304 B c= 50 round=1/3    1002.6 req/s
+h1 stream ry_blocking     2097152 B c= 10 round=1/3    1080.9 req/s
+h1 full   requests        4194304 B c=150 round=1/3      54.6 req/s
+h1 stream pycurl          4194304 B c= 50 round=1/3      84.8 req/s
+h1 stream wreq_blocking   1048576 B c= 10 round=1/3    1438.3 req/s
+h1 stream curl_cffi_blocking  1048576 B c= 50 round=1/3     184.0 req/s
+h1 full   ry_blocking       65536 B c=100 round=1/3    7412.8 req/s
+h1 full   niquests_blocking   131072 B c=100 round=1/3     797.7 req/s
+h1 full   requests          65536 B c= 50 round=1/3    1015.0 req/s
+h1 full   niquests_blocking     1024 B c=150 round=1/3    1461.9 req/s
+h1 full   requests         131072 B c=100 round=1/3     777.9 req/s
+h1 full   httpx_blocking    65536 B c= 10 round=1/3    1186.6 req/s
+h1 stream httpx_blocking   131072 B c=150 round=1/3     617.6 req/s
+h1 stream ry_blocking      131072 B c= 10 round=1/3    3451.9 req/s
+h1 full   wreq_blocking   2097152 B c= 10 round=1/3    2380.1 req/s
+h1 full   httpx_blocking    10240 B c=100 round=1/3    1753.0 req/s
+h1 full   ry_blocking       10240 B c= 10 round=1/3    9253.4 req/s
+h1 stream wreq_blocking     10240 B c= 50 round=1/3    7222.8 req/s
+h1 stream httpx_blocking    65536 B c= 50 round=1/3     778.7 req/s
+h1 full   httpx_blocking   131072 B c= 10 round=1/3     884.7 req/s
+h1 stream requests        1048576 B c= 50 round=1/3     157.4 req/s
+h1 full   wreq_blocking_st  4194304 B c=150 round=1/3     463.7 req/s
+h1 stream requests         131072 B c=150 round=1/3     623.0 req/s
+h1 stream curl_cffi_blocking  1048576 B c=150 round=1/3     186.7 req/s
+h1 full   wreq_blocking_st    65536 B c=150 round=1/3   12035.8 req/s
+h1 full   ry_blocking       65536 B c=150 round=1/3    6799.8 req/s
+h1 stream wreq_blocking_st    10240 B c=100 round=1/3    6660.2 req/s
+h1 full   wreq_blocking_st  4194304 B c= 10 round=1/3     430.3 req/s
+h1 full   wreq_blocking_st  1048576 B c=100 round=1/3    1475.8 req/s
+h1 stream requests           1024 B c= 50 round=1/3    1302.1 req/s
+h1 stream pycurl          1048576 B c= 10 round=1/3     287.9 req/s
+h1 full   curl_cffi_blocking  2097152 B c=150 round=1/3     156.6 req/s
+h1 stream niquests_blocking    65536 B c= 50 round=1/3     809.0 req/s
+h1 stream curl_cffi_blocking    65536 B c= 50 round=1/3     472.3 req/s
+h1 full   curl_cffi_blocking     1024 B c=150 round=1/3     568.8 req/s
+h1 full   ry_blocking     1048576 B c=150 round=1/3    3519.1 req/s
+h1 stream wreq_blocking_st    10240 B c= 10 round=1/3    7798.3 req/s
+h1 stream wreq_blocking    131072 B c= 10 round=1/3    4407.3 req/s
+h1 stream wreq_blocking   4194304 B c= 50 round=1/3     942.4 req/s
+h1 stream wreq_blocking    131072 B c=150 round=1/3    3585.8 req/s
+h1 stream ry_blocking        1024 B c=150 round=1/3    4715.6 req/s
+h1 stream wreq_blocking    131072 B c=100 round=1/3    3800.3 req/s
+h1 full   wreq_blocking_st  4194304 B c=100 round=1/3     457.7 req/s
+h1 full   curl_cffi_blocking   131072 B c= 50 round=1/3     492.2 req/s
+h1 stream wreq_blocking_st    65536 B c= 50 round=1/3    3737.3 req/s
+h1 full   httpx_blocking  1048576 B c=150 round=1/3     188.8 req/s
+h1 full   pycurl            65536 B c= 10 round=1/3    4818.3 req/s
+h1 full   curl_cffi_blocking  2097152 B c= 10 round=1/3     151.8 req/s
+h1 stream curl_cffi_blocking     1024 B c= 50 round=1/3     540.7 req/s
+h1 stream curl_cffi_blocking    10240 B c= 50 round=1/3     546.9 req/s
+h1 stream httpx_blocking  1048576 B c= 10 round=1/3     143.0 req/s
+h1 full   httpx_blocking     1024 B c= 50 round=1/3    1799.5 req/s
+h1 full   wreq_blocking   2097152 B c=150 round=1/3    1823.4 req/s
+h1 stream requests        4194304 B c= 10 round=1/3      50.0 req/s
+h1 stream wreq_blocking_st  4194304 B c=100 round=1/3     267.1 req/s
+h1 full   pycurl           131072 B c= 10 round=1/3    2817.8 req/s
+h1 full   pycurl            10240 B c=150 round=1/3    9614.0 req/s
+h1 full   requests          10240 B c=150 round=1/3    1391.7 req/s
+h1 stream niquests_blocking  1048576 B c= 50 round=1/3     158.1 req/s
+h1 stream ry_blocking       65536 B c= 10 round=1/3    3474.3 req/s
+h1 stream curl_cffi_blocking   131072 B c=150 round=1/3     437.7 req/s
+h1 stream wreq_blocking_st  1048576 B c= 50 round=1/3     727.0 req/s
+h1 full   ry_blocking     4194304 B c=150 round=1/3     889.5 req/s
+h1 stream wreq_blocking   4194304 B c= 10 round=1/3     872.8 req/s
+h1 full   httpx_blocking     1024 B c=150 round=1/3    1706.3 req/s
+h1 full   requests          65536 B c=150 round=1/3     997.1 req/s
+h1 full   requests          10240 B c= 50 round=1/3    1447.4 req/s
+h1 stream wreq_blocking      1024 B c=100 round=1/3    6711.1 req/s
+h1 stream wreq_blocking      1024 B c= 50 round=1/3    7075.2 req/s
+h1 full   niquests_blocking  4194304 B c=100 round=1/3      55.3 req/s
+h1 full   requests        1048576 B c=150 round=1/3     192.1 req/s
+h1 stream pycurl             1024 B c= 50 round=1/3    6693.6 req/s
+h1 full   wreq_blocking_st     1024 B c= 50 round=1/3   17173.2 req/s
+h1 full   wreq_blocking_st    10240 B c=150 round=1/3   12523.3 req/s
+h1 stream wreq_blocking_st  1048576 B c=150 round=1/3     691.8 req/s
+h1 full   requests          65536 B c= 10 round=1/3    1029.5 req/s
+h1 stream pycurl           131072 B c=150 round=1/3    1755.5 req/s
+h1 stream curl_cffi_blocking   131072 B c=100 round=1/3     441.7 req/s
+h1 full   wreq_blocking_st    10240 B c= 50 round=1/3   17676.0 req/s
+h1 full   wreq_blocking_st    10240 B c= 10 round=1/3   20856.9 req/s
+h1 full   ry_blocking       65536 B c= 50 round=1/3    8110.1 req/s
+h1 stream requests        4194304 B c=150 round=1/3      51.7 req/s
+h1 stream niquests_blocking     1024 B c=150 round=1/3    1328.6 req/s
+h1 stream niquests_blocking    65536 B c= 10 round=1/3     817.6 req/s
+h1 full   curl_cffi_blocking    65536 B c= 10 round=1/3     528.6 req/s
+h1 full   curl_cffi_blocking    10240 B c= 10 round=1/3     572.6 req/s
+h1 stream curl_cffi_blocking  1048576 B c= 10 round=1/3     184.0 req/s
+h1 full   httpx_blocking  2097152 B c= 10 round=1/3      96.6 req/s
+h1 full   wreq_blocking_st  1048576 B c= 10 round=1/3    1506.9 req/s
+h1 full   wreq_blocking     65536 B c=150 round=1/3   11245.2 req/s
+h1 stream requests        2097152 B c= 50 round=1/3      92.9 req/s
+h1 stream ry_blocking     2097152 B c=100 round=1/3    1008.9 req/s
+h1 stream niquests_blocking  1048576 B c=100 round=1/3     157.7 req/s
+h1 stream pycurl          2097152 B c= 10 round=1/3     158.3 req/s
+h1 full   niquests_blocking     1024 B c=100 round=1/3    1526.3 req/s
+h1 stream pycurl           131072 B c= 10 round=1/3    1924.6 req/s
+h1 full   niquests_blocking   131072 B c= 10 round=1/3     772.0 req/s
+h1 full   ry_blocking      131072 B c=100 round=1/3    7243.1 req/s
+h1 stream wreq_blocking_st     1024 B c= 10 round=1/3    8180.8 req/s
+h1 full   pycurl             1024 B c=100 round=1/3   10711.8 req/s
+h1 full   httpx_blocking  2097152 B c=100 round=1/3      97.3 req/s
+h1 stream niquests_blocking   131072 B c= 50 round=1/3     655.2 req/s
+h1 stream niquests_blocking   131072 B c=100 round=1/3     648.2 req/s
+h1 full   niquests_blocking   131072 B c= 50 round=1/3     807.9 req/s
+h1 full   wreq_blocking_st    10240 B c=100 round=1/3   14246.7 req/s
+h1 full   niquests_blocking     1024 B c= 10 round=1/3    1557.9 req/s
+h1 full   ry_blocking     4194304 B c= 50 round=1/3     984.9 req/s
+h1 stream requests         131072 B c=100 round=1/3     623.7 req/s
+h1 full   niquests_blocking  4194304 B c= 10 round=1/3      53.7 req/s
+h1 stream niquests_blocking  2097152 B c= 50 round=1/3      93.3 req/s
+h1 stream ry_blocking       65536 B c=100 round=1/3    3228.5 req/s
+h1 stream ry_blocking        1024 B c= 10 round=1/3    5440.3 req/s
+h1 stream requests          10240 B c= 10 round=1/3    1377.9 req/s
+h1 stream curl_cffi_blocking     1024 B c= 10 round=1/3     539.3 req/s
+h1 full   wreq_blocking_st    65536 B c=100 round=1/3   13308.8 req/s
+h1 full   ry_blocking     2097152 B c= 50 round=1/3    2075.3 req/s
+h1 stream ry_blocking       10240 B c= 50 round=1/3    5255.9 req/s
+h1 full   curl_cffi_blocking  4194304 B c= 10 round=1/3      87.7 req/s
+h1 stream pycurl          1048576 B c=150 round=1/3     286.5 req/s
+h1 stream ry_blocking        1024 B c= 50 round=1/3    5234.4 req/s
+h1 stream httpx_blocking  4194304 B c= 10 round=1/3      46.1 req/s
+h1 full   pycurl             1024 B c= 10 round=1/3   13645.3 req/s
+h1 full   wreq_blocking     65536 B c= 50 round=1/3   15250.3 req/s
+h1 full   pycurl          1048576 B c=100 round=1/3     422.9 req/s
+h1 full   wreq_blocking_st  2097152 B c=100 round=1/3     842.5 req/s
+h1 stream httpx_blocking  2097152 B c= 50 round=1/3      84.9 req/s
+h1 full   ry_blocking       10240 B c=100 round=1/3    7614.4 req/s
+h1 stream ry_blocking       65536 B c=150 round=1/3    3059.3 req/s
+h1 full   httpx_blocking   131072 B c=150 round=1/3     780.0 req/s
+h1 full   httpx_blocking    10240 B c=150 round=1/3    1755.9 req/s
+h1 full   requests          10240 B c= 10 round=1/3    1533.8 req/s
+h1 full   httpx_blocking    65536 B c= 50 round=1/3    1175.0 req/s
+h1 stream wreq_blocking_st   131072 B c= 50 round=1/3    3305.2 req/s
+h1 full   wreq_blocking      1024 B c= 10 round=1/3   19487.9 req/s
+h1 full   pycurl          4194304 B c= 10 round=1/3     110.8 req/s
+h1 stream curl_cffi_blocking  4194304 B c= 10 round=1/3      69.7 req/s
+h1 stream wreq_blocking_st     1024 B c=150 round=1/3    6614.0 req/s
+h1 stream httpx_blocking   131072 B c=100 round=1/3     629.0 req/s
+h1 full   niquests_blocking  1048576 B c= 50 round=1/3     191.7 req/s
+h1 full   curl_cffi_blocking   131072 B c= 10 round=1/3     492.2 req/s
+h1 stream wreq_blocking   2097152 B c=100 round=1/3    1187.7 req/s
+h1 full   requests         131072 B c=150 round=1/3     758.5 req/s
+h1 stream httpx_blocking  2097152 B c=100 round=1/3      84.2 req/s
+h1 full   httpx_blocking  4194304 B c= 10 round=1/3      49.7 req/s
+h1 full   wreq_blocking_st   131072 B c= 50 round=1/3    9807.6 req/s
+h1 full   pycurl          4194304 B c=100 round=1/3     116.0 req/s
+h1 full   niquests_blocking  4194304 B c=150 round=1/3      54.8 req/s
+h1 full   wreq_blocking_st     1024 B c=100 round=1/3   14416.6 req/s
+h1 full   requests        1048576 B c= 10 round=1/3     192.8 req/s
+h1 stream pycurl            65536 B c=100 round=1/3    2471.3 req/s
+h1 stream httpx_blocking  1048576 B c=100 round=1/3     139.6 req/s
+h1 full   ry_blocking     2097152 B c=100 round=1/3    1928.2 req/s
+h1 stream httpx_blocking    10240 B c=150 round=1/3    1460.2 req/s
+h1 stream ry_blocking     1048576 B c= 50 round=1/3    1242.5 req/s
+h1 full   niquests_blocking  2097152 B c=100 round=1/3     104.6 req/s
+h1 full   ry_blocking       65536 B c= 10 round=1/3    9275.7 req/s
+h1 stream pycurl          4194304 B c= 10 round=1/3      83.0 req/s
+h1 stream httpx_blocking    10240 B c= 10 round=1/3    1559.1 req/s
+h1 full   pycurl            65536 B c= 50 round=1/3    4395.7 req/s
+h1 full   requests           1024 B c=100 round=1/3    1393.8 req/s
+h1 full   wreq_blocking   1048576 B c= 50 round=1/3    4410.5 req/s
+h1 stream ry_blocking     4194304 B c=150 round=1/3     733.6 req/s
+h1 full   wreq_blocking   4194304 B c=150 round=1/3     868.2 req/s
+h1 stream curl_cffi_blocking    10240 B c=150 round=1/3     528.6 req/s
+h1 stream curl_cffi_blocking    65536 B c= 10 round=1/3     475.1 req/s
+h1 full   httpx_blocking  2097152 B c=150 round=1/3      99.3 req/s
+h1 stream curl_cffi_blocking  4194304 B c= 50 round=1/3      67.6 req/s
+h1 stream ry_blocking     1048576 B c=150 round=1/3    1160.7 req/s
+h1 stream ry_blocking      131072 B c=100 round=1/3    3137.6 req/s
+h1 stream ry_blocking     2097152 B c= 50 round=1/3    1015.2 req/s
+h1 stream niquests_blocking   131072 B c= 10 round=1/3     676.0 req/s
+h1 full   requests        2097152 B c=100 round=1/3     104.9 req/s
+h1 stream httpx_blocking     1024 B c= 50 round=1/3    1536.1 req/s
+h1 full   httpx_blocking    65536 B c=100 round=1/3    1115.9 req/s
+h1 stream httpx_blocking  4194304 B c=100 round=1/3      45.6 req/s
+h1 stream niquests_blocking    65536 B c=100 round=1/3     784.9 req/s
+h1 full   httpx_blocking     1024 B c=100 round=1/3    1773.1 req/s
+h1 stream wreq_blocking_st     1024 B c=100 round=1/3    7153.3 req/s
+h1 stream curl_cffi_blocking    10240 B c=100 round=1/3     533.1 req/s
+h1 stream wreq_blocking_st    65536 B c=150 round=1/3    3576.0 req/s
+h1 stream curl_cffi_blocking  2097152 B c=100 round=1/3     115.4 req/s
+h1 full   ry_blocking     4194304 B c=100 round=1/3     931.7 req/s
+h1 full   requests        2097152 B c=150 round=1/3     104.3 req/s
+h1 full   wreq_blocking    131072 B c= 10 round=1/3   17877.5 req/s
+h1 stream requests        1048576 B c= 10 round=1/3     158.6 req/s
+h1 full   curl_cffi_blocking     1024 B c=100 round=1/3     570.8 req/s
+h1 stream niquests_blocking    10240 B c= 50 round=1/3    1374.2 req/s
+h1 full   requests        1048576 B c= 50 round=1/3     192.3 req/s
+h1 full   httpx_blocking    10240 B c= 10 round=1/3    1845.8 req/s
+h1 stream curl_cffi_blocking   131072 B c= 50 round=1/3     443.3 req/s
+h1 stream wreq_blocking_st  2097152 B c= 10 round=1/3     472.1 req/s
+h1 stream pycurl            65536 B c= 10 round=1/3    2560.6 req/s
+h1 full   wreq_blocking    131072 B c=150 round=1/3   10209.6 req/s
+h1 stream wreq_blocking   2097152 B c= 10 round=1/3    1271.5 req/s
+h1 stream requests        4194304 B c=100 round=1/3      52.0 req/s
+h1 stream curl_cffi_blocking  2097152 B c=150 round=1/3     119.5 req/s
+h1 full   requests        4194304 B c= 50 round=1/3      54.4 req/s
+h1 full   wreq_blocking      1024 B c=150 round=1/3   11206.5 req/s
+h1 full   niquests_blocking  2097152 B c= 50 round=1/3     102.7 req/s
+h1 stream niquests_blocking  1048576 B c= 10 round=1/3     158.6 req/s
+h1 full   ry_blocking        1024 B c=150 round=1/3    7103.1 req/s
+h1 full   httpx_blocking   131072 B c= 50 round=1/3     864.1 req/s
+h1 full   wreq_blocking   2097152 B c=100 round=1/3    1905.4 req/s
+h1 stream wreq_blocking    131072 B c= 50 round=1/3    4012.1 req/s
+h1 full   wreq_blocking   4194304 B c= 10 round=1/3     989.0 req/s
+h1 full   wreq_blocking_st  2097152 B c= 10 round=1/3     867.2 req/s
+h1 stream requests        1048576 B c=100 round=1/3     156.9 req/s
+h1 stream wreq_blocking      1024 B c= 10 round=1/3    8242.3 req/s
+h1 stream requests           1024 B c= 10 round=1/3    1357.8 req/s
+h1 stream wreq_blocking     65536 B c= 10 round=1/3    4378.8 req/s
+h1 full   niquests_blocking    10240 B c= 50 round=1/3    1555.4 req/s
+h1 full   pycurl           131072 B c=150 round=1/3    2549.9 req/s
+h1 stream niquests_blocking    10240 B c=100 round=1/3    1338.1 req/s
+h1 stream requests          10240 B c=150 round=1/3    1276.8 req/s
+h1 stream httpx_blocking  2097152 B c= 10 round=1/3      84.0 req/s
+h1 stream requests        2097152 B c=150 round=1/3      93.0 req/s
+h1 stream niquests_blocking  2097152 B c=150 round=1/3      91.7 req/s
+h1 stream ry_blocking       10240 B c=150 round=1/3    4699.8 req/s
+h1 full   ry_blocking     2097152 B c=150 round=1/3    1872.5 req/s
+h1 stream niquests_blocking  2097152 B c=100 round=1/3      93.5 req/s
+h1 stream httpx_blocking   131072 B c= 10 round=1/3     635.7 req/s
+h1 full   wreq_blocking      1024 B c= 50 round=1/3   15548.4 req/s
+h1 stream httpx_blocking     1024 B c=150 round=1/3    1474.6 req/s
+h1 full   niquests_blocking  2097152 B c= 10 round=1/3     104.1 req/s
+h1 stream wreq_blocking_st  1048576 B c=100 round=1/3     707.7 req/s
+h1 full   pycurl            10240 B c= 10 round=1/3   13450.1 req/s
+h1 stream wreq_blocking   4194304 B c=150 round=1/3     861.5 req/s
+h1 full   wreq_blocking_st     1024 B c= 10 round=1/3   19807.2 req/s
+h1 full   niquests_blocking  1048576 B c=100 round=1/3     191.6 req/s
+h1 full   pycurl          2097152 B c=100 round=1/3     229.0 req/s
+h1 full   pycurl          1048576 B c= 10 round=1/3     428.2 req/s
+h1 stream niquests_blocking   131072 B c=150 round=1/3     629.9 req/s
+h1 stream pycurl          1048576 B c=100 round=1/3     286.0 req/s
+h1 stream niquests_blocking  4194304 B c=100 round=1/3      51.6 req/s
+h1 stream wreq_blocking_st  4194304 B c= 50 round=1/3     278.2 req/s
+h1 full   wreq_blocking     10240 B c=100 round=1/3   13335.8 req/s
+h1 full   wreq_blocking   4194304 B c=100 round=1/3     950.1 req/s
+h1 full   httpx_blocking  1048576 B c= 10 round=1/3     180.9 req/s
+h1 stream httpx_blocking    65536 B c= 10 round=1/3     782.5 req/s
+h1 full   wreq_blocking_st    65536 B c= 10 round=1/3   15372.7 req/s
+h1 full   requests         131072 B c= 10 round=1/3     802.6 req/s
+h1 stream ry_blocking     1048576 B c=100 round=1/3    1203.0 req/s
+h1 full   curl_cffi_blocking    65536 B c= 50 round=1/3     528.1 req/s
+h1 stream httpx_blocking  2097152 B c=150 round=1/3      85.7 req/s
+h1 full   requests        2097152 B c= 10 round=1/3     103.7 req/s
+h1 full   pycurl          4194304 B c=150 round=1/3     120.2 req/s
+h1 full   ry_blocking       10240 B c=150 round=1/3    6987.0 req/s
+h1 full   niquests_blocking    10240 B c= 10 round=1/3    1584.3 req/s
+h1 stream ry_blocking     4194304 B c= 10 round=1/3     876.6 req/s
+h1 full   httpx_blocking  4194304 B c=150 round=1/3      51.1 req/s
+h1 stream niquests_blocking  2097152 B c= 10 round=1/3      93.4 req/s
+h1 full   niquests_blocking     1024 B c= 50 round=1/3    1572.6 req/s
+h1 full   pycurl           131072 B c=100 round=1/3    2617.3 req/s
+h1 stream ry_blocking       10240 B c=100 round=1/3    4926.6 req/s
+h1 stream pycurl             1024 B c=100 round=1/3    6217.8 req/s
+h1 stream ry_blocking       65536 B c= 50 round=1/3    3436.0 req/s
+h1 full   requests           1024 B c= 50 round=1/3    1459.3 req/s
+h1 stream pycurl            10240 B c= 50 round=1/3    6593.5 req/s
+h1 stream requests          10240 B c= 50 round=1/3    1317.1 req/s
+h1 full   httpx_blocking  1048576 B c= 50 round=1/3     185.0 req/s
+h1 stream curl_cffi_blocking  4194304 B c=150 round=1/3      68.9 req/s
+h1 full   niquests_blocking   131072 B c=150 round=1/3     763.4 req/s
+h1 full   wreq_blocking      1024 B c=100 round=1/3   13068.0 req/s
+h1 full   wreq_blocking   2097152 B c= 50 round=1/3    2055.3 req/s
+h1 full   pycurl            10240 B c=100 round=1/3   10390.9 req/s
+h1 stream ry_blocking     4194304 B c= 50 round=1/3     763.9 req/s
+h1 full   ry_blocking     4194304 B c= 10 round=1/3    1045.6 req/s
+h1 full   ry_blocking     1048576 B c=100 round=1/3    3703.2 req/s
+h1 stream pycurl          4194304 B c=150 round=1/3      84.0 req/s
+h1 stream curl_cffi_blocking  2097152 B c= 50 round=1/3     117.0 req/s
+h1 full   wreq_blocking    131072 B c=100 round=1/3   12322.3 req/s
+h1 full   ry_blocking     1048576 B c= 10 round=1/3    4535.4 req/s
+h1 full   niquests_blocking  4194304 B c= 50 round=1/3      54.5 req/s
+h1 stream wreq_blocking     65536 B c=100 round=1/3    3884.0 req/s
+h1 full   wreq_blocking_st   131072 B c=100 round=1/3    8984.5 req/s
+h1 full   niquests_blocking    10240 B c=150 round=1/3    1421.8 req/s
+h1 stream wreq_blocking_st   131072 B c= 10 round=1/3    3416.8 req/s
+h1 full   curl_cffi_blocking    65536 B c=150 round=1/3     515.7 req/s
+h1 stream httpx_blocking  1048576 B c=150 round=1/3     142.7 req/s
+h1 full   pycurl          2097152 B c=150 round=1/3     217.1 req/s
+h1 full   niquests_blocking  1048576 B c= 10 round=1/3     194.8 req/s
+h1 full   wreq_blocking_st  1048576 B c= 50 round=1/3    1523.1 req/s
+h1 stream requests          65536 B c=150 round=1/3     761.2 req/s
+h1 stream pycurl           131072 B c= 50 round=1/3    1878.5 req/s
+h1 full   wreq_blocking     65536 B c= 10 round=1/3   18413.1 req/s
+h1 stream niquests_blocking     1024 B c= 10 round=1/3    1426.2 req/s
+h1 stream wreq_blocking_st  2097152 B c=150 round=1/3     444.4 req/s
+h1 full   wreq_blocking     10240 B c= 10 round=1/3   20229.3 req/s
+h1 full   curl_cffi_blocking  1048576 B c=150 round=1/3     244.5 req/s
+h1 full   requests        4194304 B c= 10 round=1/3      53.8 req/s
+h1 stream niquests_blocking    10240 B c= 10 round=1/3    1413.9 req/s
+h1 stream wreq_blocking     65536 B c=150 round=1/3    3614.2 req/s
+h1 stream curl_cffi_blocking    65536 B c=150 round=1/3     465.8 req/s
+h1 full   curl_cffi_blocking   131072 B c=150 round=1/3     480.2 req/s
+h1 full   pycurl            65536 B c=150 round=1/3    4029.9 req/s
+h1 full   httpx_blocking  4194304 B c= 50 round=1/3      50.7 req/s
+h1 stream httpx_blocking    65536 B c=100 round=1/3     745.8 req/s
+h1 full   curl_cffi_blocking  1048576 B c= 10 round=1/3     239.6 req/s
+h1 stream pycurl          1048576 B c= 50 round=1/3     289.7 req/s
+h1 full   wreq_blocking     10240 B c= 50 round=1/3   15637.5 req/s
+h1 full   requests        2097152 B c= 50 round=1/3     103.8 req/s
+h1 full   pycurl            65536 B c=100 round=1/3    4235.8 req/s
+h1 full   wreq_blocking_st  1048576 B c=150 round=1/3    1523.8 req/s
+h1 stream requests          65536 B c=100 round=1/3     754.7 req/s
+h1 stream wreq_blocking_st     1024 B c= 50 round=1/3    7382.9 req/s
+h1 full   httpx_blocking    65536 B c=150 round=1/3    1032.8 req/s
+h1 stream wreq_blocking_st   131072 B c=150 round=1/3    2882.6 req/s
+h1 stream curl_cffi_blocking     1024 B c=100 round=1/3     538.5 req/s
+h1 stream httpx_blocking   131072 B c= 50 round=1/3     633.6 req/s
+h1 full   ry_blocking      131072 B c=150 round=1/3    6636.8 req/s
+h1 stream requests         131072 B c= 50 round=1/3     640.6 req/s
+h1 stream pycurl             1024 B c= 10 round=1/3    6802.9 req/s
+h1 stream wreq_blocking     10240 B c=150 round=1/3    6119.9 req/s
+h1 stream wreq_blocking_st  1048576 B c= 10 round=1/3     759.0 req/s
+h1 stream curl_cffi_blocking     1024 B c=150 round=1/3     527.1 req/s
+h1 stream wreq_blocking_st  4194304 B c= 10 round=1/3     318.0 req/s
+h1 full   ry_blocking        1024 B c= 50 round=1/3    8257.2 req/s
+h1 full   curl_cffi_blocking  2097152 B c= 50 round=1/3     151.9 req/s
+h1 full   pycurl          1048576 B c= 50 round=1/3     431.9 req/s
+h1 full   wreq_blocking   1048576 B c= 10 round=1/3    5518.2 req/s
+h1 full   niquests_blocking    10240 B c=100 round=1/3    1472.3 req/s
+h1 stream curl_cffi_blocking   131072 B c= 10 round=1/3     437.3 req/s
+h1 full   niquests_blocking    65536 B c=150 round=1/3     998.4 req/s
+h1 stream wreq_blocking_st  4194304 B c=150 round=1/3     276.6 req/s
+h1 stream ry_blocking      131072 B c=150 round=1/3    3033.5 req/s
+h1 full   ry_blocking     2097152 B c= 10 round=1/3    2232.8 req/s
+h1 full   wreq_blocking_st  2097152 B c=150 round=1/3     854.8 req/s
+h1 full   httpx_blocking  4194304 B c=100 round=1/3      49.9 req/s
+h1 full   wreq_blocking_st   131072 B c=150 round=1/3    7589.6 req/s
+h1 full   curl_cffi_blocking  4194304 B c= 10 round=2/3      87.5 req/s
+h1 stream niquests_blocking     1024 B c= 50 round=2/3    1265.4 req/s
+h1 full   httpx_blocking  2097152 B c= 10 round=2/3      96.0 req/s
+h1 full   requests        2097152 B c= 50 round=2/3     103.5 req/s
+h1 stream httpx_blocking  2097152 B c= 10 round=2/3      83.2 req/s
+h1 full   wreq_blocking_st    65536 B c=100 round=2/3   13776.6 req/s
+h1 full   pycurl             1024 B c= 10 round=2/3   13921.1 req/s
+h1 stream ry_blocking     4194304 B c=100 round=2/3     745.6 req/s
+h1 full   wreq_blocking_st  1048576 B c=100 round=2/3    1474.3 req/s
+h1 full   curl_cffi_blocking    10240 B c= 50 round=2/3     574.1 req/s
+h1 full   ry_blocking     1048576 B c=100 round=2/3    3693.5 req/s
+h1 full   pycurl             1024 B c=100 round=2/3   10748.1 req/s
+h1 stream ry_blocking     4194304 B c= 10 round=2/3     925.7 req/s
+h1 stream niquests_blocking     1024 B c= 10 round=2/3    1448.9 req/s
+h1 full   wreq_blocking   4194304 B c= 10 round=2/3    1076.4 req/s
+h1 full   niquests_blocking  4194304 B c=100 round=2/3      55.2 req/s
+h1 stream curl_cffi_blocking   131072 B c= 10 round=2/3     439.9 req/s
+h1 stream httpx_blocking  2097152 B c=150 round=2/3      85.0 req/s
+h1 stream niquests_blocking   131072 B c= 50 round=2/3     662.3 req/s
+h1 full   curl_cffi_blocking  4194304 B c= 50 round=2/3      86.8 req/s
+h1 full   ry_blocking       65536 B c=150 round=2/3    7028.1 req/s
+h1 full   httpx_blocking     1024 B c=150 round=2/3    1712.0 req/s
+h1 stream httpx_blocking   131072 B c= 50 round=2/3     631.4 req/s
+h1 stream httpx_blocking    10240 B c=150 round=2/3    1443.6 req/s
+h1 stream curl_cffi_blocking    65536 B c=100 round=2/3     472.7 req/s
+h1 stream wreq_blocking_st    10240 B c= 10 round=2/3    7979.4 req/s
+h1 stream wreq_blocking     65536 B c= 10 round=2/3    4413.2 req/s
+h1 stream wreq_blocking    131072 B c= 50 round=2/3    4073.8 req/s
+h1 stream pycurl          1048576 B c=150 round=2/3     285.4 req/s
+h1 full   curl_cffi_blocking    10240 B c=150 round=2/3     559.8 req/s
+h1 stream ry_blocking       65536 B c= 10 round=2/3    3511.6 req/s
+h1 full   pycurl            10240 B c=100 round=2/3   10667.4 req/s
+h1 stream wreq_blocking   1048576 B c= 50 round=2/3    1385.3 req/s
+h1 stream requests          10240 B c=150 round=2/3    1245.5 req/s
+h1 stream niquests_blocking  4194304 B c=150 round=2/3      50.8 req/s
+h1 stream wreq_blocking_st  2097152 B c= 10 round=2/3     467.2 req/s
+h1 full   ry_blocking     1048576 B c=150 round=2/3    3426.3 req/s
+h1 stream curl_cffi_blocking   131072 B c=100 round=2/3     436.3 req/s
+h1 stream pycurl             1024 B c=100 round=2/3    6076.0 req/s
+h1 full   niquests_blocking    10240 B c=150 round=2/3    1465.5 req/s
+h1 stream curl_cffi_blocking  2097152 B c=100 round=2/3     115.5 req/s
+h1 stream curl_cffi_blocking  2097152 B c= 10 round=2/3     118.4 req/s
+h1 stream ry_blocking     2097152 B c=150 round=2/3     983.7 req/s
+h1 full   wreq_blocking_st    10240 B c= 10 round=2/3   19791.9 req/s
+h1 stream httpx_blocking     1024 B c= 50 round=2/3    1541.0 req/s
+h1 full   curl_cffi_blocking    65536 B c=100 round=2/3     525.8 req/s
+h1 stream niquests_blocking  4194304 B c= 50 round=2/3      50.6 req/s
+h1 stream requests         131072 B c= 50 round=2/3     633.4 req/s
+h1 stream httpx_blocking  4194304 B c= 50 round=2/3      46.5 req/s
+h1 stream httpx_blocking  4194304 B c=100 round=2/3      45.8 req/s
+h1 stream requests        4194304 B c=150 round=2/3      51.2 req/s
+h1 stream wreq_blocking_st    10240 B c=100 round=2/3    7040.5 req/s
+h1 full   httpx_blocking  2097152 B c= 50 round=2/3      97.7 req/s
+h1 full   requests        1048576 B c= 50 round=2/3     192.9 req/s
+h1 stream ry_blocking        1024 B c=100 round=2/3    5017.7 req/s
+h1 stream httpx_blocking  1048576 B c= 50 round=2/3     142.9 req/s
+h1 full   curl_cffi_blocking   131072 B c= 10 round=2/3     488.0 req/s
+h1 full   wreq_blocking_st     1024 B c= 10 round=2/3   21464.2 req/s
+h1 full   httpx_blocking    10240 B c= 10 round=2/3    1815.9 req/s
+h1 stream httpx_blocking    10240 B c= 50 round=2/3    1514.9 req/s
+h1 full   curl_cffi_blocking    65536 B c= 10 round=2/3     519.0 req/s
+h1 full   pycurl           131072 B c= 50 round=2/3    2752.9 req/s
+h1 stream pycurl          2097152 B c= 10 round=2/3     157.5 req/s
+h1 stream ry_blocking       10240 B c= 50 round=2/3    5282.1 req/s
+h1 full   wreq_blocking   4194304 B c= 50 round=2/3     977.8 req/s
+h1 stream wreq_blocking_st  2097152 B c=150 round=2/3     447.0 req/s
+h1 full   wreq_blocking     10240 B c=100 round=2/3   12781.6 req/s
+h1 stream wreq_blocking   1048576 B c=150 round=2/3    1309.5 req/s
+h1 stream wreq_blocking    131072 B c=100 round=2/3    3838.0 req/s
+h1 stream ry_blocking     2097152 B c=100 round=2/3    1006.8 req/s
+h1 full   ry_blocking      131072 B c= 10 round=2/3    8922.0 req/s
+h1 full   curl_cffi_blocking    10240 B c= 10 round=2/3     578.5 req/s
+h1 stream ry_blocking        1024 B c= 10 round=2/3    5646.5 req/s
+h1 full   requests          65536 B c= 10 round=2/3    1028.3 req/s
+h1 stream pycurl            65536 B c=100 round=2/3    2434.2 req/s
+h1 full   niquests_blocking   131072 B c=100 round=2/3     776.0 req/s
+h1 full   wreq_blocking   1048576 B c=150 round=2/3    3775.5 req/s
+h1 stream niquests_blocking  2097152 B c= 50 round=2/3      92.3 req/s
+h1 full   wreq_blocking_st  1048576 B c=150 round=2/3    1515.1 req/s
+h1 stream wreq_blocking   1048576 B c= 10 round=2/3    1432.6 req/s
+h1 full   niquests_blocking     1024 B c=150 round=2/3    1454.8 req/s
+h1 stream wreq_blocking_st    65536 B c=100 round=2/3    3739.0 req/s
+h1 stream requests        2097152 B c= 50 round=2/3      92.8 req/s
+h1 full   ry_blocking     1048576 B c= 50 round=2/3    4381.5 req/s
+h1 full   pycurl          4194304 B c=100 round=2/3     113.5 req/s
+h1 full   curl_cffi_blocking  1048576 B c= 50 round=2/3     236.9 req/s
+h1 stream wreq_blocking_st   131072 B c= 50 round=2/3    3219.2 req/s
+h1 stream wreq_blocking   4194304 B c= 10 round=2/3     992.0 req/s
+h1 full   wreq_blocking_st     1024 B c=150 round=2/3   12573.0 req/s
+h1 stream wreq_blocking      1024 B c=100 round=2/3    6665.5 req/s
+h1 stream wreq_blocking     65536 B c=100 round=2/3    3855.3 req/s
+h1 stream niquests_blocking   131072 B c=100 round=2/3     647.1 req/s
+h1 full   wreq_blocking    131072 B c= 50 round=2/3   14297.7 req/s
+h1 stream httpx_blocking  1048576 B c=100 round=2/3     142.0 req/s
+h1 stream curl_cffi_blocking  2097152 B c= 50 round=2/3     116.5 req/s
+h1 stream curl_cffi_blocking  1048576 B c= 50 round=2/3     184.1 req/s
+h1 full   ry_blocking       10240 B c= 50 round=2/3    8327.2 req/s
+h1 full   wreq_blocking    131072 B c=100 round=2/3   12010.0 req/s
+h1 stream niquests_blocking  2097152 B c=150 round=2/3      93.6 req/s
+h1 stream ry_blocking     2097152 B c= 10 round=2/3    1056.6 req/s
+h1 full   requests          10240 B c= 10 round=2/3    1487.5 req/s
+h1 stream curl_cffi_blocking  4194304 B c=150 round=2/3      69.4 req/s
+h1 full   pycurl          4194304 B c= 10 round=2/3     111.4 req/s
+h1 full   requests        1048576 B c= 10 round=2/3     196.4 req/s
+h1 full   ry_blocking        1024 B c= 50 round=2/3    8377.4 req/s
+h1 stream requests          10240 B c= 50 round=2/3    1323.9 req/s
+h1 stream wreq_blocking    131072 B c=150 round=2/3    3738.0 req/s
+h1 stream pycurl            65536 B c= 50 round=2/3    2625.0 req/s
+h1 stream curl_cffi_blocking   131072 B c=150 round=2/3     437.6 req/s
+h1 stream wreq_blocking_st    65536 B c=150 round=2/3    3354.1 req/s
+h1 stream curl_cffi_blocking  2097152 B c=150 round=2/3     119.6 req/s
+h1 stream wreq_blocking   2097152 B c= 50 round=2/3    1261.0 req/s
+h1 full   curl_cffi_blocking   131072 B c= 50 round=2/3     491.6 req/s
+h1 full   pycurl           131072 B c=150 round=2/3    2413.6 req/s
+h1 full   ry_blocking     2097152 B c=150 round=2/3    1842.6 req/s
+h1 full   curl_cffi_blocking  4194304 B c=150 round=2/3      90.0 req/s
+h1 full   wreq_blocking     65536 B c=100 round=2/3   12481.9 req/s
+h1 stream curl_cffi_blocking    10240 B c= 10 round=2/3     536.6 req/s
+h1 stream curl_cffi_blocking  4194304 B c= 50 round=2/3      68.0 req/s
+h1 full   pycurl          4194304 B c=150 round=2/3     111.6 req/s
+h1 full   curl_cffi_blocking     1024 B c=100 round=2/3     574.5 req/s
+h1 stream pycurl            10240 B c= 10 round=2/3    7233.1 req/s
+h1 full   niquests_blocking   131072 B c= 50 round=2/3     817.2 req/s
+h1 full   httpx_blocking  1048576 B c=100 round=2/3     185.0 req/s
+h1 stream ry_blocking       65536 B c=100 round=2/3    3284.9 req/s
+h1 full   curl_cffi_blocking     1024 B c= 50 round=2/3     578.7 req/s
+h1 stream requests         131072 B c=150 round=2/3     629.0 req/s
+h1 stream wreq_blocking_st  1048576 B c=150 round=2/3     685.6 req/s
+h1 full   httpx_blocking   131072 B c= 50 round=2/3     856.6 req/s
+h1 stream httpx_blocking  4194304 B c=150 round=2/3      47.6 req/s
+h1 full   niquests_blocking  1048576 B c= 50 round=2/3     194.4 req/s
+h1 full   httpx_blocking    10240 B c=150 round=2/3    1763.0 req/s
+h1 stream requests        4194304 B c= 50 round=2/3      51.1 req/s
+h1 stream httpx_blocking   131072 B c= 10 round=2/3     645.8 req/s
+h1 stream ry_blocking      131072 B c=100 round=2/3    3223.2 req/s
+h1 full   wreq_blocking      1024 B c= 10 round=2/3   19587.8 req/s
+h1 full   wreq_blocking    131072 B c= 10 round=2/3   17775.5 req/s
+h1 stream ry_blocking        1024 B c= 50 round=2/3    5161.7 req/s
+h1 full   httpx_blocking  1048576 B c= 10 round=2/3     183.3 req/s
+h1 full   httpx_blocking    10240 B c=100 round=2/3    1778.9 req/s
+h1 stream ry_blocking      131072 B c=150 round=2/3    3023.6 req/s
+h1 full   niquests_blocking     1024 B c=100 round=2/3    1530.4 req/s
+h1 stream wreq_blocking_st  4194304 B c=100 round=2/3     277.8 req/s
+h1 full   wreq_blocking_st  1048576 B c= 50 round=2/3    1434.5 req/s
+h1 full   wreq_blocking    131072 B c=150 round=2/3   10111.0 req/s
+h1 stream wreq_blocking_st    10240 B c= 50 round=2/3    7236.1 req/s
+h1 full   requests          65536 B c=100 round=2/3     995.4 req/s
+h1 full   pycurl          4194304 B c= 50 round=2/3     113.7 req/s
+h1 stream curl_cffi_blocking   131072 B c= 50 round=2/3     441.4 req/s
+h1 full   pycurl          1048576 B c= 10 round=2/3     431.4 req/s
+h1 stream wreq_blocking_st   131072 B c=150 round=2/3    2949.2 req/s
+h1 full   wreq_blocking   1048576 B c= 10 round=2/3    4316.8 req/s
+h1 full   ry_blocking     4194304 B c= 50 round=2/3     989.8 req/s
+h1 stream requests        1048576 B c=150 round=2/3     159.5 req/s
+h1 full   requests        2097152 B c=100 round=2/3     106.2 req/s
+h1 full   pycurl            65536 B c= 10 round=2/3    4658.7 req/s
+h1 stream pycurl          2097152 B c=100 round=2/3     160.5 req/s
+h1 stream niquests_blocking  4194304 B c= 10 round=2/3      51.0 req/s
+h1 stream pycurl          4194304 B c=150 round=2/3      84.8 req/s
+h1 full   ry_blocking       65536 B c= 50 round=2/3    8293.2 req/s
+h1 stream wreq_blocking     65536 B c=150 round=2/3    3682.4 req/s
+h1 full   ry_blocking       10240 B c=100 round=2/3    7359.1 req/s
+h1 stream wreq_blocking_st  4194304 B c= 50 round=2/3     274.6 req/s
+h1 stream curl_cffi_blocking    65536 B c= 50 round=2/3     468.7 req/s
+h1 full   wreq_blocking     10240 B c= 50 round=2/3   15981.6 req/s
+h1 full   curl_cffi_blocking     1024 B c= 10 round=2/3     570.5 req/s
+h1 stream ry_blocking      131072 B c= 10 round=2/3    3480.9 req/s
+h1 stream wreq_blocking_st  2097152 B c=100 round=2/3     450.9 req/s
+h1 stream pycurl            65536 B c= 10 round=2/3    2585.9 req/s
+h1 stream niquests_blocking    65536 B c= 50 round=2/3     811.1 req/s
+h1 full   ry_blocking       65536 B c=100 round=2/3    7599.3 req/s
+h1 stream requests           1024 B c= 50 round=2/3    1363.9 req/s
+h1 stream wreq_blocking   4194304 B c=150 round=2/3     873.2 req/s
+h1 stream niquests_blocking  1048576 B c= 50 round=2/3     157.5 req/s
+h1 stream curl_cffi_blocking  1048576 B c= 10 round=2/3     186.6 req/s
+h1 full   httpx_blocking  2097152 B c=100 round=2/3      95.3 req/s
+h1 stream wreq_blocking_st     1024 B c=100 round=2/3    7209.4 req/s
+h1 stream wreq_blocking     10240 B c=100 round=2/3    6864.9 req/s
+h1 stream wreq_blocking     65536 B c= 50 round=2/3    4061.9 req/s
+h1 full   curl_cffi_blocking    65536 B c=150 round=2/3     520.9 req/s
+h1 full   ry_blocking     2097152 B c=100 round=2/3    1888.2 req/s
+h1 stream niquests_blocking  1048576 B c= 10 round=2/3     158.7 req/s
+h1 full   wreq_blocking_st  2097152 B c= 10 round=2/3     906.4 req/s
+h1 stream wreq_blocking   2097152 B c= 10 round=2/3    1288.6 req/s
+h1 full   httpx_blocking    65536 B c=100 round=2/3    1119.9 req/s
+h1 full   requests           1024 B c= 10 round=2/3    1502.9 req/s
+h1 stream wreq_blocking_st    65536 B c= 10 round=2/3    3804.1 req/s
+h1 full   niquests_blocking    65536 B c= 50 round=2/3    1047.4 req/s
+h1 stream requests           1024 B c= 10 round=2/3    1388.9 req/s
+h1 full   pycurl          1048576 B c= 50 round=2/3     446.1 req/s
+h1 full   niquests_blocking  4194304 B c= 50 round=2/3      54.6 req/s
+h1 full   wreq_blocking_st    65536 B c= 10 round=2/3   15380.2 req/s
+h1 stream requests        1048576 B c= 10 round=2/3     159.9 req/s
+h1 stream wreq_blocking   4194304 B c=100 round=2/3     880.3 req/s
+h1 stream pycurl          1048576 B c=100 round=2/3     286.9 req/s
+h1 full   niquests_blocking   131072 B c=150 round=2/3     749.0 req/s
+h1 stream ry_blocking       65536 B c=150 round=2/3    3179.1 req/s
+h1 stream ry_blocking       10240 B c=150 round=2/3    4790.5 req/s
+h1 stream niquests_blocking     1024 B c=100 round=2/3    1362.5 req/s
+h1 stream pycurl          4194304 B c= 10 round=2/3      84.0 req/s
+h1 stream niquests_blocking    10240 B c= 50 round=2/3    1382.9 req/s
+h1 stream niquests_blocking    65536 B c=150 round=2/3     782.5 req/s
+h1 stream ry_blocking     1048576 B c=150 round=2/3    1164.0 req/s
+h1 full   requests        4194304 B c=150 round=2/3      55.1 req/s
+h1 full   niquests_blocking  2097152 B c=100 round=2/3     105.2 req/s
+h1 full   wreq_blocking   1048576 B c=100 round=2/3    3953.3 req/s
+h1 stream ry_blocking       10240 B c= 10 round=2/3    5601.9 req/s
+h1 full   niquests_blocking    10240 B c= 10 round=2/3    1410.5 req/s
+h1 stream httpx_blocking  2097152 B c=100 round=2/3      83.9 req/s
+h1 stream wreq_blocking      1024 B c= 10 round=2/3    8220.4 req/s
+h1 full   wreq_blocking   4194304 B c=100 round=2/3     937.0 req/s
+h1 full   wreq_blocking   2097152 B c= 10 round=2/3    2315.2 req/s
+h1 full   httpx_blocking   131072 B c= 10 round=2/3     866.8 req/s
+h1 stream wreq_blocking_st     1024 B c=150 round=2/3    6704.6 req/s
+h1 full   ry_blocking        1024 B c=100 round=2/3    7875.6 req/s
+h1 stream pycurl           131072 B c=100 round=2/3    1826.6 req/s
+h1 stream pycurl           131072 B c= 50 round=2/3    1843.8 req/s
+h1 full   niquests_blocking  1048576 B c= 10 round=2/3     194.8 req/s
+h1 stream httpx_blocking    10240 B c=100 round=2/3    1433.0 req/s
+h1 full   niquests_blocking  2097152 B c=150 round=2/3     104.4 req/s
+h1 stream wreq_blocking_st  4194304 B c=150 round=2/3     280.7 req/s
+h1 full   requests           1024 B c= 50 round=2/3    1481.4 req/s
+h1 full   wreq_blocking_st     1024 B c=100 round=2/3   14902.8 req/s
+h1 full   curl_cffi_blocking  1048576 B c= 10 round=2/3     241.1 req/s
+h1 full   requests        4194304 B c= 50 round=2/3      54.9 req/s
+h1 full   wreq_blocking_st    10240 B c=100 round=2/3   14490.3 req/s
+h1 stream niquests_blocking  4194304 B c=100 round=2/3      51.8 req/s
+h1 stream wreq_blocking_st   131072 B c= 10 round=2/3    3504.7 req/s
+h1 full   niquests_blocking    65536 B c=100 round=2/3    1034.3 req/s
+h1 stream requests           1024 B c=100 round=2/3    1266.5 req/s
+h1 stream ry_blocking     4194304 B c= 50 round=2/3     774.9 req/s
+h1 stream requests          65536 B c= 10 round=2/3     794.6 req/s
+h1 stream pycurl           131072 B c=150 round=2/3    1745.9 req/s
+h1 stream httpx_blocking     1024 B c=100 round=2/3    1484.2 req/s
+h1 full   httpx_blocking     1024 B c= 10 round=2/3    1852.7 req/s
+h1 full   curl_cffi_blocking  2097152 B c=100 round=2/3     151.4 req/s
+h1 full   httpx_blocking    65536 B c= 10 round=2/3    1191.3 req/s
+h1 stream wreq_blocking      1024 B c= 50 round=2/3    7138.8 req/s
+h1 full   wreq_blocking_st    10240 B c=150 round=2/3   12191.4 req/s
+h1 full   requests         131072 B c= 50 round=2/3     795.3 req/s
+h1 full   pycurl           131072 B c=100 round=2/3    2626.1 req/s
+h1 stream ry_blocking       10240 B c=100 round=2/3    4865.5 req/s
+h1 full   ry_blocking     2097152 B c= 10 round=2/3    2343.6 req/s
+h1 stream httpx_blocking  1048576 B c=150 round=2/3     144.2 req/s
+h1 stream pycurl            10240 B c=150 round=2/3    5814.0 req/s
+h1 stream curl_cffi_blocking     1024 B c= 50 round=2/3     540.6 req/s
+h1 full   ry_blocking      131072 B c=150 round=2/3    6599.5 req/s
+h1 full   ry_blocking      131072 B c=100 round=2/3    7097.2 req/s
+h1 stream requests          65536 B c= 50 round=2/3     743.2 req/s
+h1 stream wreq_blocking      1024 B c=150 round=2/3    6281.5 req/s
+h1 full   requests          10240 B c=100 round=2/3    1433.8 req/s
+h1 stream requests          65536 B c=150 round=2/3     762.0 req/s
+h1 full   pycurl            65536 B c=150 round=2/3    4081.6 req/s
+h1 stream curl_cffi_blocking    10240 B c=150 round=2/3     531.9 req/s
+h1 stream httpx_blocking     1024 B c= 10 round=2/3    1577.9 req/s
+h1 full   wreq_blocking   2097152 B c= 50 round=2/3    2049.7 req/s
+h1 stream requests        2097152 B c= 10 round=2/3      92.4 req/s
+h1 stream niquests_blocking   131072 B c= 10 round=2/3     681.8 req/s
+h1 stream curl_cffi_blocking  1048576 B c=150 round=2/3     186.0 req/s
+h1 full   ry_blocking       65536 B c= 10 round=2/3    9196.9 req/s
+h1 stream httpx_blocking    65536 B c=100 round=2/3     771.1 req/s
+h1 full   wreq_blocking   2097152 B c=150 round=2/3    1844.2 req/s
+h1 full   requests          65536 B c= 50 round=2/3    1035.3 req/s
+h1 stream httpx_blocking  2097152 B c= 50 round=2/3      85.2 req/s
+h1 stream wreq_blocking     10240 B c= 10 round=2/3    8233.8 req/s
+h1 full   pycurl            10240 B c= 50 round=2/3   11929.0 req/s
+h1 stream httpx_blocking   131072 B c=100 round=2/3     623.4 req/s
+h1 full   pycurl           131072 B c= 10 round=2/3    2836.2 req/s
+h1 full   httpx_blocking  1048576 B c= 50 round=2/3     186.4 req/s
+h1 stream curl_cffi_blocking     1024 B c= 10 round=2/3     540.9 req/s
+h1 full   niquests_blocking    65536 B c= 10 round=2/3    1112.3 req/s
+h1 full   ry_blocking     4194304 B c=100 round=2/3     947.8 req/s
+h1 stream wreq_blocking_st    65536 B c= 50 round=2/3    3888.9 req/s
+h1 full   wreq_blocking_st  4194304 B c= 50 round=2/3     466.3 req/s
+h1 full   httpx_blocking  4194304 B c=100 round=2/3      50.2 req/s
+h1 stream requests        2097152 B c=150 round=2/3      94.2 req/s
+h1 full   pycurl          1048576 B c=100 round=2/3     428.2 req/s
+h1 full   pycurl            10240 B c= 10 round=2/3   13550.4 req/s
+h1 full   wreq_blocking     65536 B c= 50 round=2/3   15038.8 req/s
+h1 stream curl_cffi_blocking    65536 B c=150 round=2/3     470.4 req/s
+h1 stream wreq_blocking_st     1024 B c= 10 round=2/3    8169.4 req/s
+h1 full   requests        4194304 B c=100 round=2/3      55.1 req/s
+h1 full   wreq_blocking_st    10240 B c= 50 round=2/3   17327.3 req/s
+h1 full   curl_cffi_blocking  2097152 B c=150 round=2/3     156.2 req/s
+h1 stream wreq_blocking_st  1048576 B c=100 round=2/3     689.7 req/s
+h1 stream curl_cffi_blocking     1024 B c=150 round=2/3     536.9 req/s
+h1 stream wreq_blocking     10240 B c= 50 round=2/3    7055.0 req/s
+h1 full   curl_cffi_blocking  4194304 B c=100 round=2/3      87.2 req/s
+h1 full   wreq_blocking_st  2097152 B c=100 round=2/3     865.2 req/s
+h1 stream ry_blocking     4194304 B c=150 round=2/3     742.2 req/s
+h1 stream requests          10240 B c= 10 round=2/3    1358.8 req/s
+h1 stream curl_cffi_blocking  1048576 B c=100 round=2/3     183.4 req/s
+h1 stream requests        4194304 B c= 10 round=2/3      50.7 req/s
+h1 full   wreq_blocking      1024 B c=100 round=2/3   13175.3 req/s
+h1 full   niquests_blocking   131072 B c= 10 round=2/3     865.8 req/s
+h1 stream niquests_blocking    10240 B c=100 round=2/3    1376.4 req/s
+h1 full   niquests_blocking  1048576 B c=100 round=2/3     195.9 req/s
+h1 stream curl_cffi_blocking    10240 B c= 50 round=2/3     537.4 req/s
+h1 full   curl_cffi_blocking  2097152 B c= 10 round=2/3     152.3 req/s
+h1 full   ry_blocking       10240 B c=150 round=2/3    6825.8 req/s
+h1 full   ry_blocking     2097152 B c= 50 round=2/3    2002.4 req/s
+h1 full   wreq_blocking     65536 B c=150 round=2/3   10931.9 req/s
+h1 stream pycurl          4194304 B c=100 round=2/3      84.0 req/s
+h1 stream pycurl             1024 B c= 50 round=2/3    6696.1 req/s
+h1 full   requests        1048576 B c=100 round=2/3     191.9 req/s
+h1 stream wreq_blocking   2097152 B c=150 round=2/3    1165.6 req/s
+h1 stream wreq_blocking   1048576 B c=100 round=2/3    1330.7 req/s
+h1 stream curl_cffi_blocking     1024 B c=100 round=2/3     537.9 req/s
+h1 stream wreq_blocking    131072 B c= 10 round=2/3    4370.7 req/s
+h1 stream niquests_blocking    10240 B c= 10 round=2/3    1420.2 req/s
+h1 full   wreq_blocking_st  2097152 B c=150 round=2/3     855.9 req/s
+h1 full   httpx_blocking  4194304 B c= 50 round=2/3      50.7 req/s
+h1 full   wreq_blocking_st  4194304 B c=150 round=2/3     457.7 req/s
+h1 stream niquests_blocking   131072 B c=150 round=2/3     610.7 req/s
+h1 stream niquests_blocking  1048576 B c=100 round=2/3     159.7 req/s
+h1 full   niquests_blocking     1024 B c= 50 round=2/3    1541.2 req/s
+h1 stream wreq_blocking_st  2097152 B c= 50 round=2/3     473.4 req/s
+h1 stream httpx_blocking     1024 B c=150 round=2/3    1474.8 req/s
+h1 full   httpx_blocking  4194304 B c= 10 round=2/3      49.6 req/s
+h1 full   niquests_blocking    65536 B c=150 round=2/3    1019.6 req/s
+h1 full   ry_blocking       10240 B c= 10 round=2/3    9296.1 req/s
+h1 stream wreq_blocking_st  4194304 B c= 10 round=2/3     295.7 req/s
+h1 stream niquests_blocking     1024 B c=150 round=2/3    1344.5 req/s
+h1 full   requests        1048576 B c=150 round=2/3     193.7 req/s
+h1 stream niquests_blocking  2097152 B c=100 round=2/3      94.5 req/s
+h1 stream ry_blocking        1024 B c=150 round=2/3    4575.1 req/s
+h1 full   requests         131072 B c= 10 round=2/3     808.1 req/s
+h1 full   httpx_blocking    65536 B c= 50 round=2/3    1147.6 req/s
+h1 stream ry_blocking     2097152 B c= 50 round=2/3    1047.8 req/s
+h1 stream ry_blocking      131072 B c= 50 round=2/3    3349.4 req/s
+h1 full   ry_blocking     4194304 B c= 10 round=2/3    1070.7 req/s
+h1 full   curl_cffi_blocking    10240 B c=100 round=2/3     576.1 req/s
+h1 stream wreq_blocking   4194304 B c= 50 round=2/3     956.2 req/s
+h1 full   httpx_blocking  2097152 B c=150 round=2/3      99.9 req/s
+h1 full   curl_cffi_blocking     1024 B c=150 round=2/3     567.1 req/s
+h1 full   requests          10240 B c=150 round=2/3    1422.4 req/s
+h1 full   wreq_blocking_st  4194304 B c=100 round=2/3     463.7 req/s
+h1 stream requests          65536 B c=100 round=2/3     767.1 req/s
+h1 full   wreq_blocking      1024 B c=150 round=2/3   11676.9 req/s
+h1 full   curl_cffi_blocking  2097152 B c= 50 round=2/3     152.6 req/s
+h1 stream pycurl            10240 B c=100 round=2/3    6258.4 req/s
+h1 full   wreq_blocking_st    65536 B c=150 round=2/3   11929.9 req/s
+h1 stream httpx_blocking  4194304 B c= 10 round=2/3      46.0 req/s
+h1 full   pycurl            10240 B c=150 round=2/3    9540.8 req/s
+h1 full   httpx_blocking   131072 B c=150 round=2/3     833.6 req/s
+h1 full   niquests_blocking    10240 B c=100 round=2/3    1529.4 req/s
+h1 stream httpx_blocking    65536 B c= 50 round=2/3     792.3 req/s
+h1 full   requests        2097152 B c= 10 round=2/3     104.4 req/s
+h1 stream niquests_blocking    65536 B c= 10 round=2/3     823.0 req/s
+h1 stream requests           1024 B c=150 round=2/3    1279.1 req/s
+h1 stream niquests_blocking  2097152 B c= 10 round=2/3      92.9 req/s
+h1 full   wreq_blocking   2097152 B c=100 round=2/3    2000.2 req/s
+h1 stream httpx_blocking   131072 B c=150 round=2/3     614.6 req/s
+h1 full   pycurl             1024 B c= 50 round=2/3   12110.4 req/s
+h1 full   pycurl          1048576 B c=150 round=2/3     427.0 req/s
+h1 stream requests        1048576 B c= 50 round=2/3     157.5 req/s
+h1 full   niquests_blocking     1024 B c= 10 round=2/3    1599.3 req/s
+h1 stream pycurl             1024 B c= 10 round=2/3    7025.1 req/s
+h1 stream ry_blocking     1048576 B c= 10 round=2/3    1250.7 req/s
+h1 full   requests        2097152 B c=150 round=2/3     104.4 req/s
+h1 stream wreq_blocking_st    10240 B c=150 round=2/3    6578.2 req/s
+h1 full   niquests_blocking  4194304 B c= 10 round=2/3      53.9 req/s
+h1 full   wreq_blocking     10240 B c=150 round=2/3   11603.1 req/s
+h1 full   pycurl          2097152 B c=100 round=2/3     223.7 req/s
+h1 full   requests        4194304 B c= 10 round=2/3      54.7 req/s
+h1 full   wreq_blocking_st     1024 B c= 50 round=2/3   17237.7 req/s
+h1 full   curl_cffi_blocking  1048576 B c=150 round=2/3     244.4 req/s
+h1 stream curl_cffi_blocking  4194304 B c= 10 round=2/3      69.6 req/s
+h1 stream requests        2097152 B c=100 round=2/3      94.2 req/s
+h1 stream pycurl          2097152 B c=150 round=2/3     160.0 req/s
+h1 full   wreq_blocking     65536 B c= 10 round=2/3   18398.0 req/s
+h1 full   requests           1024 B c=150 round=2/3    1379.5 req/s
+h1 stream wreq_blocking_st     1024 B c= 50 round=2/3    7561.7 req/s
+h1 stream wreq_blocking_st  1048576 B c= 50 round=2/3     736.0 req/s
+h1 stream pycurl          1048576 B c= 10 round=2/3     286.9 req/s
+h1 stream wreq_blocking     10240 B c=150 round=2/3    6219.9 req/s
+h1 full   httpx_blocking   131072 B c=100 round=2/3     841.5 req/s
+h1 full   niquests_blocking  4194304 B c=150 round=2/3      54.6 req/s
+h1 full   wreq_blocking_st  1048576 B c= 10 round=2/3    1516.4 req/s
+h1 full   pycurl          2097152 B c= 50 round=2/3     229.3 req/s
+h1 full   requests           1024 B c=100 round=2/3    1407.0 req/s
+h1 full   pycurl            65536 B c=100 round=2/3    4265.4 req/s
+h1 full   requests          65536 B c=150 round=2/3     973.5 req/s
+h1 full   niquests_blocking    10240 B c= 50 round=2/3    1577.9 req/s
+h1 stream httpx_blocking  1048576 B c= 10 round=2/3     143.4 req/s
+h1 full   httpx_blocking  4194304 B c=150 round=2/3      51.5 req/s
+h1 full   curl_cffi_blocking  1048576 B c=100 round=2/3     240.8 req/s
+h1 full   pycurl            65536 B c= 50 round=2/3    4499.4 req/s
+h1 full   httpx_blocking  1048576 B c=150 round=2/3     188.5 req/s
+h1 full   ry_blocking      131072 B c= 50 round=2/3    7838.2 req/s
+h1 full   wreq_blocking_st  2097152 B c= 50 round=2/3     867.7 req/s
+h1 full   httpx_blocking    65536 B c=150 round=2/3    1073.4 req/s
+h1 stream pycurl            10240 B c= 50 round=2/3    6560.1 req/s
+h1 full   wreq_blocking     10240 B c= 10 round=2/3   19178.1 req/s
+h1 full   ry_blocking     1048576 B c= 10 round=2/3    5072.9 req/s
+h1 full   httpx_blocking     1024 B c=100 round=2/3    1774.2 req/s
+h1 stream niquests_blocking  1048576 B c=150 round=2/3     159.3 req/s
+h1 full   httpx_blocking    10240 B c= 50 round=2/3    1836.4 req/s
+h1 stream niquests_blocking    65536 B c=100 round=2/3     795.4 req/s
+h1 full   requests          10240 B c= 50 round=2/3    1397.8 req/s
+h1 full   pycurl          2097152 B c=150 round=2/3     218.3 req/s
+h1 full   requests         131072 B c=100 round=2/3     779.0 req/s
+h1 full   ry_blocking        1024 B c=150 round=2/3    7108.0 req/s
+h1 stream ry_blocking       65536 B c= 50 round=2/3    3368.1 req/s
+h1 full   wreq_blocking_st    65536 B c= 50 round=2/3   15192.3 req/s
+h1 stream ry_blocking     1048576 B c=100 round=2/3    1229.0 req/s
+h1 stream httpx_blocking    65536 B c=150 round=2/3     769.9 req/s
+h1 stream requests        1048576 B c=100 round=2/3     159.5 req/s
+h1 full   curl_cffi_blocking    65536 B c= 50 round=2/3     529.5 req/s
+h1 stream curl_cffi_blocking    65536 B c= 10 round=2/3     471.4 req/s
+h1 full   niquests_blocking  2097152 B c= 50 round=2/3     104.1 req/s
+h1 full   curl_cffi_blocking   131072 B c=100 round=2/3     490.1 req/s
+h1 stream pycurl          2097152 B c= 50 round=2/3     160.3 req/s
+h1 stream ry_blocking     1048576 B c= 50 round=2/3    1262.8 req/s
+h1 full   wreq_blocking   4194304 B c=150 round=2/3     886.5 req/s
+h1 stream curl_cffi_blocking    10240 B c=100 round=2/3     535.2 req/s
+h1 full   niquests_blocking  1048576 B c=150 round=2/3     193.2 req/s
+h1 full   ry_blocking     4194304 B c=150 round=2/3     879.4 req/s
+h1 stream requests         131072 B c=100 round=2/3     631.6 req/s
+h1 stream requests         131072 B c= 10 round=2/3     658.4 req/s
+h1 stream pycurl           131072 B c= 10 round=2/3    1891.6 req/s
+h1 stream wreq_blocking   2097152 B c=100 round=2/3    1199.9 req/s
+h1 stream niquests_blocking    10240 B c=150 round=2/3    1323.8 req/s
+h1 stream wreq_blocking_st   131072 B c=100 round=2/3    3110.0 req/s
+h1 stream pycurl          1048576 B c= 50 round=2/3     292.2 req/s
+h1 full   wreq_blocking_st   131072 B c= 50 round=2/3    9491.4 req/s
+h1 full   wreq_blocking      1024 B c= 50 round=2/3   16264.1 req/s
+h1 stream httpx_blocking    10240 B c= 10 round=2/3    1581.2 req/s
+h1 stream pycurl             1024 B c=150 round=2/3    5874.5 req/s
+h1 full   pycurl             1024 B c=150 round=2/3    9709.3 req/s
+h1 full   curl_cffi_blocking   131072 B c=150 round=2/3     482.2 req/s
+h1 full   niquests_blocking  2097152 B c= 10 round=2/3     105.3 req/s
+h1 full   requests         131072 B c=150 round=2/3     762.9 req/s
+h1 full   httpx_blocking     1024 B c= 50 round=2/3    1845.0 req/s
+h1 full   pycurl          2097152 B c= 10 round=2/3     220.6 req/s
+h1 stream requests          10240 B c=100 round=2/3    1284.4 req/s
+h1 full   wreq_blocking_st  4194304 B c= 10 round=2/3     442.9 req/s
+h1 full   wreq_blocking_st   131072 B c= 10 round=2/3   11614.6 req/s
+h1 full   wreq_blocking_st   131072 B c=100 round=2/3    9100.8 req/s
+h1 full   wreq_blocking_st   131072 B c=150 round=2/3    7913.1 req/s
+h1 full   ry_blocking        1024 B c= 10 round=2/3    8018.5 req/s
+h1 stream httpx_blocking    65536 B c= 10 round=2/3     801.3 req/s
+h1 full   wreq_blocking   1048576 B c= 50 round=2/3    4398.1 req/s
+h1 stream curl_cffi_blocking  4194304 B c=100 round=2/3      67.3 req/s
+h1 stream requests        4194304 B c=100 round=2/3      52.3 req/s
+h1 stream pycurl            65536 B c=150 round=2/3    2371.3 req/s
+h1 stream wreq_blocking_st  1048576 B c= 10 round=2/3     754.8 req/s
+h1 stream pycurl          4194304 B c= 50 round=2/3      85.2 req/s
+h1 full   wreq_blocking   2097152 B c= 10 round=3/3    2053.4 req/s
+h1 full   pycurl           131072 B c= 50 round=3/3    2766.9 req/s
+h1 full   pycurl             1024 B c= 50 round=3/3   12241.7 req/s
+h1 stream wreq_blocking_st     1024 B c= 10 round=3/3    8240.9 req/s
+h1 stream curl_cffi_blocking  2097152 B c= 50 round=3/3     118.0 req/s
+h1 stream httpx_blocking   131072 B c=100 round=3/3     627.4 req/s
+h1 stream wreq_blocking_st    65536 B c= 50 round=3/3    3777.2 req/s
+h1 stream requests          10240 B c=150 round=3/3    1241.4 req/s
+h1 stream wreq_blocking   1048576 B c= 10 round=3/3    1411.0 req/s
+h1 full   curl_cffi_blocking   131072 B c= 10 round=3/3     484.0 req/s
+h1 stream httpx_blocking  4194304 B c= 10 round=3/3      46.2 req/s
+h1 full   httpx_blocking    65536 B c=150 round=3/3    1121.6 req/s
+h1 stream pycurl            65536 B c=150 round=3/3    2376.6 req/s
+h1 full   wreq_blocking   1048576 B c=150 round=3/3    4097.9 req/s
+h1 stream pycurl           131072 B c=100 round=3/3    1797.3 req/s
+h1 full   ry_blocking      131072 B c= 50 round=3/3    7639.3 req/s
+h1 stream wreq_blocking_st     1024 B c=100 round=3/3    7222.9 req/s
+h1 stream wreq_blocking   2097152 B c=100 round=3/3    1210.3 req/s
+h1 stream wreq_blocking_st    10240 B c= 10 round=3/3    7739.2 req/s
+h1 full   requests          65536 B c= 10 round=3/3    1044.4 req/s
+h1 stream pycurl            65536 B c= 50 round=3/3    2586.8 req/s
+h1 full   curl_cffi_blocking  1048576 B c= 10 round=3/3     240.7 req/s
+h1 full   ry_blocking        1024 B c=100 round=3/3    7519.0 req/s
+h1 full   ry_blocking     1048576 B c= 50 round=3/3    4120.6 req/s
+h1 full   pycurl             1024 B c= 10 round=3/3   13437.3 req/s
+h1 full   wreq_blocking_st  1048576 B c=100 round=3/3    1484.8 req/s
+h1 full   pycurl            10240 B c=100 round=3/3   10579.9 req/s
+h1 stream ry_blocking     1048576 B c=100 round=3/3    1209.7 req/s
+h1 stream pycurl            10240 B c=100 round=3/3    6306.5 req/s
+h1 stream niquests_blocking  2097152 B c= 50 round=3/3      92.7 req/s
+h1 stream pycurl            10240 B c= 50 round=3/3    6689.8 req/s
+h1 full   niquests_blocking  4194304 B c= 50 round=3/3      54.8 req/s
+h1 stream niquests_blocking  1048576 B c=150 round=3/3     159.6 req/s
+h1 stream requests        1048576 B c=150 round=3/3     159.1 req/s
+h1 full   ry_blocking       65536 B c=150 round=3/3    6967.9 req/s
+h1 full   wreq_blocking_st    65536 B c= 50 round=3/3   15088.5 req/s
+h1 stream httpx_blocking    65536 B c=150 round=3/3     762.8 req/s
+h1 stream httpx_blocking    10240 B c= 10 round=3/3    1575.3 req/s
+h1 full   niquests_blocking  1048576 B c= 10 round=3/3     197.0 req/s
+h1 full   wreq_blocking     10240 B c= 10 round=3/3   18630.7 req/s
+h1 full   requests          65536 B c= 50 round=3/3    1010.6 req/s
+h1 full   wreq_blocking   1048576 B c=100 round=3/3    4074.0 req/s
+h1 stream curl_cffi_blocking  2097152 B c= 10 round=3/3     119.1 req/s
+h1 stream curl_cffi_blocking    10240 B c=100 round=3/3     537.3 req/s
+h1 full   wreq_blocking   1048576 B c= 50 round=3/3    4272.5 req/s
+h1 full   requests        2097152 B c=150 round=3/3     104.5 req/s
+h1 stream pycurl          4194304 B c=100 round=3/3      84.7 req/s
+h1 stream httpx_blocking     1024 B c= 10 round=3/3    1548.7 req/s
+h1 full   requests           1024 B c=100 round=3/3    1429.4 req/s
+h1 stream wreq_blocking   4194304 B c= 50 round=3/3     956.9 req/s
+h1 stream niquests_blocking  4194304 B c= 50 round=3/3      51.1 req/s
+h1 full   niquests_blocking  2097152 B c= 50 round=3/3     104.5 req/s
+h1 full   wreq_blocking_st   131072 B c= 50 round=3/3   10121.0 req/s
+h1 stream pycurl             1024 B c=150 round=3/3    6002.0 req/s
+h1 full   ry_blocking     2097152 B c= 10 round=3/3    2078.2 req/s
+h1 stream pycurl          4194304 B c=150 round=3/3      84.7 req/s
+h1 stream ry_blocking     4194304 B c= 10 round=3/3    1091.6 req/s
+h1 stream niquests_blocking  2097152 B c=100 round=3/3      94.2 req/s
+h1 full   wreq_blocking     10240 B c= 50 round=3/3   16274.6 req/s
+h1 stream requests          10240 B c= 10 round=3/3    1374.0 req/s
+h1 stream httpx_blocking  2097152 B c=100 round=3/3      84.0 req/s
+h1 stream niquests_blocking   131072 B c=150 round=3/3     644.0 req/s
+h1 stream curl_cffi_blocking     1024 B c= 50 round=3/3     540.0 req/s
+h1 stream pycurl          2097152 B c=150 round=3/3     159.5 req/s
+h1 full   niquests_blocking  1048576 B c=150 round=3/3     191.9 req/s
+h1 stream httpx_blocking  1048576 B c= 50 round=3/3     143.1 req/s
+h1 stream wreq_blocking_st  4194304 B c= 50 round=3/3     281.9 req/s
+h1 full   wreq_blocking   2097152 B c= 50 round=3/3    2105.2 req/s
+h1 full   pycurl            65536 B c=100 round=3/3    4164.3 req/s
+h1 stream wreq_blocking   1048576 B c= 50 round=3/3    1399.3 req/s
+h1 full   wreq_blocking     65536 B c=150 round=3/3   10819.7 req/s
+h1 stream httpx_blocking   131072 B c= 50 round=3/3     634.2 req/s
+h1 full   requests          10240 B c=150 round=3/3    1398.7 req/s
+h1 full   requests          10240 B c= 50 round=3/3    1484.7 req/s
+h1 full   pycurl             1024 B c=100 round=3/3   10838.9 req/s
+h1 stream wreq_blocking   2097152 B c= 50 round=3/3    1272.7 req/s
+h1 full   requests        1048576 B c=100 round=3/3     191.7 req/s
+h1 full   curl_cffi_blocking  4194304 B c= 10 round=3/3      88.6 req/s
+h1 full   wreq_blocking_st    10240 B c=150 round=3/3   12484.2 req/s
+h1 stream niquests_blocking   131072 B c= 50 round=3/3     656.0 req/s
+h1 stream httpx_blocking  1048576 B c=100 round=3/3     142.0 req/s
+h1 full   requests         131072 B c=100 round=3/3     779.2 req/s
+h1 full   ry_blocking     4194304 B c=150 round=3/3     860.4 req/s
+h1 stream wreq_blocking   4194304 B c=150 round=3/3     882.5 req/s
+h1 stream wreq_blocking_st  1048576 B c= 10 round=3/3     739.3 req/s
+h1 full   requests          65536 B c=150 round=3/3     988.1 req/s
+h1 full   pycurl          4194304 B c=150 round=3/3     110.4 req/s
+h1 stream wreq_blocking_st   131072 B c=150 round=3/3    2891.6 req/s
+h1 stream httpx_blocking    10240 B c=100 round=3/3    1507.6 req/s
+h1 full   pycurl           131072 B c=100 round=3/3    2640.1 req/s
+h1 stream curl_cffi_blocking   131072 B c=100 round=3/3     438.8 req/s
+h1 stream pycurl           131072 B c=150 round=3/3    1750.4 req/s
+h1 stream wreq_blocking_st    65536 B c=100 round=3/3    3612.7 req/s
+h1 full   niquests_blocking    10240 B c=100 round=3/3    1457.8 req/s
+h1 full   ry_blocking       10240 B c=100 round=3/3    7627.9 req/s
+h1 stream pycurl            65536 B c=100 round=3/3    2465.2 req/s
+h1 full   curl_cffi_blocking  1048576 B c=150 round=3/3     245.8 req/s
+h1 full   curl_cffi_blocking   131072 B c=150 round=3/3     484.1 req/s
+h1 full   curl_cffi_blocking  1048576 B c=100 round=3/3     241.0 req/s
+h1 full   niquests_blocking    65536 B c= 10 round=3/3    1065.8 req/s
+h1 full   curl_cffi_blocking    10240 B c=100 round=3/3     569.9 req/s
+h1 stream requests           1024 B c= 50 round=3/3    1337.5 req/s
+h1 full   niquests_blocking  4194304 B c=150 round=3/3      54.6 req/s
+h1 full   wreq_blocking     10240 B c=150 round=3/3   11403.9 req/s
+h1 full   wreq_blocking_st  4194304 B c=100 round=3/3     450.9 req/s
+h1 stream httpx_blocking     1024 B c=150 round=3/3    1449.7 req/s
+h1 stream wreq_blocking   4194304 B c=100 round=3/3     883.1 req/s
+h1 stream httpx_blocking    10240 B c=150 round=3/3    1478.0 req/s
+h1 full   wreq_blocking_st   131072 B c=100 round=3/3    8959.9 req/s
+h1 stream wreq_blocking     10240 B c= 10 round=3/3    8274.3 req/s
+h1 stream wreq_blocking_st    10240 B c= 50 round=3/3    7487.8 req/s
+h1 stream ry_blocking       10240 B c=100 round=3/3    5096.0 req/s
+h1 stream requests        2097152 B c=150 round=3/3      94.6 req/s
+h1 full   niquests_blocking     1024 B c=100 round=3/3    1550.6 req/s
+h1 full   ry_blocking     1048576 B c= 10 round=3/3    4967.6 req/s
+h1 stream wreq_blocking   2097152 B c= 10 round=3/3    1279.3 req/s
+h1 stream requests          65536 B c= 50 round=3/3     792.7 req/s
+h1 full   pycurl            10240 B c=150 round=3/3    9548.2 req/s
+h1 full   curl_cffi_blocking  2097152 B c= 50 round=3/3     151.9 req/s
+h1 full   wreq_blocking_st   131072 B c= 10 round=3/3   11631.5 req/s
+h1 stream ry_blocking       10240 B c= 50 round=3/3    5312.0 req/s
+h1 full   httpx_blocking     1024 B c= 10 round=3/3    1823.6 req/s
+h1 stream curl_cffi_blocking  2097152 B c=100 round=3/3     115.7 req/s
+h1 full   curl_cffi_blocking     1024 B c= 10 round=3/3     580.0 req/s
+h1 full   niquests_blocking    10240 B c= 50 round=3/3    1520.9 req/s
+h1 stream pycurl             1024 B c= 50 round=3/3    6811.2 req/s
+h1 full   niquests_blocking     1024 B c=150 round=3/3    1487.9 req/s
+h1 stream httpx_blocking    65536 B c= 10 round=3/3     798.6 req/s
+h1 full   ry_blocking     4194304 B c= 50 round=3/3    1003.0 req/s
+h1 full   wreq_blocking   4194304 B c=150 round=3/3     896.5 req/s
+h1 full   pycurl          4194304 B c= 10 round=3/3     110.6 req/s
+h1 stream curl_cffi_blocking  4194304 B c= 10 round=3/3      69.7 req/s
+h1 stream httpx_blocking    65536 B c= 50 round=3/3     798.8 req/s
+h1 full   requests        1048576 B c=150 round=3/3     191.0 req/s
+h1 stream wreq_blocking      1024 B c=150 round=3/3    6271.7 req/s
+h1 full   wreq_blocking_st    10240 B c= 10 round=3/3   20614.6 req/s
+h1 full   wreq_blocking    131072 B c= 50 round=3/3   14759.8 req/s
+h1 stream wreq_blocking   4194304 B c= 10 round=3/3     989.0 req/s
+h1 full   pycurl          4194304 B c=100 round=3/3     113.7 req/s
+h1 stream niquests_blocking   131072 B c=100 round=3/3     644.7 req/s
+h1 full   wreq_blocking    131072 B c=100 round=3/3   12075.9 req/s
+h1 full   ry_blocking      131072 B c=100 round=3/3    7272.0 req/s
+h1 stream curl_cffi_blocking    65536 B c= 50 round=3/3     470.8 req/s
+h1 full   wreq_blocking_st     1024 B c= 50 round=3/3   17389.9 req/s
+h1 stream niquests_blocking  2097152 B c=150 round=3/3      92.6 req/s
+h1 full   httpx_blocking  2097152 B c=100 round=3/3      97.9 req/s
+h1 full   niquests_blocking    65536 B c=100 round=3/3    1046.6 req/s
+h1 stream pycurl          2097152 B c=100 round=3/3     159.6 req/s
+h1 stream pycurl          2097152 B c= 50 round=3/3     161.5 req/s
+h1 full   requests           1024 B c= 50 round=3/3    1440.8 req/s
+h1 full   pycurl            10240 B c= 10 round=3/3   13458.1 req/s
+h1 full   curl_cffi_blocking    65536 B c=100 round=3/3     529.5 req/s
+h1 stream wreq_blocking     10240 B c= 50 round=3/3    7298.6 req/s
+h1 stream niquests_blocking   131072 B c= 10 round=3/3     678.8 req/s
+h1 stream wreq_blocking   2097152 B c=150 round=3/3    1179.2 req/s
+h1 full   niquests_blocking     1024 B c= 10 round=3/3    1629.1 req/s
+h1 full   niquests_blocking  1048576 B c=100 round=3/3     193.5 req/s
+h1 stream niquests_blocking    10240 B c=100 round=3/3    1340.9 req/s
+h1 stream niquests_blocking    65536 B c=100 round=3/3     793.7 req/s
+h1 full   requests         131072 B c=150 round=3/3     768.4 req/s
+h1 stream wreq_blocking      1024 B c= 10 round=3/3    7930.7 req/s
+h1 stream requests         131072 B c= 50 round=3/3     643.9 req/s
+h1 stream wreq_blocking_st  2097152 B c= 50 round=3/3     448.0 req/s
+h1 full   httpx_blocking    10240 B c=150 round=3/3    1700.5 req/s
+h1 stream curl_cffi_blocking  4194304 B c=150 round=3/3      69.6 req/s
+h1 stream wreq_blocking     65536 B c=100 round=3/3    3911.5 req/s
+h1 full   pycurl          4194304 B c= 50 round=3/3     113.7 req/s
+h1 full   ry_blocking        1024 B c=150 round=3/3    7090.8 req/s
+h1 stream wreq_blocking_st  4194304 B c= 10 round=3/3     299.2 req/s
+h1 full   ry_blocking     1048576 B c=150 round=3/3    3485.0 req/s
+h1 stream ry_blocking     1048576 B c= 10 round=3/3    1259.6 req/s
+h1 stream wreq_blocking_st    10240 B c=100 round=3/3    6970.4 req/s
+h1 stream httpx_blocking  1048576 B c=150 round=3/3     144.6 req/s
+h1 full   httpx_blocking  2097152 B c=150 round=3/3      99.6 req/s
+h1 full   wreq_blocking   4194304 B c= 50 round=3/3    1006.6 req/s
+h1 full   requests         131072 B c= 50 round=3/3     795.2 req/s
+h1 full   wreq_blocking_st  2097152 B c=100 round=3/3     865.3 req/s
+h1 full   wreq_blocking_st  4194304 B c= 50 round=3/3     456.2 req/s
+h1 full   pycurl            65536 B c= 50 round=3/3    4512.1 req/s
+h1 stream wreq_blocking    131072 B c=100 round=3/3    3928.6 req/s
+h1 stream wreq_blocking     65536 B c= 50 round=3/3    4194.8 req/s
+h1 stream niquests_blocking    65536 B c= 50 round=3/3     808.1 req/s
+h1 full   requests        2097152 B c= 50 round=3/3     104.7 req/s
+h1 full   httpx_blocking  4194304 B c= 50 round=3/3      51.0 req/s
+h1 full   niquests_blocking    10240 B c=150 round=3/3    1464.0 req/s
+h1 stream ry_blocking        1024 B c= 10 round=3/3    5643.2 req/s
+h1 stream niquests_blocking     1024 B c= 10 round=3/3    1434.6 req/s
+h1 full   ry_blocking        1024 B c= 10 round=3/3    9285.9 req/s
+h1 full   httpx_blocking  1048576 B c=100 round=3/3     183.8 req/s
+h1 full   requests          65536 B c=100 round=3/3     989.1 req/s
+h1 full   wreq_blocking_st  1048576 B c=150 round=3/3    1504.5 req/s
+h1 stream wreq_blocking_st  1048576 B c= 50 round=3/3     723.3 req/s
+h1 stream requests         131072 B c= 10 round=3/3     659.0 req/s
+h1 stream requests        4194304 B c=100 round=3/3      52.2 req/s
+h1 full   wreq_blocking_st    10240 B c= 50 round=3/3   17349.1 req/s
+h1 stream niquests_blocking  1048576 B c=100 round=3/3     159.3 req/s
+h1 stream niquests_blocking     1024 B c=100 round=3/3    1368.4 req/s
+h1 full   curl_cffi_blocking  2097152 B c= 10 round=3/3     152.2 req/s
+h1 full   pycurl            65536 B c=150 round=3/3    4103.5 req/s
+h1 stream curl_cffi_blocking     1024 B c= 10 round=3/3     540.4 req/s
+h1 full   wreq_blocking   2097152 B c=100 round=3/3    1913.7 req/s
+h1 stream requests        1048576 B c=100 round=3/3     158.1 req/s
+h1 full   wreq_blocking     65536 B c=100 round=3/3   12801.3 req/s
+h1 stream wreq_blocking   1048576 B c=100 round=3/3    1334.1 req/s
+h1 full   requests         131072 B c= 10 round=3/3     803.8 req/s
+h1 full   httpx_blocking  2097152 B c= 50 round=3/3      97.9 req/s
+h1 stream wreq_blocking      1024 B c= 50 round=3/3    7258.6 req/s
+h1 stream niquests_blocking  4194304 B c=100 round=3/3      52.0 req/s
+h1 stream ry_blocking     1048576 B c= 50 round=3/3    1257.8 req/s
+h1 full   httpx_blocking    65536 B c=100 round=3/3    1128.6 req/s
+h1 full   httpx_blocking   131072 B c= 50 round=3/3     865.5 req/s
+h1 stream ry_blocking       65536 B c=100 round=3/3    3173.2 req/s
+h1 full   pycurl           131072 B c=150 round=3/3    2542.6 req/s
+h1 full   ry_blocking       65536 B c= 10 round=3/3    8850.1 req/s
+h1 stream ry_blocking        1024 B c= 50 round=3/3    5310.7 req/s
+h1 full   curl_cffi_blocking     1024 B c=150 round=3/3     568.4 req/s
+h1 full   httpx_blocking   131072 B c=150 round=3/3     834.6 req/s
+h1 stream niquests_blocking    10240 B c= 50 round=3/3    1423.1 req/s
+h1 full   wreq_blocking   4194304 B c=100 round=3/3     978.1 req/s
+h1 stream httpx_blocking  2097152 B c=150 round=3/3      85.3 req/s
+h1 stream requests          65536 B c=150 round=3/3     759.2 req/s
+h1 stream wreq_blocking     65536 B c= 10 round=3/3    4397.0 req/s
+h1 full   curl_cffi_blocking  4194304 B c= 50 round=3/3      87.3 req/s
+h1 full   curl_cffi_blocking    65536 B c= 10 round=3/3     524.3 req/s
+h1 stream ry_blocking      131072 B c=150 round=3/3    3057.5 req/s
+h1 stream wreq_blocking     10240 B c=100 round=3/3    6656.0 req/s
+h1 stream pycurl            10240 B c=150 round=3/3    5856.5 req/s
+h1 full   niquests_blocking    10240 B c= 10 round=3/3    1593.6 req/s
+h1 full   pycurl          2097152 B c=100 round=3/3     221.3 req/s
+h1 stream pycurl          1048576 B c= 10 round=3/3     288.9 req/s
+h1 stream ry_blocking      131072 B c=100 round=3/3    3253.1 req/s
+h1 full   ry_blocking       10240 B c= 50 round=3/3    8257.3 req/s
+h1 stream wreq_blocking_st   131072 B c= 50 round=3/3    3309.2 req/s
+h1 full   wreq_blocking_st   131072 B c=150 round=3/3    8182.7 req/s
+h1 stream wreq_blocking_st   131072 B c= 10 round=3/3    3429.6 req/s
+h1 stream wreq_blocking_st    10240 B c=150 round=3/3    6480.1 req/s
+h1 stream ry_blocking     4194304 B c= 50 round=3/3     769.2 req/s
+h1 stream wreq_blocking    131072 B c= 10 round=3/3    4255.8 req/s
+h1 stream ry_blocking      131072 B c= 10 round=3/3    3509.3 req/s
+h1 full   curl_cffi_blocking    10240 B c= 50 round=3/3     574.5 req/s
+h1 full   httpx_blocking  4194304 B c= 10 round=3/3      49.8 req/s
+h1 stream pycurl            65536 B c= 10 round=3/3    2539.2 req/s
+h1 full   pycurl             1024 B c=150 round=3/3    9650.6 req/s
+h1 full   curl_cffi_blocking    65536 B c=150 round=3/3     522.6 req/s
+h1 stream ry_blocking       10240 B c=150 round=3/3    4763.4 req/s
+h1 full   requests           1024 B c=150 round=3/3    1366.3 req/s
+h1 full   httpx_blocking  1048576 B c=150 round=3/3     187.9 req/s
+h1 stream requests          65536 B c=100 round=3/3     767.0 req/s
+h1 full   requests        4194304 B c=100 round=3/3      55.8 req/s
+h1 full   requests        4194304 B c=150 round=3/3      55.2 req/s
+h1 stream niquests_blocking  4194304 B c=150 round=3/3      51.5 req/s
+h1 stream wreq_blocking_st  4194304 B c=150 round=3/3     278.3 req/s
+h1 stream ry_blocking        1024 B c=150 round=3/3    4796.3 req/s
+h1 stream requests        1048576 B c= 10 round=3/3     159.3 req/s
+h1 full   requests        2097152 B c= 10 round=3/3     105.5 req/s
+h1 stream requests        2097152 B c=100 round=3/3      93.8 req/s
+h1 full   httpx_blocking    10240 B c= 10 round=3/3    1833.3 req/s
+h1 stream requests          10240 B c=100 round=3/3    1287.0 req/s
+h1 stream curl_cffi_blocking    65536 B c=150 round=3/3     469.1 req/s
+h1 stream curl_cffi_blocking  4194304 B c=100 round=3/3      67.2 req/s
+h1 full   requests        2097152 B c=100 round=3/3     105.5 req/s
+h1 full   wreq_blocking   4194304 B c= 10 round=3/3    1008.3 req/s
+h1 full   pycurl           131072 B c= 10 round=3/3    2871.3 req/s
+h1 full   requests        1048576 B c= 50 round=3/3     194.7 req/s
+h1 stream curl_cffi_blocking     1024 B c=100 round=3/3     541.9 req/s
+h1 full   curl_cffi_blocking    10240 B c=150 round=3/3     566.3 req/s
+h1 stream wreq_blocking_st  2097152 B c=100 round=3/3     451.0 req/s
+h1 full   niquests_blocking  2097152 B c=100 round=3/3     105.1 req/s
+h1 stream requests         131072 B c=100 round=3/3     634.6 req/s
+h1 stream curl_cffi_blocking   131072 B c= 10 round=3/3     443.5 req/s
+h1 full   wreq_blocking_st  2097152 B c= 10 round=3/3     909.7 req/s
+h1 full   wreq_blocking    131072 B c=150 round=3/3    9954.0 req/s
+h1 stream ry_blocking     1048576 B c=150 round=3/3    1164.0 req/s
+h1 full   requests        4194304 B c= 10 round=3/3      54.0 req/s
+h1 full   wreq_blocking_st  2097152 B c= 50 round=3/3     847.2 req/s
+h1 stream httpx_blocking  4194304 B c= 50 round=3/3      47.2 req/s
+h1 stream niquests_blocking     1024 B c= 50 round=3/3    1417.9 req/s
+h1 full   requests        1048576 B c= 10 round=3/3     194.0 req/s
+h1 full   wreq_blocking_st     1024 B c=150 round=3/3   12367.1 req/s
+h1 full   httpx_blocking    65536 B c= 10 round=3/3    1194.7 req/s
+h1 full   niquests_blocking  2097152 B c= 10 round=3/3     105.7 req/s
+h1 stream curl_cffi_blocking    10240 B c=150 round=3/3     536.4 req/s
+h1 full   wreq_blocking_st    65536 B c= 10 round=3/3   15942.0 req/s
+h1 stream niquests_blocking     1024 B c=150 round=3/3    1346.4 req/s
+h1 full   httpx_blocking    10240 B c=100 round=3/3    1766.9 req/s
+h1 full   pycurl          1048576 B c= 50 round=3/3     443.9 req/s
+h1 stream pycurl             1024 B c= 10 round=3/3    7123.0 req/s
+h1 stream niquests_blocking    10240 B c=150 round=3/3    1342.7 req/s
+h1 full   wreq_blocking     65536 B c= 50 round=3/3   14529.0 req/s
+h1 full   niquests_blocking  4194304 B c= 10 round=3/3      54.4 req/s
+h1 full   pycurl            10240 B c= 50 round=3/3   12090.6 req/s
+h1 full   ry_blocking     2097152 B c=100 round=3/3    1990.1 req/s
+h1 stream requests          10240 B c= 50 round=3/3    1312.7 req/s
+h1 stream wreq_blocking_st  2097152 B c=150 round=3/3     441.2 req/s
+h1 full   requests        4194304 B c= 50 round=3/3      54.1 req/s
+h1 stream httpx_blocking  4194304 B c=150 round=3/3      47.6 req/s
+h1 stream wreq_blocking   1048576 B c=150 round=3/3    1323.3 req/s
+h1 stream niquests_blocking    65536 B c=150 round=3/3     790.0 req/s
+h1 full   niquests_blocking   131072 B c= 10 round=3/3     834.0 req/s
+h1 full   curl_cffi_blocking  2097152 B c=150 round=3/3     156.6 req/s
+h1 stream httpx_blocking  1048576 B c= 10 round=3/3     143.1 req/s
+h1 stream requests           1024 B c= 10 round=3/3    1364.0 req/s
+h1 full   wreq_blocking      1024 B c=100 round=3/3   13577.7 req/s
+h1 stream ry_blocking       10240 B c= 10 round=3/3    5712.7 req/s
+h1 full   curl_cffi_blocking    10240 B c= 10 round=3/3     572.4 req/s
+h1 stream ry_blocking       65536 B c= 50 round=3/3    3322.4 req/s
+h1 stream pycurl          1048576 B c= 50 round=3/3     293.5 req/s
+h1 stream curl_cffi_blocking  1048576 B c=100 round=3/3     181.4 req/s
+h1 stream niquests_blocking  2097152 B c= 10 round=3/3      93.7 req/s
+h1 full   curl_cffi_blocking  1048576 B c= 50 round=3/3     238.8 req/s
+h1 stream pycurl          1048576 B c=100 round=3/3     289.5 req/s
+h1 full   curl_cffi_blocking  4194304 B c=100 round=3/3      86.6 req/s
+h1 stream httpx_blocking    65536 B c=100 round=3/3     764.6 req/s
+h1 full   wreq_blocking_st     1024 B c=100 round=3/3   14505.2 req/s
+h1 full   curl_cffi_blocking  2097152 B c=100 round=3/3     150.2 req/s
+h1 stream niquests_blocking  4194304 B c= 10 round=3/3      50.6 req/s
+h1 stream curl_cffi_blocking     1024 B c=150 round=3/3     532.3 req/s
+h1 full   requests          10240 B c=100 round=3/3    1403.1 req/s
+h1 full   pycurl          1048576 B c=100 round=3/3     427.8 req/s
+h1 stream pycurl          1048576 B c=150 round=3/3     286.4 req/s
+h1 full   httpx_blocking  4194304 B c=100 round=3/3      50.5 req/s
+h1 full   ry_blocking     4194304 B c=100 round=3/3     977.3 req/s
+h1 full   wreq_blocking   2097152 B c=150 round=3/3    1891.5 req/s
+h1 full   wreq_blocking_st  2097152 B c=150 round=3/3     852.6 req/s
+h1 full   httpx_blocking   131072 B c= 10 round=3/3     868.9 req/s
+h1 full   wreq_blocking_st  1048576 B c= 10 round=3/3    1544.2 req/s
+h1 full   ry_blocking      131072 B c= 10 round=3/3    8873.1 req/s
+h1 stream ry_blocking       65536 B c=150 round=3/3    3122.4 req/s
+h1 stream ry_blocking        1024 B c=100 round=3/3    5019.2 req/s
+h1 stream niquests_blocking    10240 B c= 10 round=3/3    1444.9 req/s
+h1 stream wreq_blocking     65536 B c=150 round=3/3    3801.7 req/s
+h1 full   pycurl          1048576 B c= 10 round=3/3     439.9 req/s
+h1 full   ry_blocking       65536 B c=100 round=3/3    7538.8 req/s
+h1 stream requests        2097152 B c= 50 round=3/3      93.9 req/s
+h1 stream niquests_blocking  1048576 B c= 10 round=3/3     160.0 req/s
+h1 full   pycurl            65536 B c= 10 round=3/3    4783.0 req/s
+h1 full   ry_blocking     1048576 B c=100 round=3/3    3731.5 req/s
+h1 full   ry_blocking      131072 B c=150 round=3/3    6671.7 req/s
+h1 stream wreq_blocking_st  1048576 B c=100 round=3/3     692.5 req/s
+h1 full   ry_blocking       65536 B c= 50 round=3/3    7864.4 req/s
+h1 stream pycurl          4194304 B c= 50 round=3/3      85.3 req/s
+h1 stream pycurl          4194304 B c= 10 round=3/3      84.4 req/s
+h1 stream requests          65536 B c= 10 round=3/3     813.1 req/s
+h1 stream niquests_blocking    65536 B c= 10 round=3/3     830.4 req/s
+h1 full   niquests_blocking  4194304 B c=100 round=3/3      54.9 req/s
+h1 full   wreq_blocking_st  4194304 B c= 10 round=3/3     455.8 req/s
+h1 stream curl_cffi_blocking  1048576 B c= 50 round=3/3     184.5 req/s
+h1 stream httpx_blocking  2097152 B c= 10 round=3/3      84.3 req/s
+h1 full   wreq_blocking     65536 B c= 10 round=3/3   19289.7 req/s
+h1 full   curl_cffi_blocking   131072 B c=100 round=3/3     486.6 req/s
+h1 full   pycurl          2097152 B c= 50 round=3/3     225.1 req/s
+h1 full   wreq_blocking_st    65536 B c=100 round=3/3   13538.1 req/s
+h1 full   ry_blocking       10240 B c=150 round=3/3    6780.8 req/s
+h1 full   niquests_blocking   131072 B c=100 round=3/3     795.4 req/s
+h1 stream curl_cffi_blocking  4194304 B c= 50 round=3/3      68.2 req/s
+h1 stream curl_cffi_blocking    10240 B c= 50 round=3/3     546.5 req/s
+h1 full   pycurl          1048576 B c=150 round=3/3     426.6 req/s
+h1 stream curl_cffi_blocking  1048576 B c= 10 round=3/3     184.5 req/s
+h1 full   wreq_blocking     10240 B c=100 round=3/3   12994.3 req/s
+h1 full   curl_cffi_blocking     1024 B c= 50 round=3/3     577.4 req/s
+h1 stream curl_cffi_blocking   131072 B c= 50 round=3/3     449.0 req/s
+h1 full   wreq_blocking      1024 B c= 50 round=3/3   15887.9 req/s
+h1 stream requests         131072 B c=150 round=3/3     623.0 req/s
+h1 stream wreq_blocking      1024 B c=100 round=3/3    6669.4 req/s
+h1 full   wreq_blocking   1048576 B c= 10 round=3/3    5302.8 req/s
+h1 stream httpx_blocking     1024 B c=100 round=3/3    1485.9 req/s
+h1 full   niquests_blocking     1024 B c= 50 round=3/3    1599.1 req/s
+h1 full   httpx_blocking   131072 B c=100 round=3/3     840.7 req/s
+h1 stream requests        4194304 B c= 10 round=3/3      51.1 req/s
+h1 stream pycurl             1024 B c=100 round=3/3    6335.0 req/s
+h1 full   niquests_blocking   131072 B c= 50 round=3/3     800.9 req/s
+h1 stream httpx_blocking  2097152 B c= 50 round=3/3      85.0 req/s
+h1 full   wreq_blocking_st     1024 B c= 10 round=3/3   21926.7 req/s
+h1 full   niquests_blocking   131072 B c=150 round=3/3     788.3 req/s
+h1 full   wreq_blocking_st  4194304 B c=150 round=3/3     452.8 req/s
+h1 stream curl_cffi_blocking   131072 B c=150 round=3/3     438.3 req/s
+h1 stream curl_cffi_blocking    65536 B c=100 round=3/3     470.2 req/s
+h1 stream pycurl          2097152 B c= 10 round=3/3     159.1 req/s
+h1 full   wreq_blocking_st    65536 B c=150 round=3/3   11982.7 req/s
+h1 stream requests        4194304 B c=150 round=3/3      51.7 req/s
+h1 stream wreq_blocking_st    65536 B c= 10 round=3/3    4069.3 req/s
+h1 full   httpx_blocking     1024 B c= 50 round=3/3    1829.7 req/s
+h1 full   requests           1024 B c= 10 round=3/3    1509.8 req/s
+h1 full   pycurl          2097152 B c= 10 round=3/3     222.3 req/s
+h1 stream pycurl            10240 B c= 10 round=3/3    6876.1 req/s
+h1 stream wreq_blocking    131072 B c=150 round=3/3    3591.8 req/s
+h1 full   httpx_blocking  1048576 B c= 10 round=3/3     185.5 req/s
+h1 stream wreq_blocking_st     1024 B c=150 round=3/3    6679.4 req/s
+h1 stream ry_blocking      131072 B c= 50 round=3/3    3433.8 req/s
+h1 stream curl_cffi_blocking    65536 B c= 10 round=3/3     472.0 req/s
+h1 stream curl_cffi_blocking  1048576 B c=150 round=3/3     186.6 req/s
+h1 full   ry_blocking     2097152 B c= 50 round=3/3    2054.2 req/s
+h1 stream pycurl           131072 B c= 50 round=3/3    1820.6 req/s
+h1 full   httpx_blocking  1048576 B c= 50 round=3/3     186.2 req/s
+h1 full   niquests_blocking  2097152 B c=150 round=3/3     105.0 req/s
+h1 full   httpx_blocking     1024 B c=150 round=3/3    1720.9 req/s
+h1 full   niquests_blocking    65536 B c= 50 round=3/3    1047.4 req/s
+h1 full   ry_blocking     2097152 B c=150 round=3/3    1980.5 req/s
+h1 full   ry_blocking        1024 B c= 50 round=3/3    8334.1 req/s
+h1 full   httpx_blocking  2097152 B c= 10 round=3/3      96.9 req/s
+h1 stream httpx_blocking  4194304 B c=100 round=3/3      46.6 req/s
+h1 full   ry_blocking     4194304 B c= 10 round=3/3    1080.7 req/s
+h1 stream ry_blocking     2097152 B c= 10 round=3/3    1131.4 req/s
+h1 full   ry_blocking       10240 B c= 10 round=3/3    8972.0 req/s
+h1 full   wreq_blocking    131072 B c= 10 round=3/3   17270.3 req/s
+h1 stream ry_blocking     2097152 B c=100 round=3/3    1000.2 req/s
+h1 stream pycurl           131072 B c= 10 round=3/3    1910.1 req/s
+h1 stream httpx_blocking    10240 B c= 50 round=3/3    1524.0 req/s
+h1 stream httpx_blocking   131072 B c= 10 round=3/3     651.4 req/s
+h1 full   curl_cffi_blocking   131072 B c= 50 round=3/3     490.7 req/s
+h1 full   curl_cffi_blocking    65536 B c= 50 round=3/3     529.6 req/s
+h1 full   pycurl          2097152 B c=150 round=3/3     219.3 req/s
+h1 stream wreq_blocking_st  4194304 B c=100 round=3/3     276.3 req/s
+h1 stream ry_blocking     2097152 B c= 50 round=3/3    1032.8 req/s
+h1 stream wreq_blocking_st  1048576 B c=150 round=3/3     680.6 req/s
+h1 stream wreq_blocking     10240 B c=150 round=3/3    6237.6 req/s
+h1 stream requests        4194304 B c= 50 round=3/3      51.0 req/s
+h1 stream requests        1048576 B c= 50 round=3/3     158.0 req/s
+h1 stream ry_blocking     2097152 B c=150 round=3/3     986.6 req/s
+h1 full   httpx_blocking    65536 B c= 50 round=3/3    1150.9 req/s
+h1 full   curl_cffi_blocking     1024 B c=100 round=3/3     579.8 req/s
+h1 full   wreq_blocking      1024 B c=150 round=3/3   11575.1 req/s
+h1 stream httpx_blocking     1024 B c= 50 round=3/3    1543.6 req/s
+h1 full   curl_cffi_blocking  4194304 B c=150 round=3/3      90.1 req/s
+h1 stream wreq_blocking_st  2097152 B c= 10 round=3/3     487.3 req/s
+h1 full   wreq_blocking      1024 B c= 10 round=3/3   20442.1 req/s
+h1 stream wreq_blocking_st     1024 B c= 50 round=3/3    7732.5 req/s
+h1 stream requests           1024 B c=150 round=3/3    1246.5 req/s
+h1 full   httpx_blocking  4194304 B c=150 round=3/3      51.5 req/s
+h1 full   niquests_blocking  1048576 B c= 50 round=3/3     192.8 req/s
+h1 full   requests          10240 B c= 10 round=3/3    1507.5 req/s
+h1 stream ry_blocking     4194304 B c=150 round=3/3     742.6 req/s
+h1 stream curl_cffi_blocking    10240 B c= 10 round=3/3     541.3 req/s
+h1 stream requests        2097152 B c= 10 round=3/3      92.4 req/s
+h1 full   httpx_blocking     1024 B c=100 round=3/3    1777.7 req/s
+h1 stream wreq_blocking_st    65536 B c=150 round=3/3    3623.4 req/s
+h1 stream niquests_blocking  1048576 B c= 50 round=3/3     158.3 req/s
+h1 full   wreq_blocking_st    10240 B c=100 round=3/3   14733.3 req/s
+h1 stream ry_blocking     4194304 B c=100 round=3/3     748.9 req/s
+h1 full   wreq_blocking_st  1048576 B c= 50 round=3/3    1483.1 req/s
+h1 stream wreq_blocking    131072 B c= 50 round=3/3    4029.8 req/s
+h1 full   niquests_blocking    65536 B c=150 round=3/3    1028.9 req/s
+h1 stream ry_blocking       65536 B c= 10 round=3/3    3549.6 req/s
+h1 stream curl_cffi_blocking  2097152 B c=150 round=3/3     120.1 req/s
+h1 stream httpx_blocking   131072 B c=150 round=3/3     617.0 req/s
+h1 stream wreq_blocking_st   131072 B c=100 round=3/3    3126.2 req/s
+h1 full   httpx_blocking    10240 B c= 50 round=3/3    1778.9 req/s
+h1 stream requests           1024 B c=100 round=3/3    1178.5 req/s
+h2 stream wreq_blocking_st  2097152 B c= 10 round=1/3     352.9 req/s
+h2 stream httpx_blocking   131072 B c=150 round=1/3     369.3 req/s
+h2 stream curl_cffi_blocking  2097152 B c=150 round=1/3      81.1 req/s
+h2 full   wreq_blocking   1048576 B c=100 round=1/3    2481.0 req/s
+h2 full   wreq_blocking     10240 B c=100 round=1/3   13205.4 req/s
+h2 stream pycurl           131072 B c= 10 round=1/3    1290.1 req/s
+h2 stream httpx_blocking  2097152 B c=100 round=1/3      27.0 req/s
+h2 full   httpx_blocking     1024 B c=100 round=1/3    1524.3 req/s
+h2 full   wreq_blocking   4194304 B c= 50 round=1/3     709.4 req/s
+h2 full   pycurl            65536 B c= 10 round=1/3    3102.9 req/s
+h2 full   wreq_blocking_st     1024 B c= 10 round=1/3   18968.2 req/s
+h2 full   wreq_blocking    131072 B c=150 round=1/3    7797.9 req/s
+h2 full   niquests_blocking   131072 B c=150 round=1/3     430.9 req/s
+h2 full   wreq_blocking   4194304 B c= 10 round=1/3     815.6 req/s
+h2 stream curl_cffi_blocking  1048576 B c=150 round=1/3     141.7 req/s
+h2 full   httpx_blocking     1024 B c=150 round=1/3    1346.6 req/s
+h2 stream ry_blocking      131072 B c= 50 round=1/3    1897.3 req/s
+h2 full   pycurl           131072 B c=100 round=1/3    1635.5 req/s
+h2 full   wreq_blocking_st   131072 B c=100 round=1/3    4728.7 req/s
+h2 full   curl_cffi_blocking  1048576 B c= 50 round=1/3     156.7 req/s
+h2 full   niquests_blocking    10240 B c= 50 round=1/3    1317.1 req/s
+h2 stream wreq_blocking     65536 B c= 50 round=1/3    3680.3 req/s
+h2 stream ry_blocking      131072 B c= 10 round=1/3    1922.5 req/s
+h2 stream curl_cffi_blocking  4194304 B c= 50 round=1/3      43.0 req/s
+h2 stream curl_cffi_blocking     1024 B c=100 round=1/3     542.8 req/s
+h2 stream ry_blocking        1024 B c=100 round=1/3    4938.5 req/s
+h2 full   pycurl            10240 B c=150 round=1/3    9528.3 req/s
+h2 full   curl_cffi_blocking    10240 B c= 50 round=1/3     577.6 req/s
+h2 full   wreq_blocking   2097152 B c=150 round=1/3    1282.1 req/s
+h2 full   curl_cffi_blocking     1024 B c=100 round=1/3     574.9 req/s
+h2 full   niquests_blocking   131072 B c= 10 round=1/3     445.5 req/s
+h2 full   curl_cffi_blocking    10240 B c=150 round=1/3     558.6 req/s
+h2 stream wreq_blocking     10240 B c=100 round=1/3    6503.3 req/s
+h2 stream niquests_blocking  2097152 B c=150 round=1/3      38.0 req/s
+h2 full   pycurl             1024 B c=150 round=1/3    9327.9 req/s
+h2 stream niquests_blocking  2097152 B c= 10 round=1/3      37.2 req/s
+h2 stream curl_cffi_blocking  1048576 B c= 50 round=1/3     141.7 req/s
+h2 stream wreq_blocking     10240 B c=150 round=1/3    6074.4 req/s
+h2 stream pycurl           131072 B c=150 round=1/3    1243.8 req/s
+h2 full   pycurl          1048576 B c=100 round=1/3     226.6 req/s
+h2 stream ry_blocking     4194304 B c= 50 round=1/3     104.2 req/s
+h2 stream wreq_blocking_st  1048576 B c= 50 round=1/3     530.2 req/s
+h2 stream wreq_blocking   1048576 B c= 50 round=1/3    1054.6 req/s
+h2 stream httpx_blocking  4194304 B c= 10 round=1/3      13.5 req/s
+h2 stream niquests_blocking   131072 B c=150 round=1/3     425.0 req/s
+h2 stream wreq_blocking_st   131072 B c= 10 round=1/3    2490.0 req/s
+h2 stream httpx_blocking  1048576 B c=150 round=1/3      55.5 req/s
+h2 stream wreq_blocking_st     1024 B c= 10 round=1/3    6953.1 req/s
+h2 full   pycurl            10240 B c= 10 round=1/3   13073.8 req/s
+h2 full   ry_blocking     1048576 B c= 50 round=1/3     437.9 req/s
+h2 full   curl_cffi_blocking  2097152 B c= 10 round=1/3      90.1 req/s
+h2 stream niquests_blocking  1048576 B c=150 round=1/3      73.9 req/s
+h2 stream wreq_blocking_st  1048576 B c=100 round=1/3     502.8 req/s
+h2 full   curl_cffi_blocking    65536 B c=150 round=1/3     495.7 req/s
+h2 stream httpx_blocking     1024 B c= 50 round=1/3    1540.1 req/s
+h2 stream niquests_blocking  1048576 B c=100 round=1/3      72.2 req/s
+h2 stream ry_blocking       65536 B c= 10 round=1/3    2591.7 req/s
+h2 full   ry_blocking     1048576 B c=100 round=1/3     433.4 req/s
+h2 full   curl_cffi_blocking  4194304 B c=100 round=1/3      48.6 req/s
+h2 full   httpx_blocking  2097152 B c= 10 round=1/3      25.1 req/s
+h2 stream curl_cffi_blocking    10240 B c= 10 round=1/3     538.9 req/s
+h2 full   niquests_blocking  4194304 B c=100 round=1/3      18.8 req/s
+h2 full   curl_cffi_blocking  2097152 B c=150 round=1/3      91.9 req/s
+h2 full   curl_cffi_blocking  1048576 B c=100 round=1/3     156.5 req/s
+h2 stream niquests_blocking    10240 B c= 50 round=1/3    1317.5 req/s
+h2 full   wreq_blocking_st    10240 B c= 50 round=1/3   16099.8 req/s
+h2 full   httpx_blocking   131072 B c= 10 round=1/3     369.0 req/s
+h2 stream niquests_blocking    10240 B c=100 round=1/3    1262.8 req/s
+h2 stream wreq_blocking      1024 B c=100 round=1/3    6799.5 req/s
+h2 stream wreq_blocking   2097152 B c= 50 round=1/3     792.3 req/s
+h2 full   ry_blocking      131072 B c= 50 round=1/3    2731.2 req/s
+h2 stream ry_blocking       10240 B c=100 round=1/3    4993.5 req/s
+h2 full   curl_cffi_blocking    65536 B c=100 round=1/3     505.8 req/s
+h2 stream wreq_blocking_st   131072 B c=150 round=1/3    2176.3 req/s
+h2 stream wreq_blocking_st    65536 B c= 10 round=1/3    3004.8 req/s
+h2 stream curl_cffi_blocking  1048576 B c= 10 round=1/3     140.7 req/s
+h2 stream ry_blocking     4194304 B c=150 round=1/3     103.5 req/s
+h2 stream wreq_blocking   4194304 B c=150 round=1/3     505.4 req/s
+h2 stream curl_cffi_blocking    10240 B c=100 round=1/3     535.3 req/s
+h2 stream pycurl          1048576 B c=150 round=1/3     196.5 req/s
+h2 stream ry_blocking     2097152 B c=150 round=1/3     194.9 req/s
+h2 full   httpx_blocking   131072 B c=100 round=1/3     360.8 req/s
+h2 stream niquests_blocking   131072 B c= 10 round=1/3     440.5 req/s
+h2 stream httpx_blocking  4194304 B c=150 round=1/3      14.0 req/s
+h2 full   curl_cffi_blocking  4194304 B c= 10 round=1/3      48.6 req/s
+h2 stream wreq_blocking_st  1048576 B c=150 round=1/3     480.5 req/s
+h2 full   httpx_blocking  1048576 B c=150 round=1/3      52.2 req/s
+h2 stream wreq_blocking_st     1024 B c=150 round=1/3    6664.3 req/s
+h2 full   wreq_blocking_st  1048576 B c=100 round=1/3     818.4 req/s
+h2 stream niquests_blocking    10240 B c= 10 round=1/3    1132.8 req/s
+h2 full   wreq_blocking_st  1048576 B c= 10 round=1/3     917.6 req/s
+h2 full   httpx_blocking    65536 B c=150 round=1/3     616.0 req/s
+h2 full   wreq_blocking    131072 B c= 10 round=1/3   10763.5 req/s
+h2 stream ry_blocking     4194304 B c= 10 round=1/3     102.3 req/s
+h2 full   curl_cffi_blocking  1048576 B c=150 round=1/3     158.2 req/s
+h2 full   niquests_blocking  1048576 B c= 50 round=1/3      72.9 req/s
+h2 full   ry_blocking      131072 B c=100 round=1/3    2606.6 req/s
+h2 full   httpx_blocking    65536 B c= 10 round=1/3     633.6 req/s
+h2 full   pycurl             1024 B c= 10 round=1/3   13234.3 req/s
+h2 full   curl_cffi_blocking   131072 B c= 10 round=1/3     434.4 req/s
+h2 stream curl_cffi_blocking   131072 B c= 50 round=1/3     400.0 req/s
+h2 full   pycurl          4194304 B c= 10 round=1/3      55.1 req/s
+h2 stream niquests_blocking    65536 B c=100 round=1/3     674.2 req/s
+h2 stream pycurl           131072 B c=100 round=1/3    1263.7 req/s
+h2 stream wreq_blocking_st    65536 B c= 50 round=1/3    2926.7 req/s
+h2 stream niquests_blocking    65536 B c=150 round=1/3     668.0 req/s
+h2 full   httpx_blocking    10240 B c=150 round=1/3    1462.0 req/s
+h2 stream curl_cffi_blocking  2097152 B c= 10 round=1/3      80.7 req/s
+h2 stream wreq_blocking_st  4194304 B c=100 round=1/3     187.2 req/s
+h2 full   wreq_blocking_st  2097152 B c= 50 round=1/3     427.3 req/s
+h2 full   httpx_blocking  2097152 B c=100 round=1/3      23.4 req/s
+h2 full   niquests_blocking     1024 B c= 50 round=1/3    1327.9 req/s
+h2 full   pycurl          4194304 B c=100 round=1/3      57.4 req/s
+h2 stream ry_blocking     1048576 B c=150 round=1/3     343.5 req/s
+h2 stream httpx_blocking    65536 B c= 10 round=1/3     631.1 req/s
+h2 stream wreq_blocking_st  2097152 B c= 50 round=1/3     324.4 req/s
+h2 full   curl_cffi_blocking  1048576 B c= 10 round=1/3     156.2 req/s
+h2 stream niquests_blocking  1048576 B c= 10 round=1/3      71.3 req/s
+h2 full   wreq_blocking     10240 B c=150 round=1/3   11241.4 req/s
+h2 stream ry_blocking       10240 B c= 10 round=1/3    5672.0 req/s
+h2 full   curl_cffi_blocking    65536 B c= 10 round=1/3     501.1 req/s
+h2 stream pycurl            65536 B c=150 round=1/3    1929.5 req/s
+h2 full   pycurl          1048576 B c=150 round=1/3     225.7 req/s
+h2 full   wreq_blocking_st  1048576 B c= 50 round=1/3     889.1 req/s
+h2 full   httpx_blocking  1048576 B c=100 round=1/3      50.1 req/s
+h2 stream ry_blocking       65536 B c= 50 round=1/3    2512.0 req/s
+h2 stream httpx_blocking  2097152 B c= 10 round=1/3      27.2 req/s
+h2 stream curl_cffi_blocking    10240 B c=150 round=1/3     531.2 req/s
+h2 stream wreq_blocking_st  2097152 B c=100 round=1/3     319.2 req/s
+h2 stream pycurl          1048576 B c= 50 round=1/3     197.8 req/s
+h2 full   niquests_blocking  1048576 B c=100 round=1/3      73.1 req/s
+h2 full   wreq_blocking   4194304 B c=150 round=1/3     613.3 req/s
+h2 stream pycurl          4194304 B c= 50 round=1/3      50.2 req/s
+h2 stream pycurl          4194304 B c=150 round=1/3      50.4 req/s
+h2 full   niquests_blocking    10240 B c=150 round=1/3    1244.9 req/s
+h2 stream ry_blocking     2097152 B c=100 round=1/3     195.5 req/s
+h2 stream httpx_blocking    65536 B c=150 round=1/3     610.0 req/s
+h2 full   niquests_blocking  2097152 B c= 50 round=1/3      37.0 req/s
+h2 stream niquests_blocking  4194304 B c=150 round=1/3      19.1 req/s
+h2 full   wreq_blocking_st    65536 B c= 50 round=1/3    7355.4 req/s
+h2 full   ry_blocking       10240 B c=150 round=1/3    6987.9 req/s
+h2 stream httpx_blocking    10240 B c=100 round=1/3    1482.0 req/s
+h2 stream curl_cffi_blocking     1024 B c= 50 round=1/3     539.4 req/s
+h2 full   wreq_blocking_st     1024 B c=100 round=1/3   14579.5 req/s
+h2 stream ry_blocking      131072 B c=100 round=1/3    1799.3 req/s
+h2 full   wreq_blocking      1024 B c= 50 round=1/3   15925.5 req/s
+h2 full   wreq_blocking   1048576 B c= 50 round=1/3    2670.5 req/s
+h2 stream pycurl          2097152 B c= 10 round=1/3      96.9 req/s
+h2 stream wreq_blocking     10240 B c= 10 round=1/3    8000.3 req/s
+h2 stream niquests_blocking     1024 B c=100 round=1/3    1264.4 req/s
+h2 full   wreq_blocking_st    10240 B c=100 round=1/3   14458.6 req/s
+h2 full   wreq_blocking      1024 B c=100 round=1/3   13350.9 req/s
+h2 full   wreq_blocking   4194304 B c=100 round=1/3     683.0 req/s
+h2 stream wreq_blocking_st    10240 B c= 10 round=1/3    6335.5 req/s
+h2 full   ry_blocking     2097152 B c=150 round=1/3     221.0 req/s
+h2 full   wreq_blocking_st  1048576 B c=150 round=1/3     758.1 req/s
+h2 full   ry_blocking       10240 B c= 10 round=1/3    9056.5 req/s
+h2 stream pycurl          2097152 B c= 50 round=1/3     100.4 req/s
+h2 stream httpx_blocking  2097152 B c= 50 round=1/3      27.2 req/s
+h2 stream wreq_blocking_st    65536 B c=150 round=1/3    2586.8 req/s
+h2 stream curl_cffi_blocking  2097152 B c= 50 round=1/3      80.3 req/s
+h2 stream curl_cffi_blocking  4194304 B c= 10 round=1/3      43.3 req/s
+h2 full   curl_cffi_blocking    10240 B c= 10 round=1/3     575.8 req/s
+h2 stream ry_blocking     2097152 B c= 10 round=1/3     192.8 req/s
+h2 full   httpx_blocking  1048576 B c= 10 round=1/3      50.8 req/s
+h2 full   niquests_blocking  4194304 B c=150 round=1/3      19.2 req/s
+h2 full   curl_cffi_blocking     1024 B c= 10 round=1/3     570.3 req/s
+h2 full   curl_cffi_blocking    65536 B c= 50 round=1/3     495.4 req/s
+h2 full   pycurl            10240 B c= 50 round=1/3   11661.7 req/s
+h2 full   ry_blocking     1048576 B c=150 round=1/3     424.3 req/s
+h2 stream ry_blocking     2097152 B c= 50 round=1/3     196.4 req/s
+h2 stream wreq_blocking   2097152 B c=100 round=1/3     763.7 req/s
+h2 full   niquests_blocking    65536 B c=150 round=1/3     673.6 req/s
+h2 stream httpx_blocking  1048576 B c=100 round=1/3      53.7 req/s
+h2 stream wreq_blocking_st  4194304 B c= 10 round=1/3     192.3 req/s
+h2 full   niquests_blocking   131072 B c= 50 round=1/3     439.6 req/s
+h2 stream pycurl          4194304 B c= 10 round=1/3      48.8 req/s
+h2 full   wreq_blocking     65536 B c=100 round=1/3    8871.0 req/s
+h2 stream wreq_blocking   4194304 B c= 50 round=1/3     533.0 req/s
+h2 full   wreq_blocking    131072 B c= 50 round=1/3    9702.2 req/s
+h2 full   pycurl           131072 B c= 10 round=1/3    1644.8 req/s
+h2 full   ry_blocking      131072 B c= 10 round=1/3    2908.6 req/s
+h2 full   ry_blocking     4194304 B c=150 round=1/3     113.6 req/s
+h2 full   ry_blocking     1048576 B c= 10 round=1/3     450.8 req/s
+h2 stream ry_blocking       65536 B c=100 round=1/3    2440.2 req/s
+h2 stream niquests_blocking     1024 B c=150 round=1/3    1239.1 req/s
+h2 stream wreq_blocking    131072 B c= 10 round=1/3    3585.3 req/s
+h2 full   niquests_blocking  1048576 B c=150 round=1/3      74.6 req/s
+h2 full   ry_blocking     2097152 B c= 50 round=1/3     227.0 req/s
+h2 full   wreq_blocking     65536 B c=150 round=1/3    8524.4 req/s
+h2 stream wreq_blocking    131072 B c= 50 round=1/3    3543.9 req/s
+h2 stream niquests_blocking  2097152 B c= 50 round=1/3      37.0 req/s
+h2 stream httpx_blocking   131072 B c= 10 round=1/3     367.0 req/s
+h2 full   wreq_blocking_st     1024 B c= 50 round=1/3   16568.9 req/s
+h2 stream pycurl          2097152 B c=100 round=1/3     100.0 req/s
+h2 full   niquests_blocking  4194304 B c= 50 round=1/3      18.9 req/s
+h2 stream ry_blocking        1024 B c= 10 round=1/3    5595.1 req/s
+h2 stream niquests_blocking  4194304 B c=100 round=1/3      18.8 req/s
+h2 stream httpx_blocking  2097152 B c=150 round=1/3      27.9 req/s
+h2 stream wreq_blocking_st     1024 B c= 50 round=1/3    6726.4 req/s
+h2 full   httpx_blocking    65536 B c= 50 round=1/3     596.7 req/s
+h2 stream wreq_blocking     65536 B c=100 round=1/3    3433.9 req/s
+h2 full   wreq_blocking   2097152 B c=100 round=1/3    1328.0 req/s
+h2 full   curl_cffi_blocking    10240 B c=100 round=1/3     570.1 req/s
+h2 full   wreq_blocking   2097152 B c= 10 round=1/3    1565.5 req/s
+h2 stream curl_cffi_blocking    65536 B c=100 round=1/3     447.6 req/s
+h2 stream niquests_blocking   131072 B c=100 round=1/3     428.8 req/s
+h2 stream pycurl            65536 B c= 10 round=1/3    2050.9 req/s
+h2 stream httpx_blocking   131072 B c= 50 round=1/3     370.3 req/s
+h2 stream httpx_blocking    65536 B c= 50 round=1/3     625.4 req/s
+h2 full   httpx_blocking    65536 B c=100 round=1/3     606.8 req/s
+h2 full   wreq_blocking      1024 B c=150 round=1/3   11720.7 req/s
+h2 stream wreq_blocking    131072 B c=100 round=1/3    3372.1 req/s
+h2 full   wreq_blocking_st   131072 B c= 10 round=1/3    5464.4 req/s
+h2 stream wreq_blocking_st  2097152 B c=150 round=1/3     300.7 req/s
+h2 full   wreq_blocking   2097152 B c= 50 round=1/3    1433.4 req/s
+h2 stream ry_blocking     1048576 B c=100 round=1/3     344.1 req/s
+h2 stream wreq_blocking   2097152 B c=150 round=1/3     755.8 req/s
+h2 stream ry_blocking       65536 B c=150 round=1/3    2389.4 req/s
+h2 full   pycurl          2097152 B c= 50 round=1/3     113.1 req/s
+h2 stream wreq_blocking_st   131072 B c=100 round=1/3    2136.7 req/s
+h2 full   curl_cffi_blocking   131072 B c=100 round=1/3     435.7 req/s
+h2 full   niquests_blocking  2097152 B c= 10 round=1/3      37.0 req/s
+h2 stream niquests_blocking   131072 B c= 50 round=1/3     430.6 req/s
+h2 stream wreq_blocking_st    10240 B c=100 round=1/3    6019.9 req/s
+h2 stream wreq_blocking   1048576 B c= 10 round=1/3    1080.3 req/s
+h2 stream wreq_blocking   4194304 B c=100 round=1/3     501.8 req/s
+h2 stream httpx_blocking    10240 B c= 10 round=1/3    1562.4 req/s
+h2 full   ry_blocking     2097152 B c=100 round=1/3     225.9 req/s
+h2 full   pycurl          1048576 B c= 10 round=1/3     218.7 req/s
+h2 full   wreq_blocking_st   131072 B c= 50 round=1/3    5175.5 req/s
+h2 full   wreq_blocking     10240 B c= 50 round=1/3   15698.7 req/s
+h2 full   wreq_blocking_st    10240 B c= 10 round=1/3   17176.4 req/s
+h2 stream ry_blocking       10240 B c= 50 round=1/3    5216.6 req/s
+h2 stream wreq_blocking_st     1024 B c=100 round=1/3    6997.5 req/s
+h2 stream httpx_blocking  1048576 B c= 10 round=1/3      53.9 req/s
+h2 full   niquests_blocking    65536 B c= 50 round=1/3     647.0 req/s
+h2 full   httpx_blocking  1048576 B c= 50 round=1/3      50.7 req/s
+h2 full   pycurl           131072 B c=150 round=1/3    1620.7 req/s
+h2 stream wreq_blocking     10240 B c= 50 round=1/3    7151.0 req/s
+h2 stream httpx_blocking  4194304 B c=100 round=1/3      13.3 req/s
+h2 full   httpx_blocking     1024 B c= 50 round=1/3    1552.1 req/s
+h2 full   ry_blocking       65536 B c=100 round=1/3    4088.2 req/s
+h2 stream httpx_blocking  1048576 B c= 50 round=1/3      53.9 req/s
+h2 full   pycurl            65536 B c=100 round=1/3    2979.9 req/s
+h2 full   curl_cffi_blocking  4194304 B c= 50 round=1/3      48.5 req/s
+h2 stream pycurl          1048576 B c= 10 round=1/3     191.9 req/s
+h2 stream ry_blocking        1024 B c=150 round=1/3    4625.5 req/s
+h2 stream pycurl             1024 B c= 50 round=1/3    6609.9 req/s
+h2 stream wreq_blocking   4194304 B c= 10 round=1/3     545.4 req/s
+h2 stream niquests_blocking    65536 B c= 10 round=1/3     691.7 req/s
+h2 full   httpx_blocking  2097152 B c= 50 round=1/3      23.8 req/s
+h2 full   pycurl          2097152 B c=100 round=1/3     113.2 req/s
+h2 stream niquests_blocking     1024 B c= 50 round=1/3    1308.9 req/s
+h2 full   niquests_blocking   131072 B c=100 round=1/3     429.2 req/s
+h2 stream ry_blocking     4194304 B c=100 round=1/3     103.2 req/s
+h2 stream pycurl           131072 B c= 50 round=1/3    1314.3 req/s
+h2 stream wreq_blocking_st  1048576 B c= 10 round=1/3     527.7 req/s
+h2 full   curl_cffi_blocking     1024 B c= 50 round=1/3     579.2 req/s
+h2 stream pycurl          1048576 B c=100 round=1/3     197.3 req/s
+h2 stream httpx_blocking    65536 B c=100 round=1/3     607.6 req/s
+h2 stream niquests_blocking  4194304 B c= 10 round=1/3      18.7 req/s
+h2 full   ry_blocking        1024 B c=150 round=1/3    6903.1 req/s
+h2 full   pycurl          4194304 B c=150 round=1/3      58.5 req/s
+h2 full   niquests_blocking  2097152 B c=100 round=1/3      37.1 req/s
+h2 stream ry_blocking      131072 B c=150 round=1/3    1746.2 req/s
+h2 stream wreq_blocking_st    10240 B c= 50 round=1/3    6097.0 req/s
+h2 stream niquests_blocking    10240 B c=150 round=1/3    1240.9 req/s
+h2 full   httpx_blocking    10240 B c=100 round=1/3    1482.7 req/s
+h2 stream wreq_blocking   1048576 B c=100 round=1/3    1023.8 req/s
+h2 stream curl_cffi_blocking  2097152 B c=100 round=1/3      78.9 req/s
+h2 stream pycurl            10240 B c=100 round=1/3    6259.3 req/s
+h2 stream wreq_blocking      1024 B c= 10 round=1/3    8059.5 req/s
+h2 stream pycurl            10240 B c= 50 round=1/3    6399.4 req/s
+h2 stream ry_blocking       10240 B c=150 round=1/3    4736.7 req/s
+h2 full   wreq_blocking_st     1024 B c=150 round=1/3   12531.1 req/s
+h2 full   pycurl            65536 B c=150 round=1/3    2917.3 req/s
+h2 full   pycurl             1024 B c=100 round=1/3   10503.1 req/s
+h2 stream wreq_blocking_st    65536 B c=100 round=1/3    2633.9 req/s
+h2 full   wreq_blocking   1048576 B c=150 round=1/3    2418.2 req/s
+h2 full   wreq_blocking     10240 B c= 10 round=1/3   19115.9 req/s
+h2 full   httpx_blocking     1024 B c= 10 round=1/3    1594.3 req/s
+h2 stream httpx_blocking    10240 B c=150 round=1/3    1458.0 req/s
+h2 full   ry_blocking      131072 B c=150 round=1/3    2506.5 req/s
+h2 full   wreq_blocking_st  4194304 B c=100 round=1/3     206.8 req/s
+h2 full   wreq_blocking    131072 B c=100 round=1/3    9081.9 req/s
+h2 stream wreq_blocking      1024 B c= 50 round=1/3    7262.7 req/s
+h2 full   ry_blocking     4194304 B c= 10 round=1/3     109.0 req/s
+h2 stream wreq_blocking     65536 B c= 10 round=1/3    3779.8 req/s
+h2 full   ry_blocking       10240 B c=100 round=1/3    7623.4 req/s
+h2 full   pycurl          4194304 B c= 50 round=1/3      57.8 req/s
+h2 full   niquests_blocking     1024 B c= 10 round=1/3    1327.8 req/s
+h2 full   pycurl            10240 B c=100 round=1/3   10406.5 req/s
+h2 full   curl_cffi_blocking   131072 B c=150 round=1/3     432.2 req/s
+h2 full   ry_blocking        1024 B c=100 round=1/3    7733.4 req/s
+h2 full   ry_blocking       10240 B c= 50 round=1/3    8123.2 req/s
+h2 full   pycurl          2097152 B c= 10 round=1/3     110.1 req/s
+h2 full   wreq_blocking     65536 B c= 10 round=1/3   11833.0 req/s
+h2 full   niquests_blocking  2097152 B c=150 round=1/3      37.9 req/s
+h2 stream curl_cffi_blocking    10240 B c= 50 round=1/3     539.2 req/s
+h2 full   pycurl            65536 B c= 50 round=1/3    3159.3 req/s
+h2 full   curl_cffi_blocking  2097152 B c= 50 round=1/3      89.8 req/s
+h2 stream wreq_blocking     65536 B c=150 round=1/3    3369.0 req/s
+h2 stream httpx_blocking   131072 B c=100 round=1/3     364.3 req/s
+h2 stream curl_cffi_blocking    65536 B c=150 round=1/3     447.6 req/s
+h2 stream curl_cffi_blocking   131072 B c= 10 round=1/3     394.9 req/s
+h2 stream httpx_blocking     1024 B c=100 round=1/3    1515.2 req/s
+h2 full   ry_blocking       65536 B c=150 round=1/3    4029.8 req/s
+h2 stream curl_cffi_blocking   131072 B c=100 round=1/3     395.4 req/s
+h2 stream httpx_blocking     1024 B c= 10 round=1/3    1602.6 req/s
+h2 stream wreq_blocking      1024 B c=150 round=1/3    6345.6 req/s
+h2 full   httpx_blocking  4194304 B c=100 round=1/3      10.2 req/s
+h2 full   ry_blocking       65536 B c= 50 round=1/3    4412.3 req/s
+h2 full   wreq_blocking_st    10240 B c=150 round=1/3   12575.1 req/s
+h2 stream wreq_blocking   1048576 B c=150 round=1/3     987.9 req/s
+h2 full   niquests_blocking     1024 B c=100 round=1/3    1263.6 req/s
+h2 stream pycurl            65536 B c=100 round=1/3    1960.1 req/s
+h2 full   niquests_blocking  1048576 B c= 10 round=1/3      72.0 req/s
+h2 full   pycurl           131072 B c= 50 round=1/3    1685.0 req/s
+h2 stream curl_cffi_blocking     1024 B c=150 round=1/3     533.0 req/s
+h2 stream niquests_blocking  2097152 B c=100 round=1/3      37.0 req/s
+h2 full   wreq_blocking      1024 B c= 10 round=1/3   19319.0 req/s
+h2 stream httpx_blocking  4194304 B c= 50 round=1/3      13.5 req/s
+h2 full   ry_blocking        1024 B c= 10 round=1/3    9275.5 req/s
+h2 stream ry_blocking        1024 B c= 50 round=1/3    5288.7 req/s
+h2 full   wreq_blocking_st   131072 B c=150 round=1/3    4456.5 req/s
+h2 full   httpx_blocking   131072 B c= 50 round=1/3     359.7 req/s
+h2 stream pycurl            10240 B c=150 round=1/3    5749.9 req/s
+h2 stream niquests_blocking  1048576 B c= 50 round=1/3      72.1 req/s
+h2 full   curl_cffi_blocking     1024 B c=150 round=1/3     562.9 req/s
+h2 stream httpx_blocking     1024 B c=150 round=1/3    1448.7 req/s
+h2 stream wreq_blocking_st   131072 B c= 50 round=1/3    2323.6 req/s
+h2 full   httpx_blocking   131072 B c=150 round=1/3     362.5 req/s
+h2 stream httpx_blocking    10240 B c= 50 round=1/3    1499.9 req/s
+h2 stream pycurl             1024 B c=100 round=1/3    6222.1 req/s
+h2 full   pycurl             1024 B c= 50 round=1/3   11943.8 req/s
+h2 full   wreq_blocking_st  2097152 B c=150 round=1/3     414.6 req/s
+h2 stream niquests_blocking    65536 B c= 50 round=1/3     682.7 req/s
+h2 full   wreq_blocking_st    65536 B c= 10 round=1/3    7515.4 req/s
+h2 full   niquests_blocking    65536 B c=100 round=1/3     660.4 req/s
+h2 stream pycurl          2097152 B c=150 round=1/3      99.5 req/s
+h2 stream curl_cffi_blocking  4194304 B c=100 round=1/3      42.1 req/s
+h2 stream wreq_blocking_st  4194304 B c=150 round=1/3     179.8 req/s
+h2 full   httpx_blocking  4194304 B c= 50 round=1/3      10.2 req/s
+h2 stream wreq_blocking_st  4194304 B c= 50 round=1/3     189.6 req/s
+h2 full   niquests_blocking    10240 B c=100 round=1/3    1057.5 req/s
+h2 full   wreq_blocking_st  4194304 B c=150 round=1/3     211.8 req/s
+h2 full   niquests_blocking     1024 B c=150 round=1/3    1245.5 req/s
+h2 stream pycurl            65536 B c= 50 round=1/3    2020.0 req/s
+h2 full   httpx_blocking  2097152 B c=150 round=1/3      23.9 req/s
+h2 stream curl_cffi_blocking    65536 B c= 10 round=1/3     448.2 req/s
+h2 stream ry_blocking     1048576 B c= 50 round=1/3     343.9 req/s
+h2 stream niquests_blocking  4194304 B c= 50 round=1/3      18.8 req/s
+h2 stream curl_cffi_blocking     1024 B c= 10 round=1/3     542.2 req/s
+h2 full   wreq_blocking   1048576 B c= 10 round=1/3    2889.6 req/s
+h2 stream wreq_blocking_st    10240 B c=150 round=1/3    6285.0 req/s
+h2 stream pycurl          4194304 B c=100 round=1/3      49.7 req/s
+h2 full   wreq_blocking_st  4194304 B c= 10 round=1/3     218.8 req/s
+h2 full   curl_cffi_blocking   131072 B c= 50 round=1/3     433.4 req/s
+h2 stream curl_cffi_blocking   131072 B c=150 round=1/3     394.0 req/s
+h2 stream pycurl            10240 B c= 10 round=1/3    6745.8 req/s
+h2 full   wreq_blocking_st  2097152 B c=100 round=1/3     401.5 req/s
+h2 full   wreq_blocking_st    65536 B c=100 round=1/3    6748.8 req/s
+h2 full   ry_blocking     2097152 B c= 10 round=1/3     216.3 req/s
+h2 stream curl_cffi_blocking    65536 B c= 50 round=1/3     447.5 req/s
+h2 full   httpx_blocking  4194304 B c= 10 round=1/3      11.2 req/s
+h2 full   ry_blocking     4194304 B c= 50 round=1/3     110.8 req/s
+h2 full   wreq_blocking_st  4194304 B c= 50 round=1/3     202.1 req/s
+h2 full   curl_cffi_blocking  4194304 B c=150 round=1/3      49.6 req/s
+h2 stream pycurl             1024 B c=150 round=1/3    5363.5 req/s
+h2 stream wreq_blocking    131072 B c=150 round=1/3    3231.7 req/s
+h2 full   niquests_blocking  4194304 B c= 10 round=1/3      18.6 req/s
+h2 full   pycurl          1048576 B c= 50 round=1/3     225.0 req/s
+h2 full   curl_cffi_blocking  2097152 B c=100 round=1/3      88.7 req/s
+h2 full   pycurl          2097152 B c=150 round=1/3     119.0 req/s
+h2 full   ry_blocking       65536 B c= 10 round=1/3    4735.1 req/s
+h2 full   httpx_blocking    10240 B c= 50 round=1/3    1537.9 req/s
+h2 stream niquests_blocking     1024 B c= 10 round=1/3    1320.5 req/s
+h2 full   niquests_blocking    10240 B c= 10 round=1/3    1333.5 req/s
+h2 full   ry_blocking        1024 B c= 50 round=1/3    8208.3 req/s
+h2 stream wreq_blocking   2097152 B c= 10 round=1/3     827.9 req/s
+h2 full   httpx_blocking  4194304 B c=150 round=1/3      10.4 req/s
+h2 full   ry_blocking     4194304 B c=100 round=1/3     110.9 req/s
+h2 full   wreq_blocking     65536 B c= 50 round=1/3   10165.7 req/s
+h2 full   httpx_blocking    10240 B c= 10 round=1/3    1572.3 req/s
+h2 full   wreq_blocking_st    65536 B c=150 round=1/3    6672.4 req/s
+h2 stream pycurl             1024 B c= 10 round=1/3    6760.2 req/s
+h2 stream ry_blocking     1048576 B c= 10 round=1/3     344.8 req/s
+h2 stream curl_cffi_blocking  4194304 B c=150 round=1/3      43.4 req/s
+h2 full   niquests_blocking    65536 B c= 10 round=1/3     691.6 req/s
+h2 full   wreq_blocking_st  2097152 B c= 10 round=1/3     448.6 req/s
+h2 stream curl_cffi_blocking  1048576 B c=100 round=1/3     138.0 req/s
+h2 stream niquests_blocking  2097152 B c= 10 round=2/3      36.6 req/s
+h2 full   wreq_blocking    131072 B c= 50 round=2/3    9758.6 req/s
+h2 stream ry_blocking     1048576 B c=150 round=2/3     339.7 req/s
+h2 full   ry_blocking     1048576 B c=150 round=2/3     426.9 req/s
+h2 full   wreq_blocking_st    10240 B c= 50 round=2/3   15466.2 req/s
+h2 full   niquests_blocking  2097152 B c=150 round=2/3      38.0 req/s
+h2 stream pycurl          4194304 B c= 50 round=2/3      50.2 req/s
+h2 stream httpx_blocking  1048576 B c= 50 round=2/3      53.7 req/s
+h2 full   pycurl           131072 B c= 10 round=2/3    1641.6 req/s
+h2 full   niquests_blocking   131072 B c=150 round=2/3     422.5 req/s
+h2 full   httpx_blocking  1048576 B c=100 round=2/3      49.5 req/s
+h2 stream niquests_blocking   131072 B c=100 round=2/3     421.1 req/s
+h2 stream wreq_blocking    131072 B c= 10 round=2/3    3628.5 req/s
+h2 stream wreq_blocking   2097152 B c= 10 round=2/3     804.3 req/s
+h2 stream pycurl           131072 B c= 50 round=2/3    1303.5 req/s
+h2 stream curl_cffi_blocking    65536 B c= 50 round=2/3     454.6 req/s
+h2 stream httpx_blocking    10240 B c= 50 round=2/3    1527.8 req/s
+h2 stream pycurl             1024 B c= 10 round=2/3    7117.1 req/s
+h2 stream pycurl          2097152 B c= 50 round=2/3     100.2 req/s
+h2 stream wreq_blocking_st  1048576 B c=100 round=2/3     511.6 req/s
+h2 full   wreq_blocking_st    65536 B c=150 round=2/3    6622.7 req/s
+h2 stream wreq_blocking_st    65536 B c=100 round=2/3    2771.3 req/s
+h2 full   httpx_blocking   131072 B c= 50 round=2/3     355.1 req/s
+h2 full   niquests_blocking  1048576 B c= 10 round=2/3      72.3 req/s
+h2 full   pycurl            10240 B c= 50 round=2/3   11838.9 req/s
+h2 stream wreq_blocking_st   131072 B c=150 round=2/3    2127.0 req/s
+h2 full   httpx_blocking  2097152 B c= 50 round=2/3      23.7 req/s
+h2 stream pycurl          4194304 B c=150 round=2/3      50.1 req/s
+h2 full   curl_cffi_blocking  4194304 B c=150 round=2/3      49.6 req/s
+h2 full   curl_cffi_blocking   131072 B c=150 round=2/3     431.4 req/s
+h2 stream curl_cffi_blocking     1024 B c= 50 round=2/3     540.9 req/s
+h2 full   wreq_blocking_st  1048576 B c= 10 round=2/3     938.2 req/s
+h2 full   ry_blocking       10240 B c=150 round=2/3    6912.8 req/s
+h2 stream wreq_blocking_st  4194304 B c= 50 round=2/3     185.1 req/s
+h2 full   ry_blocking        1024 B c=100 round=2/3    7648.3 req/s
+h2 stream httpx_blocking  4194304 B c= 10 round=2/3      13.5 req/s
+h2 full   wreq_blocking     10240 B c= 50 round=2/3   15031.0 req/s
+h2 full   wreq_blocking   4194304 B c= 50 round=2/3     739.3 req/s
+h2 stream ry_blocking       10240 B c= 10 round=2/3    5357.0 req/s
+h2 full   httpx_blocking   131072 B c=100 round=2/3     364.0 req/s
+h2 full   ry_blocking       10240 B c= 50 round=2/3    8019.9 req/s
+h2 full   curl_cffi_blocking     1024 B c= 50 round=2/3     577.5 req/s
+h2 stream pycurl          1048576 B c=150 round=2/3     198.2 req/s
+h2 stream httpx_blocking  1048576 B c= 10 round=2/3      54.2 req/s
+h2 stream wreq_blocking_st  2097152 B c=150 round=2/3     306.3 req/s
+h2 stream wreq_blocking_st  4194304 B c=100 round=2/3     191.2 req/s
+h2 stream wreq_blocking   4194304 B c=100 round=2/3     506.1 req/s
+h2 full   wreq_blocking    131072 B c= 10 round=2/3   11214.9 req/s
+h2 stream wreq_blocking   2097152 B c= 50 round=2/3     799.8 req/s
+h2 stream curl_cffi_blocking    65536 B c=150 round=2/3     445.8 req/s
+h2 full   niquests_blocking    65536 B c= 10 round=2/3     697.3 req/s
+h2 full   ry_blocking     4194304 B c=100 round=2/3     113.7 req/s
+h2 full   wreq_blocking   2097152 B c=100 round=2/3    1274.1 req/s
+h2 stream pycurl            65536 B c= 50 round=2/3    2020.5 req/s
+h2 stream wreq_blocking_st  1048576 B c= 50 round=2/3     520.6 req/s
+h2 full   wreq_blocking_st  2097152 B c= 50 round=2/3     438.8 req/s
+h2 full   curl_cffi_blocking    65536 B c=100 round=2/3     492.3 req/s
+h2 stream httpx_blocking    65536 B c=150 round=2/3     608.5 req/s
+h2 full   httpx_blocking  2097152 B c=100 round=2/3      23.4 req/s
+h2 stream httpx_blocking   131072 B c=150 round=2/3     367.6 req/s
+h2 stream niquests_blocking  4194304 B c= 50 round=2/3      18.8 req/s
+h2 stream niquests_blocking  4194304 B c=100 round=2/3      18.8 req/s
+h2 stream ry_blocking     4194304 B c= 50 round=2/3     103.9 req/s
+h2 full   wreq_blocking     10240 B c= 10 round=2/3   19137.2 req/s
+h2 full   ry_blocking       65536 B c=100 round=2/3    4109.5 req/s
+h2 stream httpx_blocking    10240 B c= 10 round=2/3    1557.5 req/s
+h2 full   httpx_blocking  2097152 B c= 10 round=2/3      25.1 req/s
+h2 stream niquests_blocking     1024 B c=150 round=2/3    1233.6 req/s
+h2 stream httpx_blocking  2097152 B c= 10 round=2/3      27.0 req/s
+h2 stream wreq_blocking_st  2097152 B c= 50 round=2/3     341.8 req/s
+h2 full   wreq_blocking_st  4194304 B c= 50 round=2/3     203.8 req/s
+h2 stream niquests_blocking  1048576 B c=100 round=2/3      72.1 req/s
+h2 full   httpx_blocking    10240 B c=100 round=2/3    1464.5 req/s
+h2 stream pycurl            10240 B c=100 round=2/3    6163.8 req/s
+h2 stream httpx_blocking    65536 B c= 50 round=2/3     637.1 req/s
+h2 full   ry_blocking     4194304 B c= 10 round=2/3     108.9 req/s
+h2 stream httpx_blocking   131072 B c= 50 round=2/3     371.6 req/s
+h2 stream ry_blocking      131072 B c=150 round=2/3    1767.3 req/s
+h2 full   niquests_blocking    10240 B c=150 round=2/3    1233.1 req/s
+h2 stream wreq_blocking_st     1024 B c=150 round=2/3    6364.2 req/s
+h2 stream niquests_blocking     1024 B c= 10 round=2/3    1322.0 req/s
+h2 full   ry_blocking     2097152 B c= 50 round=2/3     227.3 req/s
+h2 stream ry_blocking        1024 B c= 10 round=2/3    5499.2 req/s
+h2 full   wreq_blocking     10240 B c=100 round=2/3   12804.2 req/s
+h2 full   wreq_blocking_st  1048576 B c= 50 round=2/3     890.3 req/s
+h2 stream httpx_blocking  1048576 B c=100 round=2/3      53.3 req/s
+h2 stream httpx_blocking     1024 B c= 50 round=2/3    1451.2 req/s
+h2 full   niquests_blocking    65536 B c=150 round=2/3     669.1 req/s
+h2 stream wreq_blocking_st   131072 B c= 10 round=2/3    2382.8 req/s
+h2 stream wreq_blocking_st     1024 B c=100 round=2/3    6992.5 req/s
+h2 stream wreq_blocking   1048576 B c= 50 round=2/3    1045.8 req/s
+h2 stream httpx_blocking   131072 B c=100 round=2/3     364.1 req/s
+h2 full   httpx_blocking    65536 B c=150 round=2/3     610.2 req/s
+h2 full   httpx_blocking    65536 B c= 10 round=2/3     631.6 req/s
+h2 full   httpx_blocking    65536 B c=100 round=2/3     606.1 req/s
+h2 stream curl_cffi_blocking    65536 B c= 10 round=2/3     451.0 req/s
+h2 full   ry_blocking        1024 B c= 50 round=2/3    8204.2 req/s
+h2 full   wreq_blocking      1024 B c=150 round=2/3   11668.8 req/s
+h2 full   pycurl          4194304 B c= 10 round=2/3      55.1 req/s
+h2 stream wreq_blocking_st   131072 B c=100 round=2/3    2230.9 req/s
+h2 full   ry_blocking     1048576 B c= 10 round=2/3     435.5 req/s
+h2 stream pycurl           131072 B c= 10 round=2/3    1272.1 req/s
+h2 stream niquests_blocking    65536 B c=100 round=2/3     665.5 req/s
+h2 stream niquests_blocking   131072 B c= 10 round=2/3     440.8 req/s
+h2 stream ry_blocking       10240 B c=100 round=2/3    4969.6 req/s
+h2 full   curl_cffi_blocking  1048576 B c= 10 round=2/3     156.2 req/s
+h2 stream ry_blocking     1048576 B c=100 round=2/3     343.6 req/s
+h2 stream wreq_blocking      1024 B c= 10 round=2/3    8105.0 req/s
+h2 full   wreq_blocking_st     1024 B c=150 round=2/3   12507.0 req/s
+h2 full   ry_blocking       65536 B c= 10 round=2/3    4817.7 req/s
+h2 full   httpx_blocking  4194304 B c=100 round=2/3      10.2 req/s
+h2 stream pycurl           131072 B c=100 round=2/3    1294.5 req/s
+h2 full   niquests_blocking  4194304 B c= 10 round=2/3      18.9 req/s
+h2 stream wreq_blocking     65536 B c=150 round=2/3    3397.4 req/s
+h2 stream ry_blocking      131072 B c=100 round=2/3    1795.6 req/s
+h2 stream ry_blocking     1048576 B c= 50 round=2/3     348.2 req/s
+h2 stream ry_blocking       65536 B c= 10 round=2/3    2543.1 req/s
+h2 stream wreq_blocking      1024 B c=150 round=2/3    6209.0 req/s
+h2 stream pycurl          2097152 B c=150 round=2/3     100.2 req/s
+h2 stream wreq_blocking_st  1048576 B c=150 round=2/3     482.3 req/s
+h2 stream wreq_blocking      1024 B c=100 round=2/3    6629.0 req/s
+h2 full   pycurl             1024 B c=100 round=2/3   10752.6 req/s
+h2 stream wreq_blocking   1048576 B c= 10 round=2/3    1053.8 req/s
+h2 full   ry_blocking      131072 B c= 10 round=2/3    2869.9 req/s
+h2 stream niquests_blocking   131072 B c= 50 round=2/3     434.1 req/s
+h2 stream ry_blocking       10240 B c= 50 round=2/3    5231.9 req/s
+h2 full   niquests_blocking    65536 B c=100 round=2/3     668.8 req/s
+h2 full   pycurl             1024 B c= 50 round=2/3   11999.1 req/s
+h2 full   ry_blocking     1048576 B c= 50 round=2/3     438.4 req/s
+h2 full   httpx_blocking   131072 B c=150 round=2/3     362.7 req/s
+h2 stream ry_blocking       65536 B c=100 round=2/3    2424.7 req/s
+h2 stream curl_cffi_blocking    65536 B c=100 round=2/3     448.9 req/s
+h2 stream ry_blocking     4194304 B c=100 round=2/3     103.2 req/s
+h2 stream niquests_blocking  2097152 B c=150 round=2/3      37.9 req/s
+h2 stream wreq_blocking_st    10240 B c= 10 round=2/3    6286.1 req/s
+h2 stream ry_blocking      131072 B c= 10 round=2/3    1901.8 req/s
+h2 stream wreq_blocking   4194304 B c= 50 round=2/3     529.7 req/s
+h2 stream pycurl            10240 B c= 50 round=2/3    6371.1 req/s
+h2 full   httpx_blocking  1048576 B c=150 round=2/3      52.0 req/s
+h2 stream niquests_blocking     1024 B c= 50 round=2/3    1323.4 req/s
+h2 stream pycurl            65536 B c=100 round=2/3    1985.2 req/s
+h2 stream httpx_blocking  4194304 B c=100 round=2/3      13.4 req/s
+h2 full   wreq_blocking   1048576 B c= 50 round=2/3    2610.6 req/s
+h2 stream ry_blocking       10240 B c=150 round=2/3    4548.7 req/s
+h2 stream ry_blocking       65536 B c= 50 round=2/3    2541.6 req/s
+h2 stream pycurl          1048576 B c=100 round=2/3     196.0 req/s
+h2 full   pycurl            65536 B c=150 round=2/3    2874.6 req/s
+h2 full   ry_blocking      131072 B c=150 round=2/3    2546.3 req/s
+h2 stream curl_cffi_blocking  4194304 B c= 50 round=2/3      42.9 req/s
+h2 full   curl_cffi_blocking     1024 B c=150 round=2/3     567.6 req/s
+h2 full   ry_blocking        1024 B c= 10 round=2/3    9361.0 req/s
+h2 stream httpx_blocking    65536 B c=100 round=2/3     614.4 req/s
+h2 full   wreq_blocking   4194304 B c= 10 round=2/3     781.2 req/s
+h2 full   niquests_blocking    10240 B c=100 round=2/3    1285.4 req/s
+h2 stream niquests_blocking    10240 B c= 10 round=2/3    1325.7 req/s
+h2 full   wreq_blocking_st   131072 B c=150 round=2/3    4581.9 req/s
+h2 stream wreq_blocking_st  4194304 B c=150 round=2/3     182.4 req/s
+h2 full   niquests_blocking  4194304 B c=100 round=2/3      18.9 req/s
+h2 full   niquests_blocking  1048576 B c=100 round=2/3      73.0 req/s
+h2 full   niquests_blocking  4194304 B c= 50 round=2/3      18.9 req/s
+h2 full   wreq_blocking   4194304 B c=150 round=2/3     650.4 req/s
+h2 full   curl_cffi_blocking    65536 B c= 10 round=2/3     502.0 req/s
+h2 stream curl_cffi_blocking  1048576 B c=100 round=2/3     139.1 req/s
+h2 full   wreq_blocking   1048576 B c=100 round=2/3    2484.7 req/s
+h2 stream niquests_blocking  4194304 B c= 10 round=2/3      18.9 req/s
+h2 stream wreq_blocking_st    10240 B c=100 round=2/3    6056.5 req/s
+h2 stream wreq_blocking     10240 B c= 50 round=2/3    7387.4 req/s
+h2 stream wreq_blocking_st     1024 B c= 50 round=2/3    6954.8 req/s
+h2 stream wreq_blocking_st   131072 B c= 50 round=2/3    2299.3 req/s
+h2 full   wreq_blocking_st    10240 B c=100 round=2/3   14487.2 req/s
+h2 full   niquests_blocking     1024 B c=150 round=2/3    1263.0 req/s
+h2 stream httpx_blocking     1024 B c=150 round=2/3    1489.5 req/s
+h2 stream wreq_blocking_st    10240 B c= 50 round=2/3    5987.0 req/s
+h2 stream httpx_blocking     1024 B c= 10 round=2/3    1603.1 req/s
+h2 full   ry_blocking       10240 B c=100 round=2/3    7747.7 req/s
+h2 stream curl_cffi_blocking  1048576 B c=150 round=2/3     141.6 req/s
+h2 full   curl_cffi_blocking    65536 B c=150 round=2/3     493.5 req/s
+h2 stream httpx_blocking  4194304 B c=150 round=2/3      14.0 req/s
+h2 full   wreq_blocking_st  4194304 B c= 10 round=2/3     215.9 req/s
+h2 full   pycurl          2097152 B c=100 round=2/3     113.9 req/s
+h2 full   httpx_blocking   131072 B c= 10 round=2/3     367.8 req/s
+h2 stream wreq_blocking      1024 B c= 50 round=2/3    7086.7 req/s
+h2 full   wreq_blocking_st    65536 B c=100 round=2/3    6894.9 req/s
+h2 stream ry_blocking       65536 B c=150 round=2/3    2403.8 req/s
+h2 full   curl_cffi_blocking  2097152 B c=100 round=2/3      90.0 req/s
+h2 full   httpx_blocking  2097152 B c=150 round=2/3      24.3 req/s
+h2 stream wreq_blocking   2097152 B c=100 round=2/3     766.0 req/s
+h2 stream wreq_blocking    131072 B c=100 round=2/3    3419.2 req/s
+h2 full   ry_blocking       65536 B c=150 round=2/3    4054.3 req/s
+h2 stream httpx_blocking  2097152 B c=100 round=2/3      27.0 req/s
+h2 full   pycurl          1048576 B c= 10 round=2/3     222.8 req/s
+h2 full   httpx_blocking  4194304 B c=150 round=2/3      10.5 req/s
+h2 full   wreq_blocking   4194304 B c=100 round=2/3     690.5 req/s
+h2 stream curl_cffi_blocking   131072 B c= 10 round=2/3     400.5 req/s
+h2 stream curl_cffi_blocking     1024 B c= 10 round=2/3     541.3 req/s
+h2 stream wreq_blocking_st    65536 B c=150 round=2/3    2635.4 req/s
+h2 stream curl_cffi_blocking  2097152 B c= 10 round=2/3      80.2 req/s
+h2 full   httpx_blocking     1024 B c= 10 round=2/3    1595.6 req/s
+h2 full   pycurl            10240 B c=150 round=2/3    9441.5 req/s
+h2 stream curl_cffi_blocking   131072 B c= 50 round=2/3     397.4 req/s
+h2 full   curl_cffi_blocking    10240 B c= 10 round=2/3     578.3 req/s
+h2 full   niquests_blocking     1024 B c=100 round=2/3    1303.9 req/s
+h2 stream httpx_blocking  2097152 B c= 50 round=2/3      27.3 req/s
+h2 full   wreq_blocking_st   131072 B c= 50 round=2/3    5193.2 req/s
+h2 stream niquests_blocking  2097152 B c= 50 round=2/3      36.8 req/s
+h2 full   niquests_blocking   131072 B c= 50 round=2/3     439.2 req/s
+h2 stream pycurl             1024 B c= 50 round=2/3    6631.0 req/s
+h2 full   wreq_blocking     65536 B c= 10 round=2/3   11928.1 req/s
+h2 stream curl_cffi_blocking  2097152 B c=150 round=2/3      81.2 req/s
+h2 stream ry_blocking     2097152 B c= 50 round=2/3     198.0 req/s
+h2 full   httpx_blocking     1024 B c=100 round=2/3    1461.4 req/s
+h2 full   wreq_blocking   2097152 B c= 10 round=2/3    1551.2 req/s
+h2 full   wreq_blocking_st   131072 B c= 10 round=2/3    5160.9 req/s
+h2 full   wreq_blocking_st  4194304 B c=150 round=2/3     204.5 req/s
+h2 stream pycurl             1024 B c=150 round=2/3    5837.2 req/s
+h2 stream wreq_blocking_st     1024 B c= 10 round=2/3    6784.5 req/s
+h2 full   wreq_blocking     65536 B c=100 round=2/3    9255.1 req/s
+h2 stream wreq_blocking     10240 B c=100 round=2/3    6619.7 req/s
+h2 full   curl_cffi_blocking  4194304 B c= 10 round=2/3      48.8 req/s
+h2 stream curl_cffi_blocking     1024 B c=150 round=2/3     536.4 req/s
+h2 full   pycurl             1024 B c= 10 round=2/3   13354.0 req/s
+h2 stream niquests_blocking    10240 B c=100 round=2/3    1249.4 req/s
+h2 full   niquests_blocking     1024 B c= 10 round=2/3    1356.4 req/s
+h2 full   curl_cffi_blocking    10240 B c= 50 round=2/3     575.9 req/s
+h2 stream curl_cffi_blocking  1048576 B c= 50 round=2/3     140.4 req/s
+h2 stream wreq_blocking    131072 B c=150 round=2/3    3286.9 req/s
+h2 stream pycurl            10240 B c=150 round=2/3    5812.8 req/s
+h2 stream pycurl          2097152 B c= 10 round=2/3      96.8 req/s
+h2 full   wreq_blocking     10240 B c=150 round=2/3   11165.8 req/s
+h2 full   wreq_blocking   2097152 B c=150 round=2/3    1284.7 req/s
+h2 full   ry_blocking     2097152 B c= 10 round=2/3     218.5 req/s
+h2 full   niquests_blocking  2097152 B c= 50 round=2/3      37.0 req/s
+h2 stream wreq_blocking   2097152 B c=150 round=2/3     754.8 req/s
+h2 stream pycurl          4194304 B c=100 round=2/3      50.3 req/s
+h2 full   httpx_blocking  4194304 B c= 50 round=2/3      10.3 req/s
+h2 full   wreq_blocking   1048576 B c= 10 round=2/3    2910.7 req/s
+h2 full   pycurl           131072 B c=100 round=2/3    1658.2 req/s
+h2 stream ry_blocking     2097152 B c=100 round=2/3     194.8 req/s
+h2 stream niquests_blocking    65536 B c=150 round=2/3     668.2 req/s
+h2 full   httpx_blocking    10240 B c= 50 round=2/3    1520.9 req/s
+h2 full   niquests_blocking  2097152 B c=100 round=2/3      37.4 req/s
+h2 full   httpx_blocking     1024 B c= 50 round=2/3    1542.9 req/s
+h2 full   ry_blocking     2097152 B c=100 round=2/3     232.7 req/s
+h2 full   ry_blocking        1024 B c=150 round=2/3    7116.4 req/s
+h2 stream curl_cffi_blocking  2097152 B c=100 round=2/3      79.1 req/s
+h2 full   wreq_blocking_st  1048576 B c=150 round=2/3     803.9 req/s
+h2 stream ry_blocking     2097152 B c= 10 round=2/3     193.3 req/s
+h2 full   curl_cffi_blocking     1024 B c=100 round=2/3     577.5 req/s
+h2 full   niquests_blocking   131072 B c= 10 round=2/3     449.4 req/s
+h2 stream curl_cffi_blocking    10240 B c= 10 round=2/3     534.6 req/s
+h2 full   wreq_blocking_st  2097152 B c=100 round=2/3     409.2 req/s
+h2 stream wreq_blocking_st    65536 B c= 50 round=2/3    2858.7 req/s
+h2 full   wreq_blocking_st   131072 B c=100 round=2/3    4899.9 req/s
+h2 stream ry_blocking        1024 B c=150 round=2/3    4687.8 req/s
+h2 full   wreq_blocking_st     1024 B c= 50 round=2/3   16869.1 req/s
+h2 stream curl_cffi_blocking    10240 B c=100 round=2/3     540.1 req/s
+h2 full   wreq_blocking_st  4194304 B c=100 round=2/3     205.7 req/s
+h2 stream ry_blocking        1024 B c=100 round=2/3    5033.5 req/s
+h2 full   httpx_blocking    65536 B c= 50 round=2/3     625.6 req/s
+h2 full   niquests_blocking     1024 B c= 50 round=2/3    1311.7 req/s
+h2 stream pycurl            10240 B c= 10 round=2/3    6928.1 req/s
+h2 stream ry_blocking        1024 B c= 50 round=2/3    5118.0 req/s
+h2 full   curl_cffi_blocking  1048576 B c= 50 round=2/3     158.1 req/s
+h2 stream pycurl          1048576 B c= 50 round=2/3     198.5 req/s
+h2 stream httpx_blocking    10240 B c=150 round=2/3    1444.4 req/s
+h2 stream niquests_blocking   131072 B c=150 round=2/3     427.1 req/s
+h2 full   wreq_blocking_st     1024 B c=100 round=2/3   14616.0 req/s
+h2 stream httpx_blocking   131072 B c= 10 round=2/3     369.4 req/s
+h2 stream wreq_blocking_st    65536 B c= 10 round=2/3    2955.0 req/s
+h2 full   curl_cffi_blocking  2097152 B c=150 round=2/3      91.7 req/s
+h2 stream niquests_blocking  4194304 B c=150 round=2/3      19.2 req/s
+h2 stream httpx_blocking    65536 B c= 10 round=2/3     622.5 req/s
+h2 stream wreq_blocking     65536 B c=100 round=2/3    3517.6 req/s
+h2 stream wreq_blocking_st  2097152 B c= 10 round=2/3     332.2 req/s
+h2 full   wreq_blocking_st  2097152 B c= 10 round=2/3     436.8 req/s
+h2 full   wreq_blocking    131072 B c=150 round=2/3    7948.8 req/s
+h2 full   niquests_blocking   131072 B c=100 round=2/3     431.6 req/s
+h2 stream wreq_blocking_st  2097152 B c=100 round=2/3     319.4 req/s
+h2 full   httpx_blocking  1048576 B c= 10 round=2/3      52.0 req/s
+h2 full   curl_cffi_blocking    65536 B c= 50 round=2/3     506.1 req/s
+h2 full   ry_blocking     1048576 B c=100 round=2/3     430.1 req/s
+h2 full   wreq_blocking      1024 B c=100 round=2/3   13316.8 req/s
+h2 full   wreq_blocking_st    65536 B c= 50 round=2/3    7192.7 req/s
+h2 stream curl_cffi_blocking    10240 B c= 50 round=2/3     543.8 req/s
+h2 stream ry_blocking     4194304 B c= 10 round=2/3     101.7 req/s
+h2 stream wreq_blocking     10240 B c=150 round=2/3    6054.6 req/s
+h2 full   wreq_blocking   2097152 B c= 50 round=2/3    1416.5 req/s
+h2 stream httpx_blocking  4194304 B c= 50 round=2/3      13.6 req/s
+h2 stream pycurl           131072 B c=150 round=2/3    1255.1 req/s
+h2 stream curl_cffi_blocking  4194304 B c= 10 round=2/3      43.4 req/s
+h2 full   wreq_blocking      1024 B c= 10 round=2/3   19173.2 req/s
+h2 full   pycurl            65536 B c= 10 round=2/3    3153.0 req/s
+h2 full   curl_cffi_blocking   131072 B c=100 round=2/3     435.4 req/s
+h2 stream niquests_blocking  1048576 B c= 10 round=2/3      72.0 req/s
+h2 stream pycurl            65536 B c= 10 round=2/3    2040.2 req/s
+h2 stream wreq_blocking     10240 B c= 10 round=2/3    8100.0 req/s
+h2 full   pycurl          1048576 B c=150 round=2/3     226.1 req/s
+h2 stream curl_cffi_blocking  1048576 B c= 10 round=2/3     140.8 req/s
+h2 full   ry_blocking     4194304 B c=150 round=2/3     111.8 req/s
+h2 stream pycurl             1024 B c=100 round=2/3    6208.7 req/s
+h2 stream wreq_blocking_st  1048576 B c= 10 round=2/3     524.5 req/s
+h2 full   niquests_blocking    65536 B c= 50 round=2/3     677.2 req/s
+h2 full   httpx_blocking    10240 B c= 10 round=2/3    1566.4 req/s
+h2 full   pycurl            65536 B c= 50 round=2/3    3142.1 req/s
+h2 full   wreq_blocking     65536 B c= 50 round=2/3   10001.0 req/s
+h2 stream httpx_blocking  2097152 B c=150 round=2/3      28.0 req/s
+h2 full   curl_cffi_blocking  1048576 B c=150 round=2/3     158.4 req/s
+h2 full   ry_blocking       10240 B c= 10 round=2/3    8804.3 req/s
+h2 full   pycurl           131072 B c=150 round=2/3    1569.6 req/s
+h2 stream curl_cffi_blocking  4194304 B c=150 round=2/3      43.6 req/s
+h2 full   wreq_blocking      1024 B c= 50 round=2/3   15643.7 req/s
+h2 full   curl_cffi_blocking  4194304 B c=100 round=2/3      48.6 req/s
+h2 full   pycurl            65536 B c=100 round=2/3    2940.3 req/s
+h2 full   ry_blocking      131072 B c= 50 round=2/3    2710.2 req/s
+h2 full   curl_cffi_blocking     1024 B c= 10 round=2/3     574.2 req/s
+h2 full   pycurl          1048576 B c= 50 round=2/3     227.9 req/s
+h2 stream httpx_blocking     1024 B c=100 round=2/3    1474.4 req/s
+h2 stream curl_cffi_blocking     1024 B c=100 round=2/3     537.2 req/s
+h2 full   ry_blocking       65536 B c= 50 round=2/3    4504.7 req/s
+h2 full   niquests_blocking    10240 B c= 50 round=2/3    1301.1 req/s
+h2 stream pycurl          4194304 B c= 10 round=2/3      48.7 req/s
+h2 stream niquests_blocking  2097152 B c=100 round=2/3      37.0 req/s
+h2 stream wreq_blocking   1048576 B c=150 round=2/3    1000.7 req/s
+h2 full   niquests_blocking  2097152 B c= 10 round=2/3      36.9 req/s
+h2 full   curl_cffi_blocking  1048576 B c=100 round=2/3     155.9 req/s
+h2 full   pycurl          2097152 B c=150 round=2/3     114.2 req/s
+h2 full   niquests_blocking    10240 B c= 10 round=2/3    1311.7 req/s
+h2 full   curl_cffi_blocking  2097152 B c= 10 round=2/3      89.6 req/s
+h2 full   niquests_blocking  1048576 B c=150 round=2/3      73.5 req/s
+h2 full   httpx_blocking    10240 B c=150 round=2/3    1329.3 req/s
+h2 stream niquests_blocking    65536 B c= 50 round=2/3     681.5 req/s
+h2 full   wreq_blocking   1048576 B c=150 round=2/3    2397.3 req/s
+h2 full   curl_cffi_blocking    10240 B c=150 round=2/3     565.4 req/s
+h2 full   pycurl           131072 B c= 50 round=2/3    1670.8 req/s
+h2 full   wreq_blocking_st    10240 B c= 10 round=2/3   16605.1 req/s
+h2 stream curl_cffi_blocking   131072 B c=100 round=2/3     398.6 req/s
+h2 full   ry_blocking     4194304 B c= 50 round=2/3     112.1 req/s
+h2 stream wreq_blocking     65536 B c= 10 round=2/3    3848.2 req/s
+h2 stream niquests_blocking  1048576 B c=150 round=2/3      73.2 req/s
+h2 full   wreq_blocking     65536 B c=150 round=2/3    8185.2 req/s
+h2 stream ry_blocking     4194304 B c=150 round=2/3     104.3 req/s
+h2 full   curl_cffi_blocking  2097152 B c= 50 round=2/3      90.1 req/s
+h2 full   wreq_blocking_st    10240 B c=150 round=2/3   12539.6 req/s
+h2 full   wreq_blocking_st  2097152 B c=150 round=2/3     413.4 req/s
+h2 stream niquests_blocking  1048576 B c= 50 round=2/3      72.2 req/s
+h2 full   niquests_blocking  4194304 B c=150 round=2/3      19.3 req/s
+h2 stream niquests_blocking    65536 B c= 10 round=2/3     695.7 req/s
+h2 full   curl_cffi_blocking  4194304 B c= 50 round=2/3      49.1 req/s
+h2 stream ry_blocking     1048576 B c= 10 round=2/3     347.1 req/s
+h2 stream ry_blocking     2097152 B c=150 round=2/3     194.9 req/s
+h2 stream wreq_blocking     65536 B c= 50 round=2/3    3653.7 req/s
+h2 full   curl_cffi_blocking   131072 B c= 50 round=2/3     437.5 req/s
+h2 stream httpx_blocking    10240 B c=100 round=2/3    1494.1 req/s
+h2 stream curl_cffi_blocking  2097152 B c= 50 round=2/3      80.2 req/s
+h2 full   wreq_blocking_st  1048576 B c=100 round=2/3     827.8 req/s
+h2 stream wreq_blocking_st  4194304 B c= 10 round=2/3     194.1 req/s
+h2 stream niquests_blocking    10240 B c=150 round=2/3    1223.7 req/s
+h2 full   pycurl          4194304 B c=100 round=2/3      59.1 req/s
+h2 full   curl_cffi_blocking    10240 B c=100 round=2/3     574.3 req/s
+h2 stream pycurl            65536 B c=150 round=2/3    1927.4 req/s
+h2 full   pycurl          4194304 B c=150 round=2/3      58.7 req/s
+h2 stream wreq_blocking   4194304 B c=150 round=2/3     511.3 req/s
+h2 full   pycurl          2097152 B c= 50 round=2/3     114.6 req/s
+h2 full   ry_blocking      131072 B c=100 round=2/3    2636.9 req/s
+h2 stream niquests_blocking    10240 B c= 50 round=2/3    1290.3 req/s
+h2 full   pycurl            10240 B c=100 round=2/3   10314.6 req/s
+h2 full   pycurl             1024 B c=150 round=2/3    9279.2 req/s
+h2 full   pycurl            10240 B c= 10 round=2/3   12927.7 req/s
+h2 stream wreq_blocking   4194304 B c= 10 round=2/3     547.7 req/s
+h2 stream curl_cffi_blocking   131072 B c=150 round=2/3     395.4 req/s
+h2 full   wreq_blocking    131072 B c=100 round=2/3    8742.9 req/s
+h2 full   pycurl          1048576 B c=100 round=2/3     224.2 req/s
+h2 full   wreq_blocking_st     1024 B c= 10 round=2/3   19038.7 req/s
+h2 full   httpx_blocking  4194304 B c= 10 round=2/3      11.1 req/s
+h2 stream curl_cffi_blocking  4194304 B c=100 round=2/3      42.8 req/s
+h2 full   pycurl          2097152 B c= 10 round=2/3     109.9 req/s
+h2 full   pycurl          4194304 B c= 50 round=2/3      57.2 req/s
+h2 stream httpx_blocking  1048576 B c=150 round=2/3      55.4 req/s
+h2 stream niquests_blocking     1024 B c=100 round=2/3    1274.3 req/s
+h2 full   curl_cffi_blocking   131072 B c= 10 round=2/3     435.7 req/s
+h2 stream wreq_blocking    131072 B c= 50 round=2/3    3604.5 req/s
+h2 full   httpx_blocking  1048576 B c= 50 round=2/3      50.7 req/s
+h2 stream curl_cffi_blocking    10240 B c=150 round=2/3     535.1 req/s
+h2 full   httpx_blocking     1024 B c=150 round=2/3    1450.6 req/s
+h2 stream ry_blocking      131072 B c= 50 round=2/3    1879.3 req/s
+h2 full   wreq_blocking_st    65536 B c= 10 round=2/3    7082.9 req/s
+h2 stream pycurl          1048576 B c= 10 round=2/3     194.2 req/s
+h2 stream wreq_blocking_st    10240 B c=150 round=2/3    6307.7 req/s
+h2 stream wreq_blocking   1048576 B c=100 round=2/3    1012.1 req/s
+h2 stream pycurl          2097152 B c=100 round=2/3      99.6 req/s
+h2 full   ry_blocking     2097152 B c=150 round=2/3     227.4 req/s
+h2 full   niquests_blocking  1048576 B c= 50 round=2/3      72.5 req/s
+h2 full   niquests_blocking    65536 B c=150 round=3/3     671.7 req/s
+h2 full   wreq_blocking_st  2097152 B c= 50 round=3/3     431.8 req/s
+h2 stream wreq_blocking_st   131072 B c= 50 round=3/3    2377.4 req/s
+h2 full   wreq_blocking_st   131072 B c=150 round=3/3    4497.0 req/s
+h2 full   pycurl          4194304 B c=100 round=3/3      58.3 req/s
+h2 stream curl_cffi_blocking     1024 B c=100 round=3/3     538.0 req/s
+h2 stream curl_cffi_blocking     1024 B c= 50 round=3/3     542.0 req/s
+h2 stream httpx_blocking  2097152 B c=100 round=3/3      26.9 req/s
+h2 full   wreq_blocking_st  2097152 B c=100 round=3/3     418.0 req/s
+h2 full   pycurl           131072 B c= 10 round=3/3    1660.2 req/s
+h2 stream niquests_blocking  2097152 B c= 50 round=3/3      37.0 req/s
+h2 full   httpx_blocking  4194304 B c= 50 round=3/3      10.3 req/s
+h2 stream wreq_blocking_st  4194304 B c=100 round=3/3     186.6 req/s
+h2 stream curl_cffi_blocking     1024 B c=150 round=3/3     531.8 req/s
+h2 full   wreq_blocking    131072 B c= 50 round=3/3    9685.6 req/s
+h2 stream curl_cffi_blocking    10240 B c= 50 round=3/3     544.0 req/s
+h2 stream curl_cffi_blocking    65536 B c=100 round=3/3     454.0 req/s
+h2 full   pycurl          1048576 B c= 50 round=3/3     229.7 req/s
+h2 stream wreq_blocking      1024 B c= 10 round=3/3    7908.8 req/s
+h2 full   wreq_blocking     65536 B c=150 round=3/3    8216.8 req/s
+h2 stream ry_blocking       65536 B c= 50 round=3/3    2535.0 req/s
+h2 stream curl_cffi_blocking  4194304 B c= 50 round=3/3      42.9 req/s
+h2 stream wreq_blocking_st  2097152 B c= 50 round=3/3     328.9 req/s
+h2 full   wreq_blocking      1024 B c= 10 round=3/3   19129.2 req/s
+h2 stream wreq_blocking_st  4194304 B c= 10 round=3/3     196.7 req/s
+h2 stream niquests_blocking    65536 B c= 50 round=3/3     689.1 req/s
+h2 stream pycurl          2097152 B c= 10 round=3/3      97.2 req/s
+h2 full   pycurl          1048576 B c=150 round=3/3     226.9 req/s
+h2 full   curl_cffi_blocking  1048576 B c=150 round=3/3     157.7 req/s
+h2 stream niquests_blocking  4194304 B c=150 round=3/3      19.3 req/s
+h2 full   httpx_blocking   131072 B c= 10 round=3/3     372.1 req/s
+h2 stream wreq_blocking_st    10240 B c= 10 round=3/3    6420.7 req/s
+h2 stream pycurl          4194304 B c=100 round=3/3      50.0 req/s
+h2 full   curl_cffi_blocking  4194304 B c=100 round=3/3      48.7 req/s
+h2 full   wreq_blocking_st    10240 B c=150 round=3/3   12201.4 req/s
+h2 full   pycurl            65536 B c=150 round=3/3    2861.4 req/s
+h2 full   niquests_blocking   131072 B c=150 round=3/3     431.8 req/s
+h2 full   wreq_blocking_st    65536 B c= 10 round=3/3    7270.2 req/s
+h2 stream niquests_blocking    10240 B c= 50 round=3/3    1314.1 req/s
+h2 stream curl_cffi_blocking   131072 B c= 50 round=3/3     397.6 req/s
+h2 stream curl_cffi_blocking    10240 B c= 10 round=3/3     541.2 req/s
+h2 full   wreq_blocking   1048576 B c= 10 round=3/3    2894.1 req/s
+h2 stream ry_blocking     2097152 B c=150 round=3/3     195.6 req/s
+h2 stream pycurl           131072 B c= 10 round=3/3    1294.1 req/s
+h2 stream pycurl          2097152 B c=150 round=3/3      99.9 req/s
+h2 full   niquests_blocking    10240 B c= 50 round=3/3    1315.2 req/s
+h2 stream ry_blocking       10240 B c=150 round=3/3    4661.5 req/s
+h2 full   ry_blocking        1024 B c= 10 round=3/3    9502.9 req/s
+h2 stream pycurl             1024 B c=100 round=3/3    6226.0 req/s
+h2 stream httpx_blocking  4194304 B c= 10 round=3/3      13.5 req/s
+h2 stream pycurl          1048576 B c= 50 round=3/3     198.9 req/s
+h2 full   httpx_blocking    10240 B c=100 round=3/3    1477.3 req/s
+h2 full   ry_blocking     1048576 B c=150 round=3/3     428.3 req/s
+h2 stream curl_cffi_blocking    10240 B c=100 round=3/3     541.3 req/s
+h2 full   ry_blocking      131072 B c=150 round=3/3    2551.2 req/s
+h2 stream ry_blocking       10240 B c= 50 round=3/3    5209.0 req/s
+h2 stream httpx_blocking    65536 B c=150 round=3/3     611.2 req/s
+h2 full   httpx_blocking    65536 B c= 10 round=3/3     627.6 req/s
+h2 stream httpx_blocking  1048576 B c= 50 round=3/3      54.1 req/s
+h2 full   httpx_blocking   131072 B c=150 round=3/3     364.0 req/s
+h2 full   niquests_blocking  2097152 B c=100 round=3/3      37.0 req/s
+h2 full   httpx_blocking    10240 B c=150 round=3/3    1449.1 req/s
+h2 stream wreq_blocking_st    10240 B c= 50 round=3/3    5986.5 req/s
+h2 stream wreq_blocking_st   131072 B c=100 round=3/3    2183.2 req/s
+h2 full   pycurl           131072 B c= 50 round=3/3    1708.4 req/s
+h2 stream httpx_blocking    10240 B c= 50 round=3/3    1533.2 req/s
+h2 stream wreq_blocking    131072 B c=150 round=3/3    3303.1 req/s
+h2 stream pycurl          4194304 B c=150 round=3/3      50.4 req/s
+h2 stream httpx_blocking  1048576 B c= 10 round=3/3      54.7 req/s
+h2 full   wreq_blocking_st     1024 B c= 10 round=3/3   19439.5 req/s
+h2 full   httpx_blocking  2097152 B c=100 round=3/3      23.4 req/s
+h2 full   wreq_blocking     10240 B c=150 round=3/3   11627.1 req/s
+h2 full   pycurl           131072 B c=100 round=3/3    1658.8 req/s
+h2 stream niquests_blocking  1048576 B c= 50 round=3/3      71.8 req/s
+h2 full   ry_blocking     4194304 B c= 10 round=3/3     108.6 req/s
+h2 full   httpx_blocking    65536 B c=150 round=3/3     606.5 req/s
+h2 stream pycurl          4194304 B c= 10 round=3/3      49.2 req/s
+h2 full   ry_blocking     1048576 B c= 10 round=3/3     435.0 req/s
+h2 full   niquests_blocking    10240 B c=100 round=3/3    1269.6 req/s
+h2 stream pycurl          2097152 B c= 50 round=3/3     101.2 req/s
+h2 stream wreq_blocking   2097152 B c=100 round=3/3     769.4 req/s
+h2 full   niquests_blocking  4194304 B c= 50 round=3/3      18.7 req/s
+h2 full   httpx_blocking  4194304 B c=150 round=3/3      10.5 req/s
+h2 stream wreq_blocking_st  1048576 B c=150 round=3/3     485.9 req/s
+h2 full   ry_blocking     2097152 B c= 50 round=3/3     223.1 req/s
+h2 full   niquests_blocking    65536 B c= 50 round=3/3     692.8 req/s
+h2 stream httpx_blocking  4194304 B c= 50 round=3/3      13.6 req/s
+h2 stream pycurl          4194304 B c= 50 round=3/3      50.6 req/s
+h2 stream wreq_blocking   4194304 B c=150 round=3/3     510.9 req/s
+h2 full   niquests_blocking  4194304 B c= 10 round=3/3      18.8 req/s
+h2 stream pycurl            65536 B c=150 round=3/3    1927.0 req/s
+h2 full   niquests_blocking   131072 B c= 50 round=3/3     438.6 req/s
+h2 full   httpx_blocking  2097152 B c=150 round=3/3      24.2 req/s
+h2 stream niquests_blocking    65536 B c=100 round=3/3     666.9 req/s
+h2 full   wreq_blocking_st  4194304 B c=150 round=3/3     205.4 req/s
+h2 full   pycurl          1048576 B c=100 round=3/3     226.4 req/s
+h2 full   curl_cffi_blocking    65536 B c= 50 round=3/3     505.7 req/s
+h2 full   niquests_blocking  1048576 B c= 10 round=3/3      72.6 req/s
+h2 full   curl_cffi_blocking     1024 B c=150 round=3/3     564.1 req/s
+h2 stream wreq_blocking_st  2097152 B c=100 round=3/3     325.5 req/s
+h2 stream niquests_blocking  1048576 B c=100 round=3/3      72.0 req/s
+h2 full   wreq_blocking_st  2097152 B c= 10 round=3/3     448.3 req/s
+h2 stream ry_blocking       65536 B c=150 round=3/3    2394.6 req/s
+h2 stream niquests_blocking  2097152 B c= 10 round=3/3      36.7 req/s
+h2 full   curl_cffi_blocking  1048576 B c= 10 round=3/3     155.7 req/s
+h2 stream httpx_blocking  2097152 B c= 10 round=3/3      27.0 req/s
+h2 full   pycurl            10240 B c= 10 round=3/3   12824.7 req/s
+h2 full   curl_cffi_blocking    65536 B c=100 round=3/3     501.3 req/s
+h2 stream httpx_blocking    10240 B c=150 round=3/3    1440.0 req/s
+h2 full   wreq_blocking_st  4194304 B c= 50 round=3/3     206.4 req/s
+h2 stream curl_cffi_blocking    10240 B c=150 round=3/3     537.8 req/s
+h2 stream ry_blocking     4194304 B c=150 round=3/3     103.9 req/s
+h2 full   niquests_blocking    65536 B c= 10 round=3/3     695.6 req/s
+h2 stream httpx_blocking     1024 B c= 10 round=3/3    1597.0 req/s
+h2 stream curl_cffi_blocking  2097152 B c= 10 round=3/3      80.5 req/s
+h2 full   pycurl             1024 B c= 50 round=3/3   11922.9 req/s
+h2 stream wreq_blocking   2097152 B c= 50 round=3/3     804.1 req/s
+h2 full   niquests_blocking    10240 B c=150 round=3/3    1240.6 req/s
+h2 stream niquests_blocking     1024 B c= 50 round=3/3    1300.0 req/s
+h2 full   pycurl          1048576 B c= 10 round=3/3     219.9 req/s
+h2 stream ry_blocking        1024 B c=100 round=3/3    5021.5 req/s
+h2 stream wreq_blocking     65536 B c= 50 round=3/3    3684.7 req/s
+h2 stream httpx_blocking    65536 B c= 50 round=3/3     620.7 req/s
+h2 stream httpx_blocking  4194304 B c=100 round=3/3      13.4 req/s
+h2 full   wreq_blocking_st    10240 B c=100 round=3/3   14477.1 req/s
+h2 full   wreq_blocking     65536 B c= 50 round=3/3   10428.3 req/s
+h2 stream wreq_blocking      1024 B c= 50 round=3/3    7181.0 req/s
+h2 full   httpx_blocking   131072 B c= 50 round=3/3     368.3 req/s
+h2 stream wreq_blocking   4194304 B c=100 round=3/3     513.2 req/s
+h2 full   wreq_blocking_st     1024 B c= 50 round=3/3   16795.1 req/s
+h2 stream ry_blocking      131072 B c=100 round=3/3    1796.4 req/s
+h2 full   curl_cffi_blocking  2097152 B c=150 round=3/3      91.6 req/s
+h2 full   pycurl            65536 B c=100 round=3/3    2855.3 req/s
+h2 stream ry_blocking      131072 B c= 10 round=3/3    1879.3 req/s
+h2 stream httpx_blocking    65536 B c= 10 round=3/3     632.0 req/s
+h2 full   ry_blocking       10240 B c=150 round=3/3    6992.5 req/s
+h2 full   wreq_blocking_st    10240 B c= 10 round=3/3   17994.8 req/s
+h2 stream ry_blocking     4194304 B c= 10 round=3/3     101.8 req/s
+h2 full   pycurl          4194304 B c=150 round=3/3      58.7 req/s
+h2 full   httpx_blocking  4194304 B c=100 round=3/3      10.1 req/s
+h2 stream wreq_blocking     65536 B c= 10 round=3/3    3836.3 req/s
+h2 full   ry_blocking     4194304 B c= 50 round=3/3     110.1 req/s
+h2 full   wreq_blocking_st  4194304 B c= 10 round=3/3     218.4 req/s
+h2 stream curl_cffi_blocking     1024 B c= 10 round=3/3     539.0 req/s
+h2 full   wreq_blocking     10240 B c=100 round=3/3   13115.3 req/s
+h2 full   httpx_blocking   131072 B c=100 round=3/3     354.3 req/s
+h2 full   ry_blocking      131072 B c= 10 round=3/3    2794.9 req/s
+h2 stream niquests_blocking     1024 B c=100 round=3/3    1237.1 req/s
+h2 full   httpx_blocking  4194304 B c= 10 round=3/3      11.2 req/s
+h2 full   curl_cffi_blocking  4194304 B c= 10 round=3/3      48.7 req/s
+h2 full   niquests_blocking  1048576 B c=150 round=3/3      74.0 req/s
+h2 full   httpx_blocking    10240 B c= 10 round=3/3    1569.2 req/s
+h2 full   wreq_blocking   2097152 B c= 10 round=3/3    1528.7 req/s
+h2 full   ry_blocking     2097152 B c= 10 round=3/3     219.1 req/s
+h2 full   ry_blocking     1048576 B c=100 round=3/3     430.5 req/s
+h2 full   pycurl          2097152 B c=100 round=3/3     115.9 req/s
+h2 full   wreq_blocking    131072 B c=100 round=3/3    8616.1 req/s
+h2 stream pycurl           131072 B c=150 round=3/3    1241.8 req/s
+h2 full   wreq_blocking_st   131072 B c= 10 round=3/3    5165.7 req/s
+h2 stream ry_blocking      131072 B c= 50 round=3/3    1879.0 req/s
+h2 stream pycurl          2097152 B c=100 round=3/3      99.6 req/s
+h2 full   curl_cffi_blocking  2097152 B c=100 round=3/3      89.6 req/s
+h2 stream httpx_blocking  1048576 B c=150 round=3/3      55.5 req/s
+h2 full   niquests_blocking  1048576 B c= 50 round=3/3      72.2 req/s
+h2 full   curl_cffi_blocking    10240 B c=100 round=3/3     567.4 req/s
+h2 stream wreq_blocking_st    10240 B c=150 round=3/3    6019.7 req/s
+h2 full   curl_cffi_blocking    10240 B c= 10 round=3/3     569.9 req/s
+h2 full   niquests_blocking   131072 B c=100 round=3/3     431.5 req/s
+h2 stream pycurl             1024 B c=150 round=3/3    5932.2 req/s
+h2 full   httpx_blocking    10240 B c= 50 round=3/3    1533.8 req/s
+h2 stream wreq_blocking_st  4194304 B c=150 round=3/3     183.8 req/s
+h2 full   wreq_blocking   2097152 B c= 50 round=3/3    1415.1 req/s
+h2 full   httpx_blocking     1024 B c=100 round=3/3    1491.8 req/s
+h2 full   curl_cffi_blocking  1048576 B c= 50 round=3/3     155.8 req/s
+h2 full   ry_blocking     2097152 B c=150 round=3/3     238.4 req/s
+h2 stream niquests_blocking   131072 B c= 10 round=3/3     438.4 req/s
+h2 stream wreq_blocking     65536 B c=150 round=3/3    3329.9 req/s
+h2 stream ry_blocking       65536 B c=100 round=3/3    2411.3 req/s
+h2 full   curl_cffi_blocking    10240 B c= 50 round=3/3     570.9 req/s
+h2 stream curl_cffi_blocking  4194304 B c= 10 round=3/3      43.3 req/s
+h2 full   pycurl            65536 B c= 50 round=3/3    3135.4 req/s
+h2 stream ry_blocking       65536 B c= 10 round=3/3    2577.0 req/s
+h2 stream ry_blocking     2097152 B c=100 round=3/3     195.2 req/s
+h2 stream pycurl          1048576 B c= 10 round=3/3     190.2 req/s
+h2 stream wreq_blocking     10240 B c= 10 round=3/3    8139.1 req/s
+h2 full   pycurl          4194304 B c= 50 round=3/3      57.1 req/s
+h2 stream httpx_blocking   131072 B c= 50 round=3/3     364.2 req/s
+h2 full   ry_blocking        1024 B c= 50 round=3/3    8112.5 req/s
+h2 stream niquests_blocking  1048576 B c=150 round=3/3      73.0 req/s
+h2 full   curl_cffi_blocking  4194304 B c=150 round=3/3      49.5 req/s
+h2 stream curl_cffi_blocking  1048576 B c=100 round=3/3     138.2 req/s
+h2 full   httpx_blocking  2097152 B c= 50 round=3/3      23.5 req/s
+h2 full   curl_cffi_blocking   131072 B c=100 round=3/3     434.1 req/s
+h2 full   curl_cffi_blocking   131072 B c= 10 round=3/3     429.5 req/s
+h2 full   httpx_blocking     1024 B c= 10 round=3/3    1588.4 req/s
+h2 stream httpx_blocking  2097152 B c=150 round=3/3      27.7 req/s
+h2 stream pycurl            10240 B c=150 round=3/3    5705.4 req/s
+h2 stream ry_blocking     2097152 B c= 50 round=3/3     196.4 req/s
+h2 stream wreq_blocking   1048576 B c=150 round=3/3     994.0 req/s
+h2 stream curl_cffi_blocking  1048576 B c= 50 round=3/3     139.2 req/s
+h2 stream curl_cffi_blocking  1048576 B c=150 round=3/3     140.9 req/s
+h2 full   niquests_blocking    65536 B c=100 round=3/3     651.6 req/s
+h2 stream wreq_blocking   4194304 B c= 50 round=3/3     527.4 req/s
+h2 stream niquests_blocking     1024 B c= 10 round=3/3    1308.2 req/s
+h2 stream wreq_blocking   2097152 B c= 10 round=3/3     815.7 req/s
+h2 stream ry_blocking     1048576 B c=100 round=3/3     342.9 req/s
+h2 stream niquests_blocking    65536 B c=150 round=3/3     660.1 req/s
+h2 stream wreq_blocking     10240 B c=100 round=3/3    6618.3 req/s
+h2 full   wreq_blocking_st  1048576 B c=150 round=3/3     801.4 req/s
+h2 stream wreq_blocking_st     1024 B c=100 round=3/3    6883.5 req/s
+h2 stream curl_cffi_blocking   131072 B c=100 round=3/3     397.5 req/s
+h2 full   ry_blocking       65536 B c= 10 round=3/3    4708.4 req/s
+h2 stream wreq_blocking_st     1024 B c=150 round=3/3    6519.9 req/s
+h2 full   niquests_blocking  2097152 B c= 10 round=3/3      36.8 req/s
+h2 stream wreq_blocking      1024 B c=150 round=3/3    6263.8 req/s
+h2 stream curl_cffi_blocking   131072 B c= 10 round=3/3     394.4 req/s
+h2 full   curl_cffi_blocking     1024 B c= 50 round=3/3     576.7 req/s
+h2 stream pycurl            65536 B c= 10 round=3/3    2043.1 req/s
+h2 stream ry_blocking        1024 B c= 10 round=3/3    5604.5 req/s
+h2 full   wreq_blocking     65536 B c= 10 round=3/3   11841.6 req/s
+h2 stream niquests_blocking    10240 B c= 10 round=3/3    1318.3 req/s
+h2 full   wreq_blocking_st    65536 B c=150 round=3/3    6748.1 req/s
+h2 stream pycurl            10240 B c=100 round=3/3    6141.1 req/s
+h2 stream httpx_blocking     1024 B c=100 round=3/3    1492.0 req/s
+h2 stream ry_blocking     4194304 B c=100 round=3/3     102.1 req/s
+h2 full   niquests_blocking     1024 B c=100 round=3/3    1130.0 req/s
+h2 full   niquests_blocking  1048576 B c=100 round=3/3      72.0 req/s
+h2 stream wreq_blocking   1048576 B c= 10 round=3/3    1065.9 req/s
+h2 stream curl_cffi_blocking  2097152 B c=150 round=3/3      80.6 req/s
+h2 full   wreq_blocking    131072 B c=150 round=3/3    7836.9 req/s
+h2 full   wreq_blocking_st    65536 B c= 50 round=3/3    7480.1 req/s
+h2 full   ry_blocking       10240 B c= 50 round=3/3    7998.7 req/s
+h2 stream wreq_blocking   4194304 B c= 10 round=3/3     544.9 req/s
+h2 full   ry_blocking     4194304 B c=150 round=3/3     112.4 req/s
+h2 stream wreq_blocking_st  2097152 B c= 10 round=3/3     329.9 req/s
+h2 full   ry_blocking       65536 B c=150 round=3/3    3915.7 req/s
+h2 stream httpx_blocking     1024 B c=150 round=3/3    1432.3 req/s
+h2 full   curl_cffi_blocking    65536 B c= 10 round=3/3     499.9 req/s
+h2 stream ry_blocking        1024 B c= 50 round=3/3    5261.2 req/s
+h2 stream wreq_blocking_st  1048576 B c= 50 round=3/3     518.8 req/s
+h2 stream httpx_blocking    10240 B c=100 round=3/3    1457.0 req/s
+h2 stream ry_blocking      131072 B c=150 round=3/3    1764.1 req/s
+h2 stream wreq_blocking_st    65536 B c= 50 round=3/3    2812.3 req/s
+h2 full   ry_blocking     2097152 B c=100 round=3/3     225.3 req/s
+h2 stream curl_cffi_blocking  2097152 B c= 50 round=3/3      79.4 req/s
+h2 full   pycurl             1024 B c=100 round=3/3   10548.6 req/s
+h2 full   curl_cffi_blocking     1024 B c=100 round=3/3     568.0 req/s
+h2 full   wreq_blocking_st  1048576 B c= 50 round=3/3     879.3 req/s
+h2 stream curl_cffi_blocking    65536 B c=150 round=3/3     444.2 req/s
+h2 full   niquests_blocking  2097152 B c= 50 round=3/3      36.8 req/s
+h2 stream wreq_blocking_st  4194304 B c= 50 round=3/3     183.6 req/s
+h2 full   wreq_blocking     10240 B c= 10 round=3/3   19130.2 req/s
+h2 stream niquests_blocking   131072 B c= 50 round=3/3     432.3 req/s
+h2 stream wreq_blocking_st    65536 B c=100 round=3/3    2728.4 req/s
+h2 full   httpx_blocking     1024 B c= 50 round=3/3    1537.8 req/s
+h2 stream wreq_blocking   1048576 B c= 50 round=3/3    1044.3 req/s
+h2 stream ry_blocking       10240 B c= 10 round=3/3    5472.7 req/s
+h2 full   wreq_blocking_st    65536 B c=100 round=3/3    6693.4 req/s
+h2 full   niquests_blocking    10240 B c= 10 round=3/3    1273.3 req/s
+h2 stream httpx_blocking     1024 B c= 50 round=3/3    1475.0 req/s
+h2 stream wreq_blocking   2097152 B c=150 round=3/3     739.0 req/s
+h2 stream wreq_blocking     65536 B c=100 round=3/3    3470.1 req/s
+h2 stream httpx_blocking    10240 B c= 10 round=3/3    1559.4 req/s
+h2 stream wreq_blocking_st    10240 B c=100 round=3/3    5978.7 req/s
+h2 full   curl_cffi_blocking    10240 B c=150 round=3/3     562.3 req/s
+h2 stream wreq_blocking    131072 B c= 10 round=3/3    3727.7 req/s
+h2 stream wreq_blocking     10240 B c=150 round=3/3    5871.5 req/s
+h2 stream niquests_blocking   131072 B c=150 round=3/3     422.0 req/s
+h2 stream pycurl            10240 B c= 10 round=3/3    6892.7 req/s
+h2 full   curl_cffi_blocking  2097152 B c= 10 round=3/3      89.8 req/s
+h2 full   wreq_blocking_st     1024 B c=100 round=3/3   14362.4 req/s
+h2 stream ry_blocking     1048576 B c= 50 round=3/3     343.6 req/s
+h2 full   wreq_blocking     65536 B c=100 round=3/3    9376.2 req/s
+h2 stream httpx_blocking  4194304 B c=150 round=3/3      13.8 req/s
+h2 full   pycurl             1024 B c=150 round=3/3    9635.7 req/s
+h2 full   wreq_blocking   1048576 B c=100 round=3/3    2479.0 req/s
+h2 full   wreq_blocking   1048576 B c= 50 round=3/3    2701.7 req/s
+h2 stream pycurl          1048576 B c=100 round=3/3     195.9 req/s
+h2 full   pycurl          2097152 B c= 50 round=3/3     114.1 req/s
+h2 stream curl_cffi_blocking  4194304 B c=100 round=3/3      42.4 req/s
+h2 full   niquests_blocking  4194304 B c=100 round=3/3      18.7 req/s
+h2 stream wreq_blocking     10240 B c= 50 round=3/3    7189.9 req/s
+h2 full   curl_cffi_blocking     1024 B c= 10 round=3/3     555.7 req/s
+h2 full   wreq_blocking_st  4194304 B c=100 round=3/3     205.5 req/s
+h2 full   pycurl             1024 B c= 10 round=3/3   13815.4 req/s
+h2 stream wreq_blocking      1024 B c=100 round=3/3    6688.1 req/s
+h2 full   pycurl          2097152 B c= 10 round=3/3     109.5 req/s
+h2 stream niquests_blocking    65536 B c= 10 round=3/3     688.6 req/s
+h2 full   ry_blocking        1024 B c=150 round=3/3    6972.4 req/s
+h2 stream ry_blocking       10240 B c=100 round=3/3    4881.7 req/s
+h2 full   ry_blocking       10240 B c=100 round=3/3    7537.4 req/s
+h2 full   wreq_blocking_st    10240 B c= 50 round=3/3   15525.1 req/s
+h2 stream niquests_blocking    10240 B c=100 round=3/3    1265.1 req/s
+h2 full   niquests_blocking   131072 B c= 10 round=3/3     442.5 req/s
+h2 stream curl_cffi_blocking  1048576 B c= 10 round=3/3     139.0 req/s
+h2 stream ry_blocking     4194304 B c= 50 round=3/3     102.7 req/s
+h2 full   niquests_blocking     1024 B c= 10 round=3/3    1344.8 req/s
+h2 full   ry_blocking      131072 B c= 50 round=3/3    2747.4 req/s
+h2 stream wreq_blocking_st   131072 B c=150 round=3/3    2149.0 req/s
+h2 stream wreq_blocking   1048576 B c=100 round=3/3     986.5 req/s
+h2 full   curl_cffi_blocking  1048576 B c=100 round=3/3     154.8 req/s
+h2 full   wreq_blocking   4194304 B c= 10 round=3/3     793.1 req/s
+h2 full   wreq_blocking_st  1048576 B c= 10 round=3/3     878.3 req/s
+h2 full   httpx_blocking     1024 B c=150 round=3/3    1439.9 req/s
+h2 stream httpx_blocking  1048576 B c=100 round=3/3      53.3 req/s
+h2 stream ry_blocking        1024 B c=150 round=3/3    4723.5 req/s
+h2 stream pycurl          1048576 B c=150 round=3/3     196.7 req/s
+h2 full   wreq_blocking_st   131072 B c= 50 round=3/3    5074.8 req/s
+h2 stream pycurl           131072 B c= 50 round=3/3    1300.3 req/s
+h2 stream wreq_blocking_st  1048576 B c= 10 round=3/3     534.9 req/s
+h2 full   wreq_blocking      1024 B c= 50 round=3/3   15150.0 req/s
+h2 stream wreq_blocking_st    65536 B c=150 round=3/3    2682.2 req/s
+h2 full   wreq_blocking   4194304 B c=150 round=3/3     653.8 req/s
+h2 stream curl_cffi_blocking   131072 B c=150 round=3/3     395.0 req/s
+h2 full   wreq_blocking   2097152 B c=150 round=3/3    1278.6 req/s
+h2 full   niquests_blocking  4194304 B c=150 round=3/3      19.1 req/s
+h2 stream niquests_blocking     1024 B c=150 round=3/3    1218.1 req/s
+h2 stream curl_cffi_blocking  4194304 B c=150 round=3/3      43.2 req/s
+h2 stream curl_cffi_blocking  2097152 B c=100 round=3/3      78.4 req/s
+h2 stream wreq_blocking_st    65536 B c= 10 round=3/3    2945.7 req/s
+h2 full   ry_blocking     4194304 B c=100 round=3/3     110.5 req/s
+h2 stream ry_blocking     1048576 B c= 10 round=3/3     340.8 req/s
+h2 full   niquests_blocking  2097152 B c=150 round=3/3      37.6 req/s
+h2 full   ry_blocking      131072 B c=100 round=3/3    2569.6 req/s
+h2 stream niquests_blocking   131072 B c=100 round=3/3     419.5 req/s
+h2 stream niquests_blocking    10240 B c=150 round=3/3    1231.8 req/s
+h2 full   pycurl            10240 B c=150 round=3/3    9482.6 req/s
+h2 stream wreq_blocking    131072 B c= 50 round=3/3    3553.3 req/s
+h2 full   pycurl            10240 B c= 50 round=3/3   11757.7 req/s
+h2 full   pycurl            65536 B c= 10 round=3/3    3100.8 req/s
+h2 stream wreq_blocking_st     1024 B c= 10 round=3/3    7011.0 req/s
+h2 full   wreq_blocking   1048576 B c=150 round=3/3    2294.5 req/s
+h2 stream pycurl           131072 B c=100 round=3/3    1260.8 req/s
+h2 full   wreq_blocking    131072 B c= 10 round=3/3   10920.9 req/s
+h2 full   wreq_blocking      1024 B c=100 round=3/3   12986.0 req/s
+h2 full   wreq_blocking_st     1024 B c=150 round=3/3   12280.8 req/s
+h2 full   curl_cffi_blocking  4194304 B c= 50 round=3/3      48.4 req/s
+h2 full   curl_cffi_blocking   131072 B c= 50 round=3/3     439.3 req/s
+h2 full   httpx_blocking  1048576 B c=150 round=3/3      51.6 req/s
+h2 full   pycurl           131072 B c=150 round=3/3    1599.0 req/s
+h2 stream wreq_blocking_st  1048576 B c=100 round=3/3     502.6 req/s
+h2 stream niquests_blocking  4194304 B c=100 round=3/3      18.7 req/s
+h2 full   curl_cffi_blocking   131072 B c=150 round=3/3     429.5 req/s
+h2 full   httpx_blocking    65536 B c=100 round=3/3     601.0 req/s
+h2 full   ry_blocking       65536 B c= 50 round=3/3    4449.2 req/s
+h2 full   ry_blocking        1024 B c=100 round=3/3    7459.5 req/s
+h2 full   wreq_blocking   4194304 B c=100 round=3/3     687.1 req/s
+h2 stream ry_blocking     1048576 B c=150 round=3/3     339.5 req/s
+h2 full   ry_blocking     1048576 B c= 50 round=3/3     433.3 req/s
+h2 full   ry_blocking       10240 B c= 10 round=3/3    8953.3 req/s
+h2 full   wreq_blocking   2097152 B c=100 round=3/3    1297.8 req/s
+h2 stream niquests_blocking  1048576 B c= 10 round=3/3      71.2 req/s
+h2 full   httpx_blocking  1048576 B c=100 round=3/3      49.1 req/s
+h2 stream niquests_blocking  2097152 B c=100 round=3/3      36.6 req/s
+h2 full   curl_cffi_blocking    65536 B c=150 round=3/3     490.6 req/s
+h2 full   wreq_blocking     10240 B c= 50 round=3/3   15606.8 req/s
+h2 full   httpx_blocking  1048576 B c= 10 round=3/3      51.1 req/s
+h2 stream pycurl            65536 B c=100 round=3/3    1916.1 req/s
+h2 full   wreq_blocking_st  2097152 B c=150 round=3/3     414.9 req/s
+h2 full   pycurl          2097152 B c=150 round=3/3     116.6 req/s
+h2 stream pycurl            10240 B c= 50 round=3/3    6352.2 req/s
+h2 full   httpx_blocking    65536 B c= 50 round=3/3     586.8 req/s
+h2 full   wreq_blocking      1024 B c=150 round=3/3   10680.4 req/s
+h2 stream ry_blocking     2097152 B c= 10 round=3/3     192.8 req/s
+h2 stream httpx_blocking  2097152 B c= 50 round=3/3      27.0 req/s
+h2 full   niquests_blocking     1024 B c= 50 round=3/3    1295.3 req/s
+h2 stream niquests_blocking  2097152 B c=150 round=3/3      37.4 req/s
+h2 stream httpx_blocking   131072 B c= 10 round=3/3     365.4 req/s
+h2 stream pycurl             1024 B c= 10 round=3/3    6903.5 req/s
+h2 full   wreq_blocking_st  1048576 B c=100 round=3/3     819.8 req/s
+h2 stream curl_cffi_blocking    65536 B c= 10 round=3/3     441.5 req/s
+h2 stream wreq_blocking    131072 B c=100 round=3/3    3387.3 req/s
+h2 full   httpx_blocking  2097152 B c= 10 round=3/3      24.7 req/s
+h2 stream niquests_blocking  4194304 B c= 50 round=3/3      18.7 req/s
+h2 stream wreq_blocking_st  2097152 B c=150 round=3/3     317.7 req/s
+h2 full   curl_cffi_blocking  2097152 B c= 50 round=3/3      89.4 req/s
+h2 full   pycurl            10240 B c=100 round=3/3   10128.6 req/s
+h2 full   wreq_blocking_st   131072 B c=100 round=3/3    4739.5 req/s
+h2 stream wreq_blocking_st   131072 B c= 10 round=3/3    2400.1 req/s
+h2 full   ry_blocking       65536 B c=100 round=3/3    4204.8 req/s
+h2 stream pycurl             1024 B c= 50 round=3/3    6532.2 req/s
+h2 full   niquests_blocking     1024 B c=150 round=3/3    1046.4 req/s
+h2 full   pycurl          4194304 B c= 10 round=3/3      54.3 req/s
+h2 stream httpx_blocking   131072 B c=100 round=3/3     360.9 req/s
+h2 full   httpx_blocking  1048576 B c= 50 round=3/3      50.1 req/s
+h2 full   wreq_blocking   4194304 B c= 50 round=3/3     711.2 req/s
+h2 stream httpx_blocking   131072 B c=150 round=3/3     364.2 req/s
+h2 stream httpx_blocking    65536 B c=100 round=3/3     598.3 req/s
+h2 stream wreq_blocking_st     1024 B c= 50 round=3/3    6827.6 req/s
+h2 stream niquests_blocking  4194304 B c= 10 round=3/3      18.6 req/s
+h2 stream pycurl            65536 B c= 50 round=3/3    2029.2 req/s
+h2 stream curl_cffi_blocking    65536 B c= 50 round=3/3     453.4 req/s
+Saved complete benchmark: /home/gngpp/.cache/wreq-python/bench-21/results/20261005T063752Z-82b372d0006a-wsl-blocking-full.json

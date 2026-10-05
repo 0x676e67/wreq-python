@@ -59,11 +59,11 @@ asyncio.run(main())
   <div><p class="wreq-eyebrow">SUPPORTED BY OUR SPONSORS</p><h2 id="sponsor-heading">Thanks to our sponsors.</h2></div>
 </div>
 <div class="wreq-sponsor-window" tabindex="0" role="region" aria-label="Project sponsors; focus or hover to pause automatic scrolling" data-sponsor-window>
-  <a class="wreq-sponsor" href="https://byteful.com/?utm_source=github_python&amp;utm_medium=github-sponsor&amp;utm_campaign=wreq_github_sponsorship" target="_blank" rel="sponsored noopener noreferrer"><img src="assets/sponsors/byteful-logo.svg" alt="Byteful" width="149" height="47"></a>
-  <a class="wreq-sponsor" href="https://go.nodemaven.com/wreqpythonGHaugust" target="_blank" rel="sponsored noopener noreferrer"><img src="assets/sponsors/nodemaven.svg" alt="NodeMaven" width="165" height="47"></a>
-  <a class="wreq-sponsor" href="https://scrape.do/?utm_source=github&amp;utm_medium=wreq" target="_blank" rel="sponsored noopener noreferrer"><img src="assets/sponsors/scrapedo.svg" alt="Scrape.do" width="149" height="47"></a>
-  <a class="wreq-sponsor" href="https://www.ez-captcha.com/?r=github-wreq" target="_blank" rel="sponsored noopener noreferrer"><img src="assets/sponsors/ezcaptcha.svg" alt="EzCaptcha" width="47" height="47"><span>EzCaptcha</span></a>
-  <a class="wreq-sponsor" href="https://hypersolutions.co/?utm_source=github&amp;utm_medium=readme&amp;utm_campaign=wreq" target="_blank" rel="sponsored noopener noreferrer"><img src="assets/sponsors/hypersolutions.jpg" alt="Hyper Solutions" width="149" height="47"></a>
+  <a class="wreq-sponsor" href="https://byteful.com/?utm_source=github_python&amp;utm_medium=github-sponsor&amp;utm_campaign=wreq_github_sponsorship" target="_blank" rel="sponsored noopener noreferrer"><img src="https://raw.githubusercontent.com/0x676e67/wreq-python/main/.github/assets/byteful-logo.svg" alt="Byteful" width="149" height="47"></a>
+  <a class="wreq-sponsor" href="https://go.nodemaven.com/wreqpythonGHaugust" target="_blank" rel="sponsored noopener noreferrer"><img src="https://raw.githubusercontent.com/0x676e67/wreq-python/main/.github/assets/nodemaven.svg" alt="NodeMaven" width="165" height="47"></a>
+  <a class="wreq-sponsor" href="https://scrape.do/?utm_source=github&amp;utm_medium=wreq" target="_blank" rel="sponsored noopener noreferrer"><img src="https://raw.githubusercontent.com/0x676e67/wreq-python/main/.github/assets/scrapedo.svg" alt="Scrape.do" width="170" height="47"></a>
+  <a class="wreq-sponsor" href="https://www.ez-captcha.com/?r=github-wreq" target="_blank" rel="sponsored noopener noreferrer"><img src="https://raw.githubusercontent.com/0x676e67/wreq-python/main/.github/assets/ezcaptcha-wordmark.svg" alt="EzCaptcha" width="149" height="47"></a>
+  <a class="wreq-sponsor" href="https://hypersolutions.co/?utm_source=github&amp;utm_medium=readme&amp;utm_campaign=wreq" target="_blank" rel="sponsored noopener noreferrer"><img src="https://raw.githubusercontent.com/0x676e67/wreq-python/main/.github/assets/hypersolutions.svg" alt="Hyper Solutions" width="149" height="47"></a>
 </div>
 <p class="wreq-sponsor-note"><a href="sponsors/">Meet our sponsors</a> · <a href="mailto:gngppz@gmail.com">Support the project</a></p>
 </section>

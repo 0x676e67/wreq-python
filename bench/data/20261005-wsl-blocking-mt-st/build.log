@@ -1,0 +1,16 @@
+📦 Including license file `LICENSE`
+🍹 Building a mixed python/rust project
+🐍 Found CPython 3.14 at /home/gngpp/.cache/wreq-python/bench-21/source/.venv/bin/python
+🔗 Found pyo3 bindings with abi3-py3.11 support
+Checked 16 packages in 1ms
+   Compiling btls-sys v0.5.6 (https://github.com/0x676e67/btls?rev=main#488c465f)
+   Compiling btls v0.5.6 (https://github.com/0x676e67/btls?rev=main#488c465f)
+   Compiling tokio-btls v0.5.6 (https://github.com/0x676e67/btls?rev=main#488c465f)
+   Compiling wreq v0.16.1 (https://github.com/0x676e67/wreq?rev=54fdc7c9e0c1290e2f70f38d271ba954e3d86cc2#54fdc7c9)
+   Compiling wreq-util v0.2.0 (https://github.com/0x676e67/wreq-util?rev=5715529002738f46eea86a7271f918f9374d3582#57155290)
+   Compiling wreq-python v0.12.3 (/home/gngpp/.cache/wreq-python/bench-21/source)
+    Finished `release` profile [optimized] target(s) in 1m 20s
+⚠️ Warning: Failed to set rpath for /home/gngpp/.cache/wreq-python/bench-16/target-91f1956/maturin/libwreq.so: Failed to execute 'patchelf', did you install it? Hint: Try `pip install maturin[patchelf]` (or just `pip install patchelf`)
+📦 Built wheel for abi3 Python ≥ 3.11 to /tmp/.tmpfU3GIH/wreq-0.12.3-cp311-abi3-linux_x86_64.whl
+✏️ Setting installed package as editable
+🛠 Installed wreq-0.12.3

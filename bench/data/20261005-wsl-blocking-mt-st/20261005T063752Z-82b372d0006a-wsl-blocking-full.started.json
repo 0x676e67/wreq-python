@@ -1,0 +1,7 @@
+{
+  "started_at": "2026-10-05T06:37:52.527231+00:00",
+  "source": "82b372d0006a5ef71e82b1bcde9df80acba01bb0",
+  "uptime": "173.81 5277.30\n",
+  "load": "1.23 0.75 0.31 1/548 1141\n",
+  "processes": "    PID %CPU %MEM COMMAND\n   1141 50.0  0.0 python\n    552 11.4  0.1 python3.10\n   1130 11.1  0.0 bash\n    159  7.0  0.0 snapfuse\n    168  4.2  0.0 snapfuse\n    291  2.9  0.0 snapd\n    143  2.3  0.0 snapfuse\n      1  1.4  0.0 systemd\n    367  1.2  0.1 dockerd\n    289  0.6  0.0 subiquity-serve\n    112  0.5  0.0 systemd-udevd\n     61  0.4  0.0 systemd-journal\n    744  0.3  0.0 systemd\n    322  0.2  0.1 containerd\n    510  0.2  0.0 systemd-timedat\n    266  0.2  0.0 systemd-resolve\n    271  0.2  0.0 systemd-timesyn\n    346  0.1  0.0 unattended-upgr\n    314  0.1  0.0 rsyslogd\n    300  0.1  0.0 systemd-logind\n    767  0.0  0.0 bash\n    283  0.0  0.0 dbus-daemon\n      2  0.0  0.0 init-systemd(Ub\n     10  0.0  0.0 init\n    117  0.0  0.0 snapfuse\n    134  0.0  0.0 snapfuse\n    149  0.0  0.0 snapfuse\n    155  0.0  0.0 snapfuse\n    164  0.0  0.0 snapfuse\n    282  0.0  0.0 cron\n    286  0.0  0.0 iperf3\n    340  0.0  0.0 agetty\n    711  0.0  0.0 login\n    745  0.0  0.0 (sd-pam)\n   1124  0.0  0.0 (udev-worker)\n   1125  0.0  0.0 (udev-worker)\n   1127  0.0  0.0 (udev-worker)\n   1128  0.0  0.0 SessionLeader\n   1129  0.0  0.0 Relay(1130)\n   1142  0.0  0.0 ps\n"
+}

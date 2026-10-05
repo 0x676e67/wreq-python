@@ -1,0 +1,49 @@
+{
+  "wreq_blocking": {
+    "cells": 112,
+    "geometric_mean_ratio": 1.0305260429080318,
+    "higher": 99,
+    "median_cv_pct": 1.144316098278311
+  },
+  "ry_blocking": {
+    "cells": 112,
+    "geometric_mean_ratio": 1.0363892264822736,
+    "higher": 109,
+    "median_cv_pct": 0.8532093773407181
+  },
+  "requests": {
+    "cells": 56,
+    "geometric_mean_ratio": 1.0360434895140587,
+    "higher": 56,
+    "median_cv_pct": 0.6448401221389624
+  },
+  "httpx_blocking": {
+    "cells": 112,
+    "geometric_mean_ratio": 1.0277596099735382,
+    "higher": 110,
+    "median_cv_pct": 0.4966875466484213
+  },
+  "niquests_blocking": {
+    "cells": 112,
+    "geometric_mean_ratio": 1.032667362195951,
+    "higher": 109,
+    "median_cv_pct": 0.5710495170858687
+  },
+  "curl_cffi_blocking": {
+    "cells": 112,
+    "geometric_mean_ratio": 1.024367791899893,
+    "higher": 112,
+    "median_cv_pct": 0.38152658237491743
+  },
+  "pycurl": {
+    "cells": 112,
+    "geometric_mean_ratio": 1.0314865013637982,
+    "higher": 110,
+    "median_cv_pct": 0.651610514163445
+  },
+  "ST/MT": {
+    "cells": 112,
+    "geometric_mean_ratio": 0.6131858148674133,
+    "st_higher": 27
+  }
+}

@@ -41,3 +41,19 @@ All 3,442 server stderr lines in the full rerun are the generic message
 recorded, and all requests passed the harness's status, protocol and length
 checks. The logs don't establish the connection error's cause or whether
 internal retries occurred. Gains describe the whole PR, not isolated TLS I/O.
+
+The [2026-10-05 blocking run](20261005-wsl-blocking-mt-st/20261005T063752Z-82b372d0006a-wsl-blocking-full.json)
+measured clean revision `82b372d0006a` on the same WSL machine with a release +
+jemalloc extension. It contains 840 supported cells across eight blocking clients,
+including separate wreq MT and ST runtimes, and took 2 h 24 min 4 s. It uses 300
+warmup and 300 timed requests per batch and three rounds. The
+[comparison](20261005-wsl-blocking-mt-st/review-comparison.report.md) covers all
+728 cases shared with the preceding blocking run and all 112 new MT/ST pairs.
+The async selection and older snapshots remain unchanged.
+
+All 3,398 server stderr lines are the same generic connection message described
+above; request validation passed and the benchmark exited successfully. The
+outer launcher returned an error after completion because its final line had a
+Windows line ending. Raw outputs, the original launcher and finalized provenance
+retain this distinction. Peer clients also improved by roughly 2.4–3.6% between
+sessions, so the comparison does not isolate a wreq code change.

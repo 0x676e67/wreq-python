@@ -1,0 +1,257 @@
+{
+  "source": "82b372d0006a5ef71e82b1bcde9df80acba01bb0",
+  "dirty": false,
+  "python": "3.14.6 (main, Jul 23 2026, 14:45:24) [Clang 22.1.3 ]",
+  "build_command": "maturin develop --release --uv --locked --features jemalloc",
+  "allocator": "jemalloc",
+  "clients": {
+    "wreq_blocking": {
+      "package": "wreq",
+      "version": "0.12.3",
+      "native": [
+        {
+          "module": "wreq.wreq",
+          "path": "/home/gngpp/.cache/wreq-python/bench-21/source/python/wreq/wreq.abi3.so",
+          "sha256": "7f5a3bb02f0408fac1076cddd59d822e5415526613caff37c6c62b426acd0ec0"
+        }
+      ],
+      "runtime": {
+        "kind": "thread_pool",
+        "session": "one client per logical worker",
+        "network": {
+          "kind": "default",
+          "scope": "shared per process"
+        }
+      },
+      "pool": {
+        "kind": "one client per logical worker"
+      },
+      "response_read": "stream(): native transport chunks",
+      "api": "blocking",
+      "protocols": [
+        "h1",
+        "h2"
+      ],
+      "body_kinds": [
+        "full",
+        "stream"
+      ]
+    },
+    "wreq_blocking_st": {
+      "package": "wreq",
+      "version": "0.12.3",
+      "native": [
+        {
+          "module": "wreq.wreq",
+          "path": "/home/gngpp/.cache/wreq-python/bench-21/source/python/wreq/wreq.abi3.so",
+          "sha256": "7f5a3bb02f0408fac1076cddd59d822e5415526613caff37c6c62b426acd0ec0"
+        }
+      ],
+      "runtime": {
+        "kind": "thread_pool",
+        "session": "one client per logical worker",
+        "network": {
+          "kind": "custom",
+          "workers": 1,
+          "work_steal": false,
+          "scope": "shared per case"
+        }
+      },
+      "pool": {
+        "kind": "one client per logical worker"
+      },
+      "response_read": "stream(): native transport chunks",
+      "api": "blocking",
+      "protocols": [
+        "h1",
+        "h2"
+      ],
+      "body_kinds": [
+        "full",
+        "stream"
+      ]
+    },
+    "ry_blocking": {
+      "package": "ry",
+      "version": "0.0.101",
+      "native": [
+        {
+          "module": "ry.ryo3",
+          "path": "/home/gngpp/.cache/wreq-python/bench-21/source/.venv/lib/python3.14/site-packages/ry/ryo3.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "c6129e81f61cc96355dfabade960b33eaabcab62777614189c845f274a2fe826"
+        }
+      ],
+      "runtime": {
+        "kind": "thread_pool",
+        "session": "one client per logical worker"
+      },
+      "pool": {
+        "kind": "one client per logical worker"
+      },
+      "response_read": "stream(): native transport chunks",
+      "api": "blocking",
+      "protocols": [
+        "h1",
+        "h2"
+      ],
+      "body_kinds": [
+        "full",
+        "stream"
+      ]
+    },
+    "requests": {
+      "package": "requests",
+      "version": "2.34.2",
+      "native": [
+        {
+          "module": "requests.packages.charset_normalizer.md",
+          "path": "/home/gngpp/.cache/wreq-python/bench-21/source/.venv/lib/python3.14/site-packages/charset_normalizer/md.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "a92bc8c547c9fdc8b6f1d4d20a6500bdaf3622893202b206ce7b6c516a5f8be9"
+        },
+        {
+          "module": "requests.packages.chardet.md",
+          "path": "/home/gngpp/.cache/wreq-python/bench-21/source/.venv/lib/python3.14/site-packages/charset_normalizer/md.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "a92bc8c547c9fdc8b6f1d4d20a6500bdaf3622893202b206ce7b6c516a5f8be9"
+        },
+        {
+          "module": "requests.packages.charset_normalizer.cd",
+          "path": "/home/gngpp/.cache/wreq-python/bench-21/source/.venv/lib/python3.14/site-packages/charset_normalizer/cd.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "4ca0b03cc9e0d6a206c33433c2d62fbd43dc0eca43015c8532635ee66ea60818"
+        },
+        {
+          "module": "requests.packages.chardet.cd",
+          "path": "/home/gngpp/.cache/wreq-python/bench-21/source/.venv/lib/python3.14/site-packages/charset_normalizer/cd.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "4ca0b03cc9e0d6a206c33433c2d62fbd43dc0eca43015c8532635ee66ea60818"
+        }
+      ],
+      "runtime": {
+        "kind": "thread_pool",
+        "session": "one client per logical worker"
+      },
+      "pool": {
+        "kind": "one client per logical worker"
+      },
+      "response_read": "iter_content(65536): reads of at most 64 KiB",
+      "api": "blocking",
+      "protocols": [
+        "h1"
+      ],
+      "body_kinds": [
+        "full",
+        "stream"
+      ]
+    },
+    "httpx_blocking": {
+      "package": "httpx",
+      "version": "0.28.1",
+      "native": [],
+      "runtime": {
+        "kind": "thread_pool",
+        "session": "one client per logical worker"
+      },
+      "pool": {
+        "kind": "one client per logical worker"
+      },
+      "response_read": "iter_raw(): native transport chunks",
+      "api": "blocking",
+      "protocols": [
+        "h1",
+        "h2"
+      ],
+      "body_kinds": [
+        "full",
+        "stream"
+      ]
+    },
+    "niquests_blocking": {
+      "package": "niquests",
+      "version": "3.21.2",
+      "native": [
+        {
+          "module": "niquests.packages.charset_normalizer.md",
+          "path": "/home/gngpp/.cache/wreq-python/bench-21/source/.venv/lib/python3.14/site-packages/charset_normalizer/md.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "a92bc8c547c9fdc8b6f1d4d20a6500bdaf3622893202b206ce7b6c516a5f8be9"
+        },
+        {
+          "module": "niquests.packages.charset_normalizer.cd",
+          "path": "/home/gngpp/.cache/wreq-python/bench-21/source/.venv/lib/python3.14/site-packages/charset_normalizer/cd.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "4ca0b03cc9e0d6a206c33433c2d62fbd43dc0eca43015c8532635ee66ea60818"
+        }
+      ],
+      "runtime": {
+        "kind": "thread_pool",
+        "session": "one client per logical worker"
+      },
+      "pool": {
+        "kind": "one client per logical worker"
+      },
+      "response_read": "iter_content(65536): reads of at most 64 KiB",
+      "api": "blocking",
+      "protocols": [
+        "h1",
+        "h2"
+      ],
+      "body_kinds": [
+        "full",
+        "stream"
+      ]
+    },
+    "curl_cffi_blocking": {
+      "package": "curl_cffi",
+      "version": "0.16.3",
+      "native": [
+        {
+          "module": "curl_cffi._wrapper",
+          "path": "/home/gngpp/.cache/wreq-python/bench-21/source/.venv/lib/python3.14/site-packages/curl_cffi/_wrapper.abi3.so",
+          "sha256": "79c9faa1630b25a5c0b7bd3d8fd19356fb3e98aa7ebf594a8fe3809ac65b75f0"
+        }
+      ],
+      "runtime": {
+        "kind": "thread_pool",
+        "session": "one client per logical worker"
+      },
+      "pool": {
+        "kind": "one client per logical worker"
+      },
+      "response_read": "content_callback: libcurl callback chunks",
+      "api": "blocking",
+      "protocols": [
+        "h1",
+        "h2"
+      ],
+      "body_kinds": [
+        "full",
+        "stream"
+      ]
+    },
+    "pycurl": {
+      "package": "pycurl",
+      "version": "7.48.0",
+      "native": [
+        {
+          "module": "pycurl._pycurl",
+          "path": "/home/gngpp/.cache/wreq-python/bench-21/source/.venv/lib/python3.14/site-packages/pycurl/_pycurl.cpython-314-x86_64-linux-gnu.so",
+          "sha256": "4530f71bedea83fee913a133a9bebca5c8230a318b25f51c42fb76cbcb4b6262"
+        }
+      ],
+      "runtime": {
+        "kind": "thread_pool",
+        "session": "one client per logical worker"
+      },
+      "pool": {
+        "kind": "one client per logical worker"
+      },
+      "response_read": "WRITEFUNCTION: libcurl callback chunks",
+      "api": "blocking",
+      "protocols": [
+        "h1",
+        "h2"
+      ],
+      "body_kinds": [
+        "full",
+        "stream"
+      ]
+    }
+  },
+  "server_sha256": "52201b771a5ae474fc3d52249b922b04a1d077508ac71621b256d7c4d597f550"
+}

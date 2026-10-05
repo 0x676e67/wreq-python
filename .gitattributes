@@ -3,3 +3,4 @@
 /bench/data/**/*.log -text
 /bench/data/**/*.txt -text
 /bench/data/**/*.report.md -text
+/bench/data/20261005-wsl-blocking-mt-st/** -text

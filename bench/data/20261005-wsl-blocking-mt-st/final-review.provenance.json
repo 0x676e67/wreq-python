@@ -1,0 +1,22 @@
+{
+  "raw_sha256": "1e6de3edfc1efcc3b56ea7215b94285f2fac2248f5618dc864f517c424c5b43c",
+  "cells": 840,
+  "timed_batches": 2520,
+  "warmup_batches": 2520,
+  "runner_exit_code": 0,
+  "outer_wrapper_exit_code": 1,
+  "wrapper_note": "Final CRLF terminator caused numeric argument error after successful measurement and result/exit markers. Original script retained; no measurement or raw file rewritten.",
+  "environment_differences": {},
+  "peer_metadata_equal": {
+    "ry_blocking": true,
+    "requests": true,
+    "httpx_blocking": true,
+    "niquests_blocking": true,
+    "curl_cffi_blocking": true,
+    "pycurl": true
+  },
+  "stderr_messages": {
+    "connection error: connection error": 3398
+  },
+  "upstream_repository": "https://github.com/0x676e67/wreq-python.git"
+}

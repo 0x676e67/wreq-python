@@ -1,0 +1,48 @@
+{
+  "wall_seconds": 8644.17,
+  "timed_seconds": 3930.903550466979,
+  "warmup_seconds": 3959.3549421510147,
+  "per_client": {
+    "wreq_blocking": {
+      "timed_seconds": 48.20822380000189,
+      "warmup_seconds": 49.024613347012945,
+      "sum_seconds": 97.23283714701483
+    },
+    "wreq_blocking_st": {
+      "timed_seconds": 117.32688676699556,
+      "warmup_seconds": 123.24378487299401,
+      "sum_seconds": 240.57067163998957
+    },
+    "ry_blocking": {
+      "timed_seconds": 151.37356926999811,
+      "warmup_seconds": 153.63992528899573,
+      "sum_seconds": 305.01349455899384
+    },
+    "requests": {
+      "timed_seconds": 279.1948618149968,
+      "warmup_seconds": 281.1981181860034,
+      "sum_seconds": 560.3929800010002
+    },
+    "httpx_blocking": {
+      "timed_seconds": 1367.0369610479895,
+      "warmup_seconds": 1375.3276586510046,
+      "sum_seconds": 2742.364619698994
+    },
+    "niquests_blocking": {
+      "timed_seconds": 991.8220646839937,
+      "warmup_seconds": 995.5064640280016,
+      "sum_seconds": 1987.3285287119952
+    },
+    "curl_cffi_blocking": {
+      "timed_seconds": 587.488157729,
+      "warmup_seconds": 589.5828166490012,
+      "sum_seconds": 1177.0709743780012
+    },
+    "pycurl": {
+      "timed_seconds": 388.45282535400355,
+      "warmup_seconds": 391.8315611280011,
+      "sum_seconds": 780.2843864820047
+    }
+  },
+  "other_seconds": 753.9115073820062
+}
