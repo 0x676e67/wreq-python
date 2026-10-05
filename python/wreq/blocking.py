@@ -68,11 +68,6 @@ class Response:
     Get the local address of the response.
     """
 
-    local_addr: SocketAddr | None
-    r"""
-    Get the local address of the response.
-    """
-
     history: Sequence[History]
     r"""
     Get the redirect history of the Response.
