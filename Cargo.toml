@@ -1,6 +1,6 @@
 [package]
 name = "wreq-python"
-version = "0.12.3"
+version = "0.13.0"
 description = "An ergonomic, privacy-aware Python HTTP Client"
 license = "Apache-2.0"
 readme = "README.md"

@@ -2473,7 +2473,7 @@ dependencies = [
 
 [[package]]
 name = "wreq-python"
-version = "0.12.3"
+version = "0.13.0"
 dependencies = [
  "bytes",
  "cookie",
