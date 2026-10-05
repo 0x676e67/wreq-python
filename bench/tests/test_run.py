@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from bench import run
+from bench import benchmark
 from bench.clients import CLIENTS
 from bench.results import BLOCKING_CLIENTS, require_publish
 from bench.tests.test_benchmark import make_document
@@ -43,10 +44,12 @@ def candidate(tmp_path, full=False, blocking=False):
 
 
 def test_separate_publication_gates_reject_subsets_and_weak_batches():
-    assert len(BLOCKING_CLIENTS) == 7 and len(CLIENTS) == 16
+    assert len(BLOCKING_CLIENTS) == 8 and len(CLIENTS) == 17
     for blocking in (False, True):
         config = publication_config(blocking)
         require_publish(config, blocking=blocking)
+        with pytest.raises(ValueError):
+            require_publish({**config, "warmup_requests": 150}, blocking=blocking)
         with pytest.raises(ValueError):
             require_publish(config, blocking=not blocking)
         for key in (
@@ -69,6 +72,22 @@ def test_separate_publication_gates_reject_subsets_and_weak_batches():
                 require_publish(invalid, blocking=blocking)
         with pytest.raises(ValueError):
             require_publish({**config, "warmup": True}, blocking=blocking)
+
+
+def test_default_suite_includes_wreq_mt_st_and_reads_legacy_snapshots():
+    args = benchmark.parse_args(["--server", "server"])
+    assert {"wreq", "wreq_st", "wreq_blocking", "wreq_blocking_st"} <= set(args.clients)
+    assert len(args.clients) == 17
+    assert args.requests == args.warmup_requests == 300
+    for blocking in (False, True):
+        legacy = publication_config(blocking)
+        legacy["clients"].remove("wreq_blocking_st")
+        require_publish(legacy, blocking=blocking, allow_legacy_snapshot=True)
+        with pytest.raises(ValueError):
+            require_publish(legacy, blocking=blocking)
+        legacy["clients"].remove("wreq_blocking")
+        with pytest.raises(ValueError):
+            require_publish(legacy, blocking=blocking, allow_legacy_snapshot=True)
 
 
 def test_existing_input_and_identical_report_reuse(tmp_path, monkeypatch):
@@ -196,9 +215,9 @@ def test_full_publish_freezes_existing_blocking_selection(
     latest = tmp_path / "latest.json"
     latest.write_bytes(b"previous full selection")
     latest_blocking = tmp_path / "latest-blocking.json"
-    blocking_raw = json.dumps(
-        make_document(publication_config(True)), indent=3
-    ).encode()
+    legacy_configuration = publication_config(True)
+    legacy_configuration["clients"].remove("wreq_blocking_st")
+    blocking_raw = json.dumps(make_document(legacy_configuration), indent=3).encode()
     latest_blocking.write_bytes(blocking_raw)
     monkeypatch.setattr(run, "LATEST", latest)
     monkeypatch.setattr(run, "LATEST_BLOCKING", latest_blocking)

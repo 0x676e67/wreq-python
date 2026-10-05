@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import ExitStack, asynccontextmanager
+from contextlib import AsyncExitStack, ExitStack
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -18,7 +18,6 @@ import sys
 import threading
 import time
 import traceback
-from urllib.parse import urlsplit
 
 if __package__:
     from .clients import (
@@ -26,9 +25,11 @@ if __package__:
         CLIENTS,
         blocking_operations,
         metadata,
+        network_runtime,
         operations,
         supports,
     )
+    from .processes import benchmark_server, start_worker
     from .results import aggregate, validate_document, write_atomic
     from .workloads import (
         BODY_CASES,
@@ -43,9 +44,11 @@ else:
         CLIENTS,
         blocking_operations,
         metadata,
+        network_runtime,
         operations,
         supports,
     )
+    from processes import benchmark_server, start_worker
     from results import aggregate, validate_document, write_atomic
     from workloads import (
         BODY_CASES,
@@ -122,6 +125,11 @@ def parse_args(argv=None):
     parser.add_argument("--warmup", type=nonnegative, default=1)
     parser.add_argument("--samples", type=positive, default=1)
     parser.add_argument("--requests", type=positive, default=300)
+    parser.add_argument(
+        "--warmup-requests",
+        type=positive,
+        help="Requests per warm-up batch; defaults to --requests",
+    )
     parser.add_argument("--server-workers", type=positive, default=4)
     parser.add_argument(
         "--case-timeout",
@@ -135,11 +143,15 @@ def parse_args(argv=None):
     )
     parser.add_argument("--worker", choices=CLIENTS, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
+    if args.warmup_requests is None:
+        args.warmup_requests = args.requests
     if args.worker is None:
         if args.server is None:
             parser.error("--server is required")
         if args.requests < max(args.concurrency):
             parser.error("--requests must be at least the largest --concurrency")
+        if args.warmup and args.warmup_requests < max(args.concurrency):
+            parser.error("--warmup-requests must be at least the largest --concurrency")
         if not any(
             supports(client, protocol, kind)
             for client in args.clients
@@ -174,17 +186,20 @@ async def run_case(client, request):
         # The untimed request validates status, protocol, EOF and echoed length.
         validation = await post()
 
-        async def batch():
+        async def batch(requests):
             cpu_start = time.process_time()
             start = time.perf_counter()
-            await closed_loop(post, request["requests"], request["concurrency"])
+            await closed_loop(post, requests, request["concurrency"])
             return {
                 "seconds": time.perf_counter() - start,
                 "cpu_seconds": time.process_time() - cpu_start,
             }
 
-        warmup = [await batch() for _ in range(request["warmup"])]
-        samples = [await batch() for _ in range(request["samples"])]
+        warmup = [
+            await batch(request.get("warmup_requests", request["requests"]))
+            for _ in range(request["warmup"])
+        ]
+        samples = [await batch(request["requests"]) for _ in range(request["samples"])]
     return {"warmup": warmup, "samples": samples, "validation": validation}
 
 
@@ -193,7 +208,11 @@ def run_blocking_case(client, request):
     body = b"x" * request["payload_bytes"]
     chunks = prepare_chunks(body, request["body_kind"])
     workers = min(request["concurrency"], request["requests"])
-    quotient, remainder = divmod(request["requests"], workers)
+    runtime_options = {}
+    runtime = network_runtime(client)
+    if runtime is not None:
+        # One network worker for the whole case, shared by every client.
+        runtime_options["runtime"] = runtime
     with ExitStack() as stack:
         posts = [
             stack.enter_context(
@@ -204,6 +223,7 @@ def run_blocking_case(client, request):
                     body,
                     request["body_kind"],
                     chunks=chunks,
+                    **runtime_options,
                 )
             )
             for _ in range(workers)
@@ -214,7 +234,8 @@ def run_blocking_case(client, request):
             raise RuntimeError("Blocking workers returned inconsistent validations")
         with ThreadPoolExecutor(max_workers=workers) as executor:
 
-            def batch():
+            def batch(requests):
+                quotient, remainder = divmod(requests, workers)
                 stopped = threading.Event()
 
                 def run(post, count):
@@ -252,8 +273,11 @@ def run_blocking_case(client, request):
                     "cpu_seconds": time.process_time() - cpu_start,
                 }
 
-            warmup = [batch() for _ in range(request["warmup"])]
-            samples = [batch() for _ in range(request["samples"])]
+            warmup = [
+                batch(request.get("warmup_requests", request["requests"]))
+                for _ in range(request["warmup"])
+            ]
+            samples = [batch(request["requests"]) for _ in range(request["samples"])]
     return {"warmup": warmup, "samples": samples, "validation": validation}
 
 
@@ -276,83 +300,6 @@ async def worker(client):
     except Exception:
         print(json.dumps({"ok": False, "error": traceback.format_exc()}), flush=True)
         raise SystemExit(1)
-
-
-async def stop_process(process, command=None):
-    if process.returncode is not None:
-        return
-    try:
-        if command is not None:
-            process.stdin.write(command)
-            await process.stdin.drain()
-        process.stdin.close()
-        async with asyncio.timeout(10):
-            await process.wait()
-        return
-    except (TimeoutError, OSError, ConnectionError):
-        pass
-    if process.returncode is None:
-        try:
-            process.terminate()
-        except ProcessLookupError:
-            return
-        try:
-            async with asyncio.timeout(5):
-                await process.wait()
-        except TimeoutError:
-            if process.returncode is None:
-                try:
-                    process.kill()
-                except ProcessLookupError:
-                    pass
-                await process.wait()
-
-
-async def receive(process, timeout, label):
-    async with asyncio.timeout(timeout):
-        line = await process.stdout.readline()
-    if not line:
-        raise RuntimeError(
-            f"{label} closed stdout before returning a result (exit {process.returncode})"
-        )
-    try:
-        answer = json.loads(line)
-    except (ValueError, UnicodeDecodeError) as exc:
-        raise RuntimeError(f"Invalid JSON from {label}: {line!r}") from exc
-    if not isinstance(answer, dict):
-        raise RuntimeError(f"Invalid response from {label}: {answer!r}")
-    return answer
-
-
-@asynccontextmanager
-async def benchmark_server(executable, protocol, workers):
-    process = await asyncio.create_subprocess_exec(
-        str(executable),
-        "--protocol",
-        protocol,
-        "--workers",
-        str(workers),
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-    )
-    try:
-        info = await receive(process, 30, "TLS server")
-        url = urlsplit(info.get("url", ""))
-        if (
-            url.scheme != "https"
-            or url.hostname not in {"127.0.0.1", "localhost", "::1"}
-            or url.port is None
-            or url.path not in {"", "/"}
-            or url.query
-            or url.fragment
-            or url.username is not None
-            or info.get("protocol") != protocol
-            or info.get("workers") != workers
-        ):
-            raise RuntimeError(f"Unexpected TLS server configuration: {info!r}")
-        yield info
-    finally:
-        await stop_process(process)
 
 
 def source_info():
@@ -446,6 +393,7 @@ async def orchestrate(args):
         "warmup": args.warmup,
         "samples": args.samples,
         "requests": args.requests,
+        "warmup_requests": args.warmup_requests,
         "stream_chunk_bytes": STREAM_CHUNK_BYTES,
         "stream_chunk_bytes_by_payload": {
             str(size): upload_chunk_bytes(size) for size in args.sizes
@@ -482,21 +430,13 @@ async def orchestrate(args):
     }
     rng = random.Random(args.seed)
     workers, rows = {}, []
-    try:
+    async with AsyncExitStack() as stack:
         for client in args.clients:
-            process = await asyncio.create_subprocess_exec(
-                sys.executable,
-                str(Path(__file__).resolve()),
-                "--worker",
-                client,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
+            worker = await stack.enter_async_context(
+                start_worker(Path(__file__).resolve(), client)
             )
-            workers[client] = process
-            answer = await receive(process, 30, client)
-            if not answer.get("ok"):
-                raise RuntimeError(f"{client}: {answer.get('error')}")
-            document["clients"][client] = answer["metadata"]
+            workers[client] = worker
+            document["clients"][client] = worker.metadata
         for protocol in args.protocols:
             async with benchmark_server(
                 executable, protocol, args.server_workers
@@ -521,17 +461,12 @@ async def orchestrate(args):
                             "payload_bytes": size,
                             "concurrency": concurrency,
                             "requests": args.requests,
+                            "warmup_requests": args.warmup_requests,
                             "warmup": args.warmup,
                             "samples": args.samples,
                             "case_timeout": args.case_timeout,
                         }
-                        process = workers[client]
-                        process.stdin.write((json.dumps(request) + "\n").encode())
-                        await process.stdin.drain()
-                        answer = await receive(process, args.case_timeout + 15, client)
-                        if not answer.get("ok"):
-                            raise RuntimeError(f"{client}: {answer.get('error')}")
-                        result = answer["result"]
+                        result = await workers[client].measure(request)
                         rows.append(
                             {
                                 "client": client,
@@ -553,9 +488,6 @@ async def orchestrate(args):
                             f"round={round_id}/{args.rounds} {rps:9.1f} req/s",
                             flush=True,
                         )
-    finally:
-        for process in workers.values():
-            await stop_process(process, b'{"stop":true}\n')
     document["results"] = aggregate(rows, args.requests)
     document["generated_at"] = datetime.now(timezone.utc).isoformat()
     validate_document(document)

@@ -6,45 +6,25 @@ import warnings
 
 if __package__:
     from .workloads import prepare_chunks
+    from .registry import (
+        CAPABILITIES as ALL_CAPABILITIES,
+        SPECS,
+        adapter_clients,
+        RESPONSE_CHUNK_BYTES,
+    )
 else:
     from workloads import prepare_chunks
+    from registry import (
+        CAPABILITIES as ALL_CAPABILITIES,
+        SPECS,
+        adapter_clients,
+        RESPONSE_CHUNK_BYTES,
+    )
 
-CLIENTS = (
-    "wreq_blocking",
-    "ry_blocking",
-    "requests",
-    "httpx_blocking",
-    "niquests_blocking",
-    "curl_cffi_blocking",
-    "pycurl",
-)
-PACKAGES = {
-    "wreq_blocking": "wreq",
-    "ry_blocking": "ry",
-    "requests": "requests",
-    "httpx_blocking": "httpx",
-    "niquests_blocking": "niquests",
-    "curl_cffi_blocking": "curl_cffi",
-    "pycurl": "pycurl",
-}
-CAPABILITIES = {
-    client: {
-        "api": "blocking",
-        "protocols": ["h1"] if client == "requests" else ["h1", "h2"],
-        "body_kinds": ["full", "stream"],
-    }
-    for client in CLIENTS
-}
-RESPONSE_CHUNK_BYTES = 65536
-RESPONSE_READ = {
-    "wreq_blocking": "stream(): native transport chunks",
-    "ry_blocking": "stream(): native transport chunks",
-    "requests": "iter_content(65536): reads of at most 64 KiB",
-    "httpx_blocking": "iter_raw(): native transport chunks",
-    "niquests_blocking": "iter_content(65536): reads of at most 64 KiB",
-    "curl_cffi_blocking": "content_callback: libcurl callback chunks",
-    "pycurl": "WRITEFUNCTION: libcurl callback chunks",
-}
+CLIENTS = adapter_clients("blocking")
+PACKAGES = {client: SPECS[client].package for client in CLIENTS}
+CAPABILITIES = {client: ALL_CAPABILITIES[client] for client in CLIENTS}
+RESPONSE_READ = {client: SPECS[client].response_read for client in CLIENTS}
 
 
 def tls_context():
@@ -94,7 +74,7 @@ class ChunkReader:
 
 
 @contextmanager
-def operations(client_id, protocol, url, body, body_kind, *, chunks=None):
+def operations(client_id, protocol, url, body, body_kind, *, chunks=None, runtime=None):
     """Yield one post callable; its session must never be used concurrently.
 
     The caller may transfer this worker-owned adapter between threads after a
@@ -116,11 +96,14 @@ def operations(client_id, protocol, url, body, body_kind, *, chunks=None):
         "ignore", message="Unverified HTTPS request is being made.*"
     )
 
-    if client_id == "wreq_blocking":
+    if SPECS[client_id].package == "wreq":
         from wreq.blocking import Client
         from wreq.tls import TlsVersion
 
+        if SPECS[client_id].runtime["kind"] == "custom" and runtime is None:
+            raise ValueError("Blocking ST requires one runtime shared by the case")
         with Client(
+            runtime=runtime,
             tls_verify=False,
             https_only=True,
             no_proxy=True,

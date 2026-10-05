@@ -39,6 +39,8 @@ def render_comparison(before: dict, after: dict, *, api: str | None = None) -> s
     if api not in (None, "async", "blocking"):
         raise ValueError("Comparison API must be async or blocking")
     configurations = [dict(document["configuration"]) for document in (before, after)]
+    for configuration in configurations:
+        configuration.setdefault("warmup_requests", configuration["requests"])
     if api is not None:
         for config in configurations:
             config["clients"] = sorted(

@@ -15,7 +15,77 @@ from bench import async_clients, blocking_clients
 from bench.tests.test_benchmark import make_document
 from bench.workloads import BODY_CASES, CONCURRENCY_CASES
 from docs import build
-from docs.benchmark_view import render_explorer
+from docs.benchmark_view import provenance, render_explorer
+
+
+def test_combined_preview_shows_each_measurement_source():
+    document = make_document()
+    document["measurement_sources"] = [
+        {
+            "label": "Original run",
+            "source": document["source"],
+            "generated_at": "2026-10-05T03:24:00+00:00",
+        },
+        {
+            "label": "Blocking MT/ST rerun",
+            "source": document["source"],
+            "generated_at": "2026-10-05T05:26:00+00:00",
+        },
+    ]
+    text = provenance(document)
+    assert "Combined preview" in text
+    assert "Original run" in text and "2026-10-05 03:24 UTC" in text
+    assert "Blocking MT/ST rerun" in text and "2026-10-05 05:26 UTC" in text
+
+
+def test_combined_source_validation_and_explicit_blocking_preview(tmp_path):
+    baseline, _ = blocking_documents()
+    partial = make_document(
+        {
+            **baseline["configuration"],
+            "clients": ["wreq_blocking", "wreq_blocking_st"],
+            "warmup_requests": 150,
+        }
+    )
+    root = docs_root(tmp_path)
+    data = root / "full.json"
+    overlay = root / "blocking.json"
+    data.write_text(json.dumps(baseline))
+    overlay.write_text(json.dumps(partial))
+    build.prepare(root=root, data=data, blocking_data=overlay)
+    content = (root / "docs/source/benchmark.md").read_text(encoding="utf-8")
+    assert "wreq (blocking MT)" in content and "wreq (blocking ST)" in content
+    assert "Experimental warm-up budget" in content
+
+    document = make_document({"clients": ["wreq", "wreq_st"]})
+    document["measurement_sources"] = [
+        {
+            "label": "Original",
+            "clients": ["wreq"],
+            "source": document["source"],
+            "generated_at": document["generated_at"],
+        },
+        {
+            "label": "Rerun",
+            "clients": ["wreq_st"],
+            "source": document["source"],
+            "generated_at": document["generated_at"],
+        },
+    ]
+    results.validate_document(document)
+    for mutation in ("revision", "clients", "nested", "timestamp"):
+        invalid = copy.deepcopy(document)
+        source = invalid["measurement_sources"][1]
+        if mutation == "revision":
+            source["source"]["commit"] = '"><script>alert(1)</script>'
+        elif mutation == "clients":
+            source["clients"] = ["wreq"]
+        elif mutation == "nested":
+            source["measurement_sources"] = [source.copy()]
+        else:
+            source["generated_at"] = "2026-10-05T00:00:00"
+        with pytest.raises(ValueError):
+            results.validate_document(invalid)
 
 
 def docs_root(tmp_path: Path) -> Path:
@@ -95,6 +165,22 @@ def test_report_aggregation_and_metadata_escaping():
     assert "both Full and Stream" not in text and ": Stream upload" not in text
 
 
+def test_experimental_docs_preview_labels_its_warmup_budget(tmp_path):
+    source = tmp_path / "experiment.json"
+    source.write_text(
+        json.dumps(make_document({"warmup_requests": 2})), encoding="utf-8"
+    )
+    (tmp_path / "docs/templates").mkdir(parents=True)
+    (tmp_path / "docs/templates/benchmark.md").write_text(
+        "{{BENCHMARK_RESULTS}}\n\n{{BENCHMARK_CHARTS}}", encoding="utf-8"
+    )
+    build.prepare(root=tmp_path, data=source)
+    text = (tmp_path / "docs/source/benchmark.md").read_text(encoding="utf-8")
+    assert "Experimental warm-up budget" in text
+    assert "2 warm-up requests and 100 timed requests" in text
+    assert "have not replaced" in text
+
+
 def test_revision_comparison_and_mismatch_rejection():
     before = make_document({"clients": ["wreq", "wreq_st", "wreq_blocking", "ry"]})
     before["environment"]["affinity"] = [0, 1, 2, 3]
@@ -116,6 +202,8 @@ def test_revision_comparison_and_mismatch_rejection():
             rate["rps"] *= 2
             rate["mbps"] *= 2
     text = compare.render_comparison(before, after)
+    after["configuration"]["warmup_requests"] = after["configuration"]["requests"]
+    assert compare.render_comparison(before, after) == text
     assert text.count("#### HTTP/") == 8
     assert text.count("| +100.0 |") == len(before["results"])
     assert "16 supported cells" in text and "400 timed requests per cell" in text
@@ -125,6 +213,7 @@ def test_revision_comparison_and_mismatch_rejection():
     assert "not a confidence interval" in text and "not a paired experiment" in text
     for path, value in (
         (("configuration", "seed"), 1),
+        (("configuration", "warmup_requests"), 50),
         (("environment", "affinity"), [0]),
         (("environment", "python"), "3.13"),
         (("server", "sha256"), "f" * 64),

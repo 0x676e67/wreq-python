@@ -88,7 +88,15 @@ def prepare(
     document = decode_document(raw)
     blocking = decode_document(blocking_raw) if blocking_raw is not None else None
     if blocking is not None:
-        require_publish(blocking["configuration"], blocking=True)
+        if blocking_data is None:
+            # Previously published snapshots predate the blocking ST variant.
+            require_publish(
+                blocking["configuration"], blocking=True, allow_legacy_snapshot=True
+            )
+        elif not all(
+            CAPABILITIES[client]["api"] == "blocking" for client in blocking["clients"]
+        ):
+            raise ValueError("The blocking preview must contain only blocking clients")
         for axis in ("protocols", "body_kinds", "payload_bytes", "concurrency"):
             if set(document["configuration"][axis]) != set(
                 blocking["configuration"][axis]
@@ -122,6 +130,27 @@ def prepare(
                 },
             }
         charts = render_explorer(document, catalog)
+        experiments = [
+            value["configuration"]
+            for value in (document, blocking)
+            if value is not None
+            and value["configuration"].get(
+                "warmup_requests", value["configuration"]["requests"]
+            )
+            != value["configuration"]["requests"]
+        ]
+        if experiments:
+            settings = "; ".join(
+                f"{config['warmup_requests']} warm-up requests and "
+                f"{config['requests']} timed requests per batch"
+                for config in experiments
+            )
+            charts = (
+                '!!! note "Experimental warm-up budget"\n\n'
+                f"    This preview uses {settings}. The warm-up budget differs "
+                "from the published method; these results have not replaced "
+                "the published snapshots.\n\n" + charts
+            )
         snapshot.parent.mkdir(parents=True, exist_ok=True)
         snapshot.write_bytes(raw)
         if blocking_raw is not None:

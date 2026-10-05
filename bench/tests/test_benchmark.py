@@ -2,10 +2,12 @@
 
 import asyncio
 import copy
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from itertools import product
 import json
 import time
+import sys
+from types import ModuleType
 
 import pytest
 
@@ -273,6 +275,65 @@ def test_blocking_workers_and_failure_cleanup(monkeypatch):
     assert closed == [2, 1, 0]
 
 
+def test_independent_warmup_budget(monkeypatch):
+    args = benchmark.parse_args(["--server", "server", "--warmup-requests", "150"])
+    assert args.requests == 300 and args.warmup_requests == 150
+    assert benchmark.parse_args(["--server", "server"]).warmup_requests == 300
+    with pytest.raises(SystemExit):
+        benchmark.parse_args(["--server", "server", "--warmup-requests", "149"])
+    calls = []
+
+    @contextmanager
+    def blocking(*args, **kwargs):
+        index = len(calls)
+        calls.append(0)
+
+        def post():
+            calls[index] += 1
+            return {"status": 200, "protocol": "h1", "response_bytes": 1024}
+
+        yield post
+
+    @asynccontextmanager
+    async def asynchronous(*args):
+        calls.append(0)
+
+        async def post():
+            calls[0] += 1
+            return {"status": 200, "protocol": "h1", "response_bytes": 1024}
+
+        yield post
+
+    request = {
+        "payload_bytes": 1024,
+        "body_kind": "full",
+        "protocol": "h1",
+        "url": "https://127.0.0.1:1",
+        "requests": 6,
+        "warmup_requests": 3,
+        "concurrency": 3,
+        "warmup": 1,
+        "samples": 2,
+    }
+    monkeypatch.setattr(benchmark, "blocking_operations", blocking)
+    result = benchmark.run_blocking_case("requests", request)
+    assert calls == [
+        6,
+        6,
+        6,
+    ]  # Validation + one warm-up + four timed requests per worker.
+    assert len(result["warmup"]) == 1 and len(result["samples"]) == 2
+    calls.clear()
+    monkeypatch.setattr(benchmark, "operations", asynchronous)
+    asyncio.run(benchmark.run_case("wreq", request))
+    assert calls == [16]  # Validation + three warm-up + twelve timed requests.
+    document = make_document({"warmup_requests": 2})
+    results.validate_document(document)
+    document["configuration"]["warmup_requests"] = 1
+    with pytest.raises(ValueError, match="warm-up request budget"):
+        results.validate_document(document)
+
+
 def test_reject_incomplete_or_corrupt_results():
     base = make_document()
     invalid = []
@@ -302,6 +363,43 @@ def test_reject_incomplete_or_corrupt_results():
     for document in invalid:
         with pytest.raises(ValueError):
             results.validate_document(document)
+
+
+def test_blocking_st_shares_one_network_runtime(monkeypatch):
+    runtimes, received = [], []
+    runtime_module = ModuleType("wreq.runtime")
+
+    def create_runtime(**options):
+        assert options == {"workers": 1, "work_steal": False}
+        runtime = object()
+        runtimes.append(runtime)
+        return runtime
+
+    runtime_module.Runtime = create_runtime
+    monkeypatch.setitem(sys.modules, "wreq.runtime", runtime_module)
+
+    @contextmanager
+    def operation(client, protocol, url, body, kind, **options):
+        received.append(options.get("runtime"))
+        yield lambda: {"status": 200, "protocol": protocol, "response_bytes": len(body)}
+
+    monkeypatch.setattr(benchmark, "blocking_operations", operation)
+    request = {
+        "payload_bytes": 1024,
+        "body_kind": "full",
+        "protocol": "h1",
+        "url": "https://localhost",
+        "concurrency": 3,
+        "requests": 6,
+        "warmup_requests": 3,
+        "warmup": 1,
+        "samples": 1,
+    }
+    benchmark.run_blocking_case("wreq_blocking_st", request)
+    assert len(runtimes) == 1 and received == [runtimes[0]] * 3
+    received.clear()
+    benchmark.run_blocking_case("wreq_blocking", request)
+    assert len(runtimes) == 1 and received == [None] * 3
 
 
 def test_native_chunk_and_response_validation():

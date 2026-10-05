@@ -11,38 +11,28 @@ import sys
 if __package__:
     from . import async_clients, blocking_clients
     from .workloads import prepare_chunks
+    from .registry import (
+        CAPABILITIES,
+        CLIENTS,
+        CORE_PACKAGES,
+        NATIVE_PACKAGES,
+        PACKAGES,
+        SPECS,
+        supports,
+    )
 else:
     import async_clients
     import blocking_clients
     from workloads import prepare_chunks
-
-CORE_PACKAGES = {
-    "wreq": "wreq",
-    "wreq_st": "wreq",
-    "pyreqwest_st": "pyreqwest",
-    "pyreqwest_mt": "pyreqwest",
-    "ry": "ry",
-}
-NATIVE_PACKAGES = {"wreq", "pyreqwest", "ry", "curl_cffi", "pycurl"}
-CAPABILITIES = {
-    **{
-        client: {
-            "api": "async",
-            "protocols": ["h1", "h2"],
-            "body_kinds": ["full", "stream"],
-        }
-        for client in CORE_PACKAGES
-    },
-    **async_clients.CAPABILITIES,
-    **blocking_clients.CAPABILITIES,
-}
-CLIENTS = tuple(CAPABILITIES)
-PACKAGES = {**CORE_PACKAGES, **async_clients.PACKAGE, **blocking_clients.PACKAGES}
-
-
-def supports(client, protocol, body_kind):
-    capability = CAPABILITIES[client]
-    return protocol in capability["protocols"] and body_kind in capability["body_kinds"]
+    from registry import (
+        CAPABILITIES,
+        CLIENTS,
+        CORE_PACKAGES,
+        NATIVE_PACKAGES,
+        PACKAGES,
+        SPECS,
+        supports,
+    )
 
 
 def normalize_version(version):
@@ -102,53 +92,29 @@ def metadata(client):
         ) from exc
     if not version:
         raise RuntimeError(f"Cannot identify the installed {package} version")
-    runtime = (
-        {"kind": "thread_pool", "session": "one client per logical worker"}
-        if CAPABILITIES[client]["api"] == "blocking"
-        else (
-            {"kind": "custom", "workers": 1, "work_steal": False}
-            if client == "wreq_st"
-            else (
-                {"kind": "single_thread"}
-                if client == "pyreqwest_st"
-                else (
-                    {"kind": "multi_thread"}
-                    if client == "pyreqwest_mt"
-                    else {"kind": "default"}
-                )
-            )
-        )
-    )
-    response_read = "Client streaming API to EOF"
-    pool = {"kind": "library default"}
-    if client in async_clients.CLIENTS:
-        response_read = async_clients.RESPONSE_READ[client]
-        pool = (
-            {"max_clients": async_clients.POOL_LIMIT}
-            if client == "curl_cffi"
-            else (
-                {"pool_maxsize": async_clients.POOL_LIMIT}
-                if client == "niquests"
-                else {"connection_limit": None}
-            )
-        )
-    elif CAPABILITIES[client]["api"] == "blocking":
-        response_read = blocking_clients.RESPONSE_READ[client]
-        pool = {"kind": "one client per logical worker"}
     return {
         "package": package,
         "version": version,
-        "runtime": runtime,
         "native": native,
-        "response_read": response_read,
-        "pool": pool,
-        **CAPABILITIES[client],
+        **SPECS[client].settings(),
     }
 
 
 async def parts(chunks):
     for chunk in chunks:
         yield chunk
+
+
+def network_runtime(client):
+    """Create a custom wreq runtime before validation or timing starts."""
+    spec = SPECS[client]
+    if spec.package != "wreq" or spec.runtime["kind"] != "custom":
+        return None
+    from wreq.runtime import Runtime
+
+    return Runtime(
+        workers=spec.runtime["workers"], work_steal=spec.runtime["work_steal"]
+    )
 
 
 @asynccontextmanager
@@ -159,7 +125,7 @@ async def operations(client_id, protocol, url, body, body_kind):
         raise ValueError(
             f"Unsupported async benchmark combination: {client_id}/{protocol}/{body_kind}"
         )
-    if client_id in async_clients.CLIENTS:
+    if SPECS[client_id].adapter == "async":
         async with async_clients.operations(
             client_id, protocol, url, body, body_kind
         ) as post:
@@ -168,14 +134,11 @@ async def operations(client_id, protocol, url, body, body_kind):
     # Payloads/chunks are prepared once, outside timed batches. Each upload gets
     # its own iterator; no artificial delay is inserted between chunks.
     chunks = prepare_chunks(body, body_kind)
-    if client_id.startswith("wreq"):
+    if SPECS[client_id].package == "wreq":
         import wreq
-        from wreq.runtime import Runtime
         from wreq.tls import TlsVersion
 
-        runtime = (
-            Runtime(workers=1, work_steal=False) if client_id == "wreq_st" else None
-        )
+        runtime = network_runtime(client_id)
         client = wreq.Client(
             tls_verify=False,
             https_only=True,
@@ -200,7 +163,7 @@ async def operations(client_id, protocol, url, body, body_kind):
             yield post
         finally:
             client.close()
-    elif client_id.startswith("pyreqwest"):
+    elif SPECS[client_id].package == "pyreqwest":
         from pyreqwest.client import ClientBuilder
         from pyreqwest.http import Url
 
@@ -209,7 +172,7 @@ async def operations(client_id, protocol, url, body, body_kind):
             .danger_accept_invalid_certs(True)
             .https_only(True)
             .no_proxy()
-            .runtime_multithreaded(client_id == "pyreqwest_mt")
+            .runtime_multithreaded(SPECS[client_id].runtime["kind"] == "multi_thread")
             .min_tls_version("TLSv1.3")
             .max_tls_version("TLSv1.3")
         )
@@ -272,7 +235,9 @@ async def operations(client_id, protocol, url, body, body_kind):
         raise ValueError(f"Unknown client: {client_id}")
 
 
-def blocking_operations(client_id, protocol, url, body, body_kind, *, chunks=None):
+def blocking_operations(
+    client_id, protocol, url, body, body_kind, *, chunks=None, runtime=None
+):
     if CAPABILITIES[client_id]["api"] != "blocking" or not supports(
         client_id, protocol, body_kind
     ):
@@ -280,5 +245,5 @@ def blocking_operations(client_id, protocol, url, body, body_kind, *, chunks=Non
             f"Unsupported blocking benchmark combination: {client_id}/{protocol}/{body_kind}"
         )
     return blocking_clients.operations(
-        client_id, protocol, url, body, body_kind, chunks=chunks
+        client_id, protocol, url, body, body_kind, chunks=chunks, runtime=runtime
     )

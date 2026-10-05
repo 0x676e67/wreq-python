@@ -12,6 +12,14 @@ def escape(value):
 
 
 def provenance(document, label=""):
+    if document.get("measurement_sources"):
+        return (
+            '<p class="wreq-bench-provenance">Combined preview from separate measured runs.</p>'
+            + "\n".join(
+                provenance(measurement, measurement["label"])
+                for measurement in document["measurement_sources"]
+            )
+        )
     source = document["source"]
     date = datetime.fromisoformat(document["generated_at"]).astimezone(timezone.utc)
     prefix = f"{escape(label)} · " if label else ""

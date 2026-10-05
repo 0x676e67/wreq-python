@@ -10,32 +10,14 @@ import sys
 from urllib.parse import urlsplit
 
 if __package__:
-    from .clients import CAPABILITIES
+    from .registry import CAPABILITIES, LABELS
     from .results import validate_document
 else:
-    from clients import CAPABILITIES
+    from registry import CAPABILITIES, LABELS
     from results import validate_document
 
 
 REPOSITORY = "https://github.com/0x676e67/wreq-python"
-LABELS = {
-    "wreq": "wreq (MT)",
-    "wreq_st": "wreq (ST)",
-    "pyreqwest_st": "pyreqwest (ST)",
-    "pyreqwest_mt": "pyreqwest (MT)",
-    "ry": "ry (default)",
-    "httpx": "httpx",
-    "aiohttp": "aiohttp",
-    "niquests": "niquests",
-    "curl_cffi": "curl_cffi",
-    "wreq_blocking": "wreq (blocking)",
-    "ry_blocking": "ry (blocking)",
-    "requests": "requests",
-    "httpx_blocking": "httpx (blocking)",
-    "niquests_blocking": "niquests (blocking)",
-    "curl_cffi_blocking": "curl_cffi (blocking)",
-    "pycurl": "PycURL",
-}
 
 
 def escape(value) -> str:
@@ -134,7 +116,8 @@ def render_markdown(
         f"| Server | Controlled Rust TLS echo server; {config['server_workers']} workers |",
         "| TLS | TLS 1.3; certificate verification disabled for the local test server |",
         f"| Repeats | Rounds: {config['rounds']}; timed batches/round: {config['samples']}; "
-        f"requests/batch: {config['requests']}; warm-up batches/round: {config['warmup']} |",
+        f"timed requests/batch: {config['requests']}; warm-up batches/round: {config['warmup']}; "
+        f"warm-up requests/batch: {config.get('warmup_requests', config['requests'])} |",
         "| Stream upload chunk | "
         + (
             (

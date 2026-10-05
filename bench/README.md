@@ -15,7 +15,7 @@ are reported separately.
 - Async clients: wreq default runtime, wreq single worker, pyreqwest
   single-threaded and multithreaded runtimes, ry, httpx, aiohttp, niquests, and
   curl_cffi.
-- Blocking clients: wreq, ry, requests, httpx, niquests, curl_cffi, and pycurl.
+- Blocking variants: wreq MT/ST, ry, requests, httpx, niquests, curl_cffi, and pycurl.
 - Three rounds, each with one warmup and one timed batch of 300 requests.
   Case order is shuffled with a recorded seed.
 - Status, negotiated HTTP version, and total response length are checked for
@@ -74,6 +74,12 @@ The default suite has 1,680 supported cases, 5,040 timed batches and the same
 number of warm-up batches. Allow several hours for a full run. The setup commands
 above prepare the dependencies and native binaries; the runner won't install or
 build them for you. Publishing the results to the docs is optional.
+
+For a warm-up experiment, pass `--warmup-requests 150`. This keeps the default
+300 timed requests and three rounds, but sends 150 requests per warm-up batch.
+The budget must reach every concurrent worker. Compare against the default on
+the same machine before using these results; reduced warm-up runs can be
+previewed with `docs/build.py --data RUN.json` but cannot replace published data.
 
 Use the same allocator and release flags for both wreq revisions in a comparison,
 and record them in the run's build provenance. jemalloc controls Rust allocations
@@ -157,7 +163,7 @@ To update only the blocking results without rerunning the async clients:
 uv run --no-sync python bench/run.py --input bench/data/BLOCKING.json --publish-blocking
 ```
 
-This requires all seven blocking clients and the same complete workload and
+This requires all eight blocking variants and the same complete workload and
 batch minimums. It freezes the candidate and existing `latest.json` for the docs
 build, then selects `bench/data/latest-blocking.json` only if the build succeeds.
 The async source and all historical files stay unchanged. The two publication
@@ -188,3 +194,41 @@ This standalone preview does not load the selected blocking overlay.
 For blocking-only data, use `--blocking-data bench/data/BLOCKING.json` instead.
 Each measurement shows its source revision and whether the checkout had
 uncommitted changes. Saving data on `main` doesn't change which code was tested.
+
+Explicit `--blocking-data` overrides may preview a blocking subset or a reduced
+warm-up run, provided their workload axes match the async snapshot. Publishing
+still requires the complete current matrix and full publication budget.
+Combined preview JSON may record `measurement_sources`; each entry must assign
+distinct clients, and together they must cover the configured clients. The page
+shows each run's revision and collection time separately.
+
+## Blocking wreq runtimes
+
+`wreq_blocking` uses the default shared multi-thread network runtime (MT).
+`wreq_blocking_st` shares one `Runtime(workers=1, work_steal=False)` across
+all logical workers in each case (ST). Both retain one client per logical
+worker and the same Python thread pool for concurrent blocking calls.
+
+The default full run includes both async and blocking wreq MT/ST, for 17
+variants and 1,792 supported cells. No `--clients` option is needed. Historical
+published snapshots remain readable; new full/blocking publication requires ST.
+
+## Maintaining the suite
+
+- `registry.py`: one `ClientSpec` per variant, with package, label, capabilities,
+  runtime, pool and response-reading settings. Default selection, validation,
+  metadata and chart labels derive from this registry.
+- `clients.py`, `async_clients.py`, `blocking_clients.py`: library-specific
+  construction and request/response adapters. Imports stay inside worker
+  processes. Custom wreq runtimes use the registered configuration.
+- `benchmark.py`: workload scheduling and the timed async/blocking loops.
+- `processes.py`: worker/server startup, JSON-line communication and cleanup.
+  `start_worker()` owns a subprocess; `Worker.measure()` submits one case.
+- `results.py`: aggregation and snapshot validation; `run.py`: artifact
+  preservation, reporting and explicit publication.
+
+To add a client, register its description in `SPECS` and implement its adapter.
+To add another wreq runtime variant, register its runtime settings and label.
+Keep payload preparation, runtime creation and protocol communication outside
+timed batches. Verify descriptions against the actual library configuration,
+then run the tool tests and an all-client local HTTPS smoke test.

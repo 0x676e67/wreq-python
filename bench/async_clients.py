@@ -6,28 +6,27 @@ from urllib.parse import urlsplit
 
 if __package__:
     from .workloads import prepare_chunks
+    from .registry import (
+        CAPABILITIES as ALL_CAPABILITIES,
+        SPECS,
+        adapter_clients,
+        POOL_LIMIT,
+        RESPONSE_CHUNK_BYTES,
+    )
 else:
     from workloads import prepare_chunks
+    from registry import (
+        CAPABILITIES as ALL_CAPABILITIES,
+        SPECS,
+        adapter_clients,
+        POOL_LIMIT,
+        RESPONSE_CHUNK_BYTES,
+    )
 
-CLIENTS = ("httpx", "aiohttp", "niquests", "curl_cffi")
-PACKAGE = {client: client for client in CLIENTS}
-CAPABILITIES = {
-    client: {
-        "api": "async",
-        "protocols": ["h1"] if client == "aiohttp" else ["h1", "h2"],
-        "body_kinds": ["full", "stream"],
-    }
-    for client in CLIENTS
-}
-RESPONSE_READ = {
-    "httpx": "aiter_raw(): native transport chunks",
-    "aiohttp": "iter_any(): available response chunks",
-    "niquests": "iter_raw(65536): reads of at most 64 KiB",
-    "curl_cffi": "aiter_content(): libcurl callback chunks",
-}
-RESPONSE_CHUNK_BYTES = 65536
-# Match niquests' connection pool and curl_cffi's handle pool to concurrency 150.
-POOL_LIMIT = 150
+CLIENTS = adapter_clients("async")
+PACKAGE = {client: SPECS[client].package for client in CLIENTS}
+CAPABILITIES = {client: ALL_CAPABILITIES[client] for client in CLIENTS}
+RESPONSE_READ = {client: SPECS[client].response_read for client in CLIENTS}
 
 
 def validate_target(url):

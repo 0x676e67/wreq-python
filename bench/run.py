@@ -39,7 +39,8 @@ def describe(config):
         f"Matrix: {cells:,} supported cells; "
         f"{cells * config['rounds'] * config['samples']:,} timed batches; "
         f"{cells * config['rounds'] * config['warmup']:,} warm-up batches; "
-        f"{config['requests']:,} requests/batch.",
+        f"{config['requests']:,} timed requests/batch; "
+        f"{config.get('warmup_requests', config['requests']):,} warm-up requests/batch.",
         flush=True,
     )
 
@@ -207,7 +208,9 @@ def main(argv=None):
                             companion_raw = handle.read(MAX_DATA_BYTES + 1)
                         companion_document = decode_document(companion_raw)
                         require_publish(
-                            companion_document["configuration"], blocking=True
+                            companion_document["configuration"],
+                            blocking=True,
+                            allow_legacy_snapshot=True,
                         )
                         companion.write_bytes(companion_raw)
                         command.extend(["--blocking-data", str(companion)])

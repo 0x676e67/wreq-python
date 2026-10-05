@@ -40,10 +40,17 @@ BLOCKING_CLIENTS = tuple(
 )
 
 
-def require_publish(config, *, blocking=False):
+def require_publish(config, *, blocking=False, allow_legacy_snapshot=False):
     """Require the complete default suite or its independent blocking matrix."""
+    expected_clients = BLOCKING_CLIENTS if blocking else CLIENTS
+    if allow_legacy_snapshot:
+        legacy_clients = tuple(
+            client for client in expected_clients if client != "wreq_blocking_st"
+        )
+        if set(config.get("clients", ())) == set(legacy_clients):
+            expected_clients = legacy_clients
     axes = {
-        "clients": BLOCKING_CLIENTS if blocking else CLIENTS,
+        "clients": expected_clients,
         "protocols": ("h1", "h2"),
         "body_kinds": ("full", "stream"),
         "payload_bytes": BODY_CASES,
@@ -51,7 +58,7 @@ def require_publish(config, *, blocking=False):
     }
     message = (
         f"Publishing requires the complete {'blocking' if blocking else 'default'} matrix, "
-        ">=300 requests, >=3 rounds, >=1 warm-up and timed sample"
+        ">=300 timed and warm-up requests, >=3 rounds, >=1 warm-up and timed sample"
     )
     try:
         complete = all(
@@ -66,6 +73,8 @@ def require_publish(config, *, blocking=False):
                 ("samples", 1),
             )
         )
+        warmup_requests = config.get("warmup_requests", config["requests"])
+        complete = complete and type(warmup_requests) is int and warmup_requests >= 300
     except (KeyError, TypeError) as exc:
         raise ValueError(message) from exc
     if not complete:
@@ -219,6 +228,15 @@ def validate_document(document):
             config["requests"] >= max(config["concurrency"]),
             "Requests cannot be below concurrency",
         )
+        if "warmup_requests" in config:
+            require(
+                integer(config["warmup_requests"])
+                and (
+                    config["warmup"] == 0
+                    or config["warmup_requests"] >= max(config["concurrency"])
+                ),
+                "Invalid warm-up request budget",
+            )
         if "stream_chunk_bytes_by_payload" in config:
             chunks = config["stream_chunk_bytes_by_payload"]
             require(
@@ -235,6 +253,57 @@ def validate_document(document):
             set(document["clients"]) == set(config["clients"]),
             "Missing client metadata",
         )
+        if "measurement_sources" in document:
+            measurements = document["measurement_sources"]
+            require(
+                isinstance(measurements, list) and bool(measurements),
+                "Invalid measurement sources",
+            )
+            assigned_clients = []
+            for measurement in measurements:
+                require(
+                    isinstance(measurement, dict)
+                    and "measurement_sources" not in measurement,
+                    "Invalid measurement source",
+                )
+                require(
+                    isinstance(measurement["label"], str)
+                    and bool(measurement["label"].strip()),
+                    "Invalid measurement label",
+                )
+                members = measurement["clients"]
+                require(
+                    isinstance(members, list)
+                    and bool(members)
+                    and all(isinstance(client, str) for client in members),
+                    "Invalid measurement clients",
+                )
+                assigned_clients.extend(members)
+                measured_at = datetime.fromisoformat(measurement["generated_at"])
+                require(
+                    measured_at.utcoffset() is not None
+                    and measured_at.utcoffset().total_seconds() == 0,
+                    "Measurement timestamps must use UTC",
+                )
+                measured_source = measurement["source"]
+                require(
+                    isinstance(measured_source, dict)
+                    and bool(re.fullmatch(r"[0-9a-f]{40}", measured_source["commit"]))
+                    and type(measured_source["dirty"]) is bool,
+                    "Invalid measurement revision",
+                )
+                if "file" in measurement or "sha256" in measurement:
+                    require(
+                        isinstance(measurement["file"], str)
+                        and bool(measurement["file"])
+                        and bool(re.fullmatch(r"[0-9a-f]{64}", measurement["sha256"])),
+                        "Invalid measurement artifact",
+                    )
+            require(
+                len(assigned_clients) == len(set(assigned_clients))
+                and set(assigned_clients) == set(config["clients"]),
+                "Measurement sources must cover every client exactly once",
+            )
         environment = document["environment"]
         require(
             all(

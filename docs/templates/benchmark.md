@@ -42,7 +42,7 @@ the chart: it identifies the code tested, which may differ from the docs revisio
 | Repetition | Case order is shuffled; warm-up batches are excluded from all reported rates |
 
 The default suite tests seven body sizes from 1 KiB to 4 MiB, with Full and
-Stream uploads at concurrency 10, 50, 100, and 150. Each batch has 300 requests,
+Stream uploads at concurrency 10, 50, 100, and 150. Each timed batch has 300 requests,
 and each case runs for three rounds. Earlier snapshots may cover fewer cases.
 The charts and raw JSON show the cases actually measured, including the upload
 chunk sizes recorded in the JSON.
@@ -63,6 +63,11 @@ available CPU parallelism. `wreq (ST)` uses
 `Runtime(workers=1, work_steal=False)`. The ST and MT labels refer to the Rust
 runtime, not Python threads. `ry` uses its default runtime; the two `pyreqwest`
 variants use single-threaded and multithreaded runtimes.
+
+New runs also include `wreq (blocking MT)` and `wreq (blocking ST)`. Blocking
+ST shares one single-worker runtime across every client in a case; the Python
+thread pool still supplies concurrent blocking calls. Historical charts only
+show variants present in their recorded data.
 
 Blocking clients run in a persistent thread pool. Each worker has its own client
 and connection pool, so scheduling and HTTP/2 multiplexing differ from the

@@ -6,11 +6,11 @@ import json
 from pathlib import Path
 
 if __package__:
-    from .clients import CAPABILITIES
+    from .registry import CAPABILITIES, SPECS
     from .report import LABELS, payload_label
     from .results import validate_document
 else:
-    from clients import CAPABILITIES
+    from registry import CAPABILITIES, SPECS
     from report import LABELS, payload_label
     from results import validate_document
 
@@ -69,11 +69,7 @@ def _tick_label(value):
 
 
 def _color(client, palette):
-    if client == "wreq_st":
-        return palette["wreq_st"]
-    if client in {"wreq", "wreq_blocking"}:
-        return palette["wreq"]
-    return palette["peer"]
+    return palette[SPECS[client].color]
 
 
 def _text(x, y, value, *, size, color, anchor="start", attributes=""):
