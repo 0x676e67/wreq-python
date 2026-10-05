@@ -26,9 +26,9 @@ use pyo3::{
 };
 use tokio_util::task::AbortOnDropHandle;
 
-use self::asyncio::Port;
 pub(crate) use self::asyncio::running_loop;
 pub use self::awaitable::Coroutine;
+use self::{asyncio::Port, scope::Scope};
 use crate::runtime::Runtime;
 
 /// Run `fut` on the runtime once the coroutine named `qualname` is first awaited.
@@ -86,17 +86,17 @@ where
     F: Future<Output = PyResult<T>> + Send + 'static,
     T: EntersSelf + for<'a> IntoPyObject<'a> + 'static,
 {
-    Bound::new(py, coroutine(qualname, fut).managed(enters_self::<T>))
-}
-
-/// Whether `T` still has its native `__aenter__`; a [`managed`] result is always exactly a
-/// `T`, but user code may replace the class attribute.
-fn enters_self<T: EntersSelf>(py: Python<'_>) -> bool {
-    T::native_aenter().get(py).is_some_and(|native| {
-        T::type_object(py)
-            .getattr(intern!(py, "__aenter__"))
-            .is_ok_and(|aenter| aenter.is(native))
-    })
+    let mut coroutine = coroutine(qualname, fut);
+    // The result is always exactly a `T`, so it enters itself unless user code replaced
+    // `T.__aenter__`.
+    coroutine.scope = Scope::Ready(|py| {
+        T::native_aenter().get(py).is_some_and(|native| {
+            T::type_object(py)
+                .getattr(intern!(py, "__aenter__"))
+                .is_ok_and(|aenter| aenter.is(native))
+        })
+    });
+    Bound::new(py, coroutine)
 }
 
 /// A coroutine that returns `value` without suspending.

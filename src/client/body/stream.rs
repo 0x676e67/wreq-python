@@ -266,13 +266,11 @@ async def forward(gen, sender):
             .bind(py)
             .call1((generator, Sender(Mutex::new(Some(tx)))))?;
         // create_task captures the caller's contextvars on the running loop.
-        let task = match event_loop.call_method1(intern!(py, "create_task"), (&coroutine,)) {
-            Ok(task) => task,
-            Err(err) => {
+        let task = event_loop
+            .call_method1(intern!(py, "create_task"), (&coroutine,))
+            .inspect_err(|_| {
                 let _ = coroutine.call_method0(intern!(py, "close"));
-                return Err(err);
-            }
-        };
+            })?;
         Ok(Self {
             rx,
             task: Some((task.unbind(), event_loop.unbind())),

@@ -215,9 +215,8 @@ async def test_empty_body_and_unit_results():
         assert [chunk async for chunk in streamer] == []
         assert await streamer.__aexit__(None, None, None) is None
         # Coroutines without a result return None, as sync methods do.
-        coroutine = response.close()
         with pytest.raises(StopIteration) as stop:
-            coroutine.__next__()
+            response.close().__next__()
         assert stop.value.value is None
         assert await client.__aexit__(None, None, None) is None
 

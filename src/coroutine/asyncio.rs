@@ -314,12 +314,7 @@ impl Drop for Keeper {
 pub(crate) fn running_loop(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     static GET_RUNNING_LOOP: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
     GET_RUNNING_LOOP
-        .get_or_try_init(py, || {
-            py.import("asyncio")?
-                .getattr("get_running_loop")
-                .map(Bound::unbind)
-        })?
-        .bind(py)
+        .import(py, "asyncio", "get_running_loop")?
         .call0()
 }
 

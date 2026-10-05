@@ -15,10 +15,7 @@ use pyo3::{
     prelude::*,
 };
 
-use super::{
-    Port,
-    scope::{EntersSelfFn, Scope},
-};
+use super::{Port, scope::Scope};
 
 /// An awaitable driving a Rust future on the asyncio event loop thread.
 ///
@@ -26,7 +23,7 @@ use super::{
 /// the C task fast path work unchanged. A throw or close drops the Rust future,
 /// which aborts any spawned work. PyO3's borrow flag rejects reentrant polls.
 ///
-/// A coroutine built with [`managed`](Self::managed) also works as `async with`, as
+/// A coroutine built with [`managed`](super::managed) also works as `async with`, as
 /// `async with await` would; the `scope` module holds that state.
 #[pyclass(module = "wreq")]
 pub struct Coroutine {
@@ -79,12 +76,6 @@ impl Coroutine {
             slot,
             scope: Scope::Unsupported,
         }
-    }
-
-    /// Let `async with` enter the coroutine; see [`coroutine::managed`](super::managed).
-    pub(super) fn managed(mut self, enters_self: EntersSelfFn) -> Self {
-        self.scope = Scope::Ready(enters_self);
-        self
     }
 
     #[inline]

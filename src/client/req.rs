@@ -5,9 +5,7 @@ use std::{
 
 use futures_util::TryFutureExt;
 use http::header::COOKIE;
-use pyo3::{
-    PyResult, exceptions::asyncio::CancelledError, intern, prelude::*, pybacked::PyBackedStr,
-};
+use pyo3::{PyResult, exceptions::asyncio::CancelledError, prelude::*, pybacked::PyBackedStr};
 
 use crate::{
     client::{
@@ -22,7 +20,6 @@ use crate::{
     extractor::Extractor,
     header::{HeaderMap, OrigHeaderMap},
     http::{Method, Version},
-    macros::lookup,
     proxy::Proxy,
     redirect,
 };
@@ -189,17 +186,11 @@ impl FromPyObject<'_, '_> for Request {
 
     fn extract(ob: Borrowed<PyAny>) -> PyResult<Request> {
         let mut request = Self::default();
-        // Extracting a body or multipart form can start a generator or take stream parts, so
-        // they are extracted last, after every other option has been validated.
-        let py = ob.py();
-        let body = lookup(&ob, intern!(py, "body"));
-        let multipart = lookup(&ob, intern!(py, "multipart"));
-        let found = usize::from(body.is_some()) + usize::from(multipart.is_some());
-        // Common keys first: the scan stops once every given key is found.
+        // Common keys first. A body or multipart form can start a generator or take stream
+        // parts, so they are extracted last, after every other option has been validated.
         extract_options!(
             ob,
             request,
-            found,
             [
                 json,
                 form,
@@ -225,14 +216,9 @@ impl FromPyObject<'_, '_> for Request {
                 brotli,
                 deflate,
                 zstd,
-            ]
+            ],
+            [body, multipart]
         );
-        if let Some(body) = body {
-            request.body = body.extract()?;
-        }
-        if let Some(multipart) = multipart {
-            request.multipart = multipart.extract()?;
-        }
         Ok(request)
     }
 }

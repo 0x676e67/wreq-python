@@ -14,11 +14,6 @@ pub(crate) fn lookup<'py>(
     }
 }
 
-/// Keys left to look up: a dict's length, or unbounded for other mappings.
-pub(crate) fn remaining(ob: &Bound<'_, PyAny>) -> usize {
-    ob.cast::<PyDict>().map_or(usize::MAX, |dict| dict.len())
-}
-
 macro_rules! extract_option {
     ($ob:expr, $params:expr, $field:ident) => {
         if let Some(value) =
@@ -30,11 +25,19 @@ macro_rules! extract_option {
 }
 
 /// Like [`extract_option!`] for several fields, but stop looking up keys once every key
-/// of a dict has been found, counting `$found` keys the caller already looked up. Unknown
-/// keys are never found, so they make the scan run to the end and stay ignored.
+/// of a dict has been found. `$last` fields are looked up first and extracted after the
+/// rest. Unknown keys are never found, so they make the scan run to the end and stay ignored.
 macro_rules! extract_options {
-    ($ob:expr, $params:expr, $found:expr, [$($field:ident),* $(,)?]) => {{
-        let mut remaining = $crate::macros::remaining(&$ob).saturating_sub($found);
+    ($ob:expr, $params:expr, [$($field:ident),* $(,)?], [$($last:ident),* $(,)?]) => {{
+        $(
+            let $last =
+                $crate::macros::lookup(&$ob, pyo3::intern!($ob.py(), stringify!($last)));
+        )*
+        // A dict's length bounds the keys left to find; other mappings are scanned in full.
+        let mut remaining = $ob
+            .cast::<pyo3::types::PyDict>()
+            .map_or(usize::MAX, |dict| dict.len())
+            $(.saturating_sub(usize::from($last.is_some())))*;
         $(
             if remaining > 0
                 && let Some(value) =
@@ -42,6 +45,11 @@ macro_rules! extract_options {
             {
                 $params.$field = value.extract()?;
                 remaining -= 1;
+            }
+        )*
+        $(
+            if let Some(value) = $last {
+                $params.$last = value.extract()?;
             }
         )*
     }};

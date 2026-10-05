@@ -91,7 +91,12 @@ impl Coroutine {
     /// Finish with `value`, first entering it when awaited by `async with`.
     pub(super) fn complete(&mut self, py: Python<'_>, value: Py<PyAny>) -> PyResult<Step> {
         match mem::replace(&mut self.scope, Scope::Spent) {
-            Scope::Entering(enters_self) => return self.open(py, value, enters_self),
+            // Its `__aenter__` would return the result itself: enter without awaiting it.
+            Scope::Entering(enters_self) if enters_self(py) => {
+                let exit = value.bind(py).getattr(intern!(py, "__aexit__"))?;
+                self.scope = Scope::Entered(exit.unbind());
+            }
+            Scope::Entering(_) => return self.open(py, value),
             Scope::Opening { exit, .. } => self.scope = Scope::Entered(exit),
             scope => self.scope = scope,
         }
@@ -100,20 +105,9 @@ impl Coroutine {
     }
 
     /// Await the manager's `__aenter__`, as `async with` would.
-    fn open(
-        &mut self,
-        py: Python<'_>,
-        manager: Py<PyAny>,
-        enters_self: EntersSelfFn,
-    ) -> PyResult<Step> {
+    fn open(&mut self, py: Python<'_>, manager: Py<PyAny>) -> PyResult<Step> {
         self.finish();
         let manager = manager.into_bound(py);
-        // Its `__aenter__` would return the manager itself: enter without awaiting it.
-        if enters_self(py) {
-            let exit = manager.getattr(intern!(py, "__aexit__"))?;
-            self.scope = Scope::Entered(exit.unbind());
-            return Ok(Step::Return(manager.unbind()));
-        }
         // Results have no instance dict, so binding on the instance matches `async with`.
         let (Ok(enter), Ok(exit)) = (
             manager.getattr(intern!(py, "__aenter__")),
