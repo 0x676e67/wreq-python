@@ -13,6 +13,7 @@ use std::{
 
 use bytes::Bytes;
 use futures_util::FutureExt;
+use http_body::Body as _;
 use http_body_util::BodyExt;
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
 use tokio::sync::{
@@ -82,6 +83,9 @@ impl Streamer {
 
     /// Buffered frames returned before `__anext__` yields to the event loop once.
     const YIELD_EVERY: usize = 8;
+
+    /// An async reader reads a buffered body of known length up to this size at once.
+    const READ_ATTACHED: u64 = 64 * 1024;
 
     /// Create a new [`Streamer`] instance.
     #[inline]
@@ -156,17 +160,24 @@ impl Streamer {
         }
     }
 
-    /// Read a frame the body already holds, before any read-ahead task starts, so a
-    /// synchronous reader of a short body never waits on another thread.
-    fn ready_frame(&self) -> Option<PyResult<Frame>> {
+    /// Read a frame the body already holds, before any read-ahead task starts, so a reader
+    /// of a short body never waits on another thread. With `limit`, only a body of known
+    /// length up to it is read here, so an async reader never decodes on the event loop;
+    /// `end` builds the error that ends iteration.
+    fn ready_frame(&self, limit: Option<u64>, end: fn() -> Error) -> Option<PyResult<Frame>> {
         let mut state = self.reader.lock();
         let State::Idle(resp) = &mut *state else {
             return None;
         };
+        if let Some(limit) = limit
+            && !resp.size_hint().exact().is_some_and(|len| len <= limit)
+        {
+            return None;
+        }
         let _runtime = self.runtime.handle().enter();
         let Some(frame) = Self::poll_ready(resp)? else {
             *state = State::Closed;
-            return Some(Err(Error::StopIteration.into()));
+            return Some(Err(end().into()));
         };
         if frame.is_err() {
             *state = State::Closed;
@@ -264,7 +275,7 @@ impl Streamer {
 
     fn __next__(&self, py: Python) -> PyResult<Frame> {
         // Frames already received are returned without releasing the GIL.
-        if let Some(frame) = self.ready_frame() {
+        if let Some(frame) = self.ready_frame(None, || Error::StopIteration) {
             return frame;
         }
         nogil::run(py, &self.runtime, self.next(|| Error::StopIteration))
@@ -297,6 +308,12 @@ impl Streamer {
         let slf = slf.unbind();
         coroutine::local(py, "Streamer.__anext__", async move {
             let this = slf.get();
+            // A short body already buffered is read without starting the read-ahead task.
+            if let Some(frame) =
+                this.ready_frame(Some(Self::READ_ATTACHED), || Error::StopAsyncIteration)
+            {
+                return frame;
+            }
             // Buffered frames complete without suspending; yield to the event loop
             // periodically so timeouts, cancellation and other tasks run.
             if this.reader.since_yield.fetch_add(1, Ordering::Relaxed) >= Self::YIELD_EVERY {

@@ -89,6 +89,22 @@ async def test_upload_errors(failure):
 
 
 @pytest.mark.asyncio
+async def test_invalid_option_does_not_start_the_body():
+    started = asyncio.Event()
+
+    async def chunks():
+        started.set()
+        yield b"first"
+
+    async with local_server() as (url, _), wreq.Client(proxies=[]) as client:
+        # Options are validated before the body generator is consumed.
+        with pytest.raises(TypeError):
+            await client.post(url, body=chunks(), timeout=5)
+        await asyncio.sleep(0.1)
+        assert not started.is_set()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("action", ["cancel", "early_response"])
 async def test_abandoned_upload_to_stalled_peer(action):
     # The peer reads only the head, so the upload stalls with the socket buffers full.

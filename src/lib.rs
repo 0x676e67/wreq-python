@@ -321,6 +321,8 @@ fn wreq(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Runtime>()?;
     m.add_class::<Response>()?;
     m.add_class::<WebSocket>()?;
+    coroutine::record_enters_self::<Response>(py)?;
+    coroutine::record_enters_self::<WebSocket>(py)?;
     m.add_class::<Streamer>()?;
     m.add_class::<Method>()?;
     m.add_class::<Version>()?;

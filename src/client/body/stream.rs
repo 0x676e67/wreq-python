@@ -226,7 +226,7 @@ impl PyAsyncStream {
     fn new(generator: Bound<'_, PyAny>) -> PyResult<Self> {
         static FORWARD: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
         let py = generator.py();
-        let event_loop = py.import("asyncio")?.call_method0("get_running_loop")?;
+        let event_loop = coroutine::running_loop(py)?;
         let forward = FORWARD.get_or_try_init(py, || {
             PyModule::from_code(
                 py,
@@ -266,10 +266,10 @@ async def forward(gen, sender):
             .bind(py)
             .call1((generator, Sender(Mutex::new(Some(tx)))))?;
         // create_task captures the caller's contextvars on the running loop.
-        let task = match event_loop.call_method1("create_task", (&coroutine,)) {
+        let task = match event_loop.call_method1(intern!(py, "create_task"), (&coroutine,)) {
             Ok(task) => task,
             Err(err) => {
-                let _ = coroutine.call_method0("close");
+                let _ = coroutine.call_method0(intern!(py, "close"));
                 return Err(err);
             }
         };

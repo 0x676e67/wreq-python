@@ -20,10 +20,13 @@ use std::{
     task::Poll,
 };
 
-use pyo3::{IntoPyObjectExt, exceptions::PyRuntimeError, prelude::*};
+use pyo3::{
+    IntoPyObjectExt, PyTypeInfo, exceptions::PyRuntimeError, intern, prelude::*, sync::PyOnceLock,
+};
 use tokio_util::task::AbortOnDropHandle;
 
 use self::asyncio::Port;
+pub(crate) use self::asyncio::running_loop;
 pub use self::awaitable::Coroutine;
 use crate::runtime::Runtime;
 
@@ -56,6 +59,20 @@ where
     Bound::new(py, coroutine(qualname, fut))
 }
 
+/// A result type whose native `__aenter__` returns the object itself, so `async with` on a
+/// [`managed`] coroutine enters it without awaiting `__aenter__`.
+pub trait EntersSelf: PyTypeInfo {
+    /// The native `__aenter__`, recorded by [`record_enters_self`].
+    fn native_aenter() -> &'static PyOnceLock<Py<PyAny>>;
+}
+
+/// Record `T`'s native `__aenter__` at module init, before user code can replace it.
+pub fn record_enters_self<T: EntersSelf>(py: Python<'_>) -> PyResult<()> {
+    let aenter = T::type_object(py).getattr(intern!(py, "__aenter__"))?;
+    let _ = T::native_aenter().set(py, aenter.unbind());
+    Ok(())
+}
+
 /// Like [`local`], but `async with` may enter the coroutine directly, as `async with await`
 /// would: its result must be an async context manager, whose `__aenter__` is awaited too.
 #[inline]
@@ -66,9 +83,21 @@ pub fn managed<'py, F, T>(
 ) -> PyResult<Bound<'py, Coroutine>>
 where
     F: Future<Output = PyResult<T>> + Send + 'static,
-    T: for<'a> IntoPyObject<'a>,
+    T: EntersSelf + for<'a> IntoPyObject<'a>,
 {
-    Bound::new(py, coroutine(qualname, fut).managed())
+    Bound::new(py, coroutine(qualname, fut).managed(enters_self::<T>))
+}
+
+/// Whether `object` is exactly a `T` whose class still has the native `__aenter__`: a
+/// subclass or a replaced class attribute may return something else.
+fn enters_self<T: EntersSelf>(object: &Bound<'_, PyAny>) -> bool {
+    let py = object.py();
+    let ty = object.get_type();
+    ty.is(T::type_object(py))
+        && T::native_aenter().get(py).is_some_and(|native| {
+            ty.getattr(intern!(py, "__aenter__"))
+                .is_ok_and(|aenter| aenter.is(native))
+        })
 }
 
 /// A coroutine that returns `value` without suspending.
