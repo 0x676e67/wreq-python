@@ -19,9 +19,19 @@ pub(crate) fn remaining(ob: &Bound<'_, PyAny>) -> usize {
     ob.cast::<PyDict>().map_or(usize::MAX, |dict| dict.len())
 }
 
+macro_rules! extract_option {
+    ($ob:expr, $params:expr, $field:ident) => {
+        if let Some(value) =
+            $crate::macros::lookup(&$ob, pyo3::intern!($ob.py(), stringify!($field)))
+        {
+            $params.$field = value.extract()?;
+        }
+    };
+}
+
 /// Like [`extract_option!`] for several fields, but stop looking up keys once every key
-/// of a dict has been found, counting `$found` keys already looked up by the caller. Unknown
-/// keys are never counted, so they still leave the scan complete and stay ignored.
+/// of a dict has been found, counting `$found` keys the caller already looked up. Unknown
+/// keys are never found, so they make the scan run to the end and stay ignored.
 macro_rules! extract_options {
     ($ob:expr, $params:expr, $found:expr, [$($field:ident),* $(,)?]) => {{
         let mut remaining = $crate::macros::remaining(&$ob).saturating_sub($found);
@@ -35,16 +45,6 @@ macro_rules! extract_options {
             }
         )*
     }};
-}
-
-macro_rules! extract_option {
-    ($ob:expr, $params:expr, $field:ident) => {
-        if let Some(value) =
-            $crate::macros::lookup(&$ob, pyo3::intern!($ob.py(), stringify!($field)))
-        {
-            $params.$field = value.extract()?;
-        }
-    };
 }
 
 macro_rules! apply_option {

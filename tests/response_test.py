@@ -1,4 +1,5 @@
 import asyncio
+import json
 import socket
 import threading
 import time
@@ -154,6 +155,99 @@ async def test_context_exit_keeps_connection_but_close_forbids_reuse():
         writer.write(reply)
         assert bytes(await (await asyncio.wait_for(task, 5)).bytes()) == b"ok"
         assert connections.empty()
+
+
+# 2**63 overflows `isize`, so it decodes as a float.
+JSON_ITEM = {"n": [0, -2, 1.5, 2**63, True, None], "s": "\u00e9\n", "o": {}}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("count", [1, 200, 1200], ids=["inline", "runtime", "large"])
+async def test_reads_decode_buffered_and_cached_bodies(count):
+    payload = json.dumps([JSON_ITEM] * count).encode()
+    reply = b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: %d\r\n\r\n%s" % (
+        len(payload),
+        payload,
+    )
+    # A read timeout starts a timer even when the body is read on the event loop.
+    options = {"proxies": [], "read_timeout": timedelta(seconds=5)}
+
+    def read_blocking(url):
+        with wreq.blocking.Client(**options).get(url) as response:
+            return response.json(), response.text(), bytes(response.bytes())
+
+    async with local_server() as (url, connections):
+        async with wreq.Client(**options) as client:
+            task = asyncio.create_task(client.get(url))
+            _, writer = await asyncio.wait_for(connections.get(), 5)
+            writer.write(reply)
+            response = await asyncio.wait_for(task, 5)
+            value = await response.json()
+            reads = value, await response.text(), bytes(await response.bytes())
+
+        task = asyncio.create_task(asyncio.to_thread(read_blocking, url))
+        _, writer = await asyncio.wait_for(connections.get(), 5)
+        writer.write(reply)
+        assert await asyncio.wait_for(task, 5) == reads
+
+    assert reads == ([JSON_ITEM] * count, payload.decode(), payload)
+    assert isinstance(value[0]["n"][3], float)
+
+
+@pytest.mark.asyncio
+async def test_empty_body_and_unit_results():
+    async with local_server() as (url, connections):
+        client = wreq.Client(proxies=[])
+
+        async def get():
+            task = asyncio.create_task(client.get(url))
+            _, writer = await asyncio.wait_for(connections.get(), 5)
+            writer.write(b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 0\r\n\r\n")
+            return await asyncio.wait_for(task, 5)
+
+        response = await get()
+        assert bytes(await response.bytes()) == b""
+        assert await response.text() == ""
+        assert await response.__aexit__(None, None, None) is None
+
+        response = await get()
+        streamer = response.stream()
+        assert [chunk async for chunk in streamer] == []
+        assert await streamer.__aexit__(None, None, None) is None
+        # Coroutines without a result return None, as sync methods do.
+        coroutine = response.close()
+        with pytest.raises(StopIteration) as stop:
+            coroutine.__next__()
+        assert stop.value.value is None
+        assert await client.__aexit__(None, None, None) is None
+
+
+@pytest.mark.asyncio
+async def test_pending_read_holds_the_body_until_it_ends():
+    head = b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\n"
+    async with local_server() as (url, connections), wreq.Client(proxies=[]) as client:
+        task = asyncio.create_task(client.get(url))
+        reader, writer = await asyncio.wait_for(connections.get(), 5)
+        writer.write(head + b"hello")
+        response = await asyncio.wait_for(task, 5)
+        first = asyncio.create_task(response.text())
+        await asyncio.sleep(0.1)
+        with pytest.raises(RuntimeError):
+            await response.bytes()
+        writer.write(b"world")
+        assert await asyncio.wait_for(first, 5) == "helloworld"
+        assert bytes(await response.bytes()) == b"helloworld"
+
+        # The fully read connection is reused; a truncated body fails, and so do later reads.
+        task = asyncio.create_task(client.get(url))
+        await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 5)
+        writer.write(head + b"hello")
+        response = await asyncio.wait_for(task, 5)
+        writer.close()
+        with pytest.raises(wreq.exceptions.DecodingError):
+            await asyncio.wait_for(response.bytes(), 5)
+        with pytest.raises(RuntimeError):
+            await response.text()
 
 
 @pytest.mark.asyncio

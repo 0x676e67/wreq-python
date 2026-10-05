@@ -22,6 +22,7 @@ use tokio::sync::{
 };
 use tokio_util::task::AbortOnDropHandle;
 
+use super::{READ_ATTACHED, loop_limit};
 use crate::{
     buffer::PyBuffer,
     client::nogil,
@@ -83,9 +84,6 @@ impl Streamer {
 
     /// Buffered frames returned before `__anext__` yields to the event loop once.
     const YIELD_EVERY: usize = 8;
-
-    /// An async reader reads a buffered body of known length up to this size at once.
-    const READ_ATTACHED: u64 = 64 * 1024;
 
     /// Create a new [`Streamer`] instance.
     #[inline]
@@ -162,15 +160,18 @@ impl Streamer {
 
     /// Read a frame the body already holds, before any read-ahead task starts, so a reader
     /// of a short body never waits on another thread. With `limit`, only a body of known
-    /// length up to it is read here, so an async reader never decodes on the event loop;
-    /// `end` builds the error that ends iteration.
+    /// length up to it is read here, so an async reader never reads a large or decompressing
+    /// body on the event loop; `end` builds the error that ends iteration.
     fn ready_frame(&self, limit: Option<u64>, end: fn() -> Error) -> Option<PyResult<Frame>> {
         let mut state = self.reader.lock();
         let State::Idle(resp) = &mut *state else {
             return None;
         };
         if let Some(limit) = limit
-            && !resp.size_hint().exact().is_some_and(|len| len <= limit)
+            && !resp
+                .size_hint()
+                .exact()
+                .is_some_and(|len| len <= loop_limit(resp.version(), limit))
         {
             return None;
         }
@@ -309,8 +310,7 @@ impl Streamer {
         coroutine::local(py, "Streamer.__anext__", async move {
             let this = slf.get();
             // A short body already buffered is read without starting the read-ahead task.
-            if let Some(frame) =
-                this.ready_frame(Some(Self::READ_ATTACHED), || Error::StopAsyncIteration)
+            if let Some(frame) = this.ready_frame(Some(READ_ATTACHED), || Error::StopAsyncIteration)
             {
                 return frame;
             }

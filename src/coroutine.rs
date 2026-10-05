@@ -15,6 +15,7 @@ mod awaitable;
 mod scope;
 
 use std::{
+    any::TypeId,
     future::{Future, poll_fn},
     mem,
     task::Poll,
@@ -54,7 +55,7 @@ pub fn local<'py, F, T>(
 ) -> PyResult<Bound<'py, Coroutine>>
 where
     F: Future<Output = PyResult<T>> + Send + 'static,
-    T: for<'a> IntoPyObject<'a>,
+    T: for<'a> IntoPyObject<'a> + 'static,
 {
     Bound::new(py, coroutine(qualname, fut))
 }
@@ -83,21 +84,19 @@ pub fn managed<'py, F, T>(
 ) -> PyResult<Bound<'py, Coroutine>>
 where
     F: Future<Output = PyResult<T>> + Send + 'static,
-    T: EntersSelf + for<'a> IntoPyObject<'a>,
+    T: EntersSelf + for<'a> IntoPyObject<'a> + 'static,
 {
     Bound::new(py, coroutine(qualname, fut).managed(enters_self::<T>))
 }
 
-/// Whether `object` is exactly a `T` whose class still has the native `__aenter__`: a
-/// subclass or a replaced class attribute may return something else.
-fn enters_self<T: EntersSelf>(object: &Bound<'_, PyAny>) -> bool {
-    let py = object.py();
-    let ty = object.get_type();
-    ty.is(T::type_object(py))
-        && T::native_aenter().get(py).is_some_and(|native| {
-            ty.getattr(intern!(py, "__aenter__"))
-                .is_ok_and(|aenter| aenter.is(native))
-        })
+/// Whether `T` still has its native `__aenter__`; a [`managed`] result is always exactly a
+/// `T`, but user code may replace the class attribute.
+fn enters_self<T: EntersSelf>(py: Python<'_>) -> bool {
+    T::native_aenter().get(py).is_some_and(|native| {
+        T::type_object(py)
+            .getattr(intern!(py, "__aenter__"))
+            .is_ok_and(|aenter| aenter.is(native))
+    })
 }
 
 /// A coroutine that returns `value` without suspending.
@@ -126,15 +125,21 @@ pub async fn yield_now() {
     .await;
 }
 
-/// A coroutine awaiting `fut` and converting its output to a Python object.
+/// A coroutine awaiting `fut` and converting its output to a Python object. Like a sync
+/// method, one with no result returns `None`, where `()` would convert to an empty tuple.
 fn coroutine<F, T>(qualname: &'static str, fut: F) -> Coroutine
 where
     F: Future<Output = PyResult<T>> + Send + 'static,
-    T: for<'a> IntoPyObject<'a>,
+    T: for<'a> IntoPyObject<'a> + 'static,
 {
     Coroutine::new(qualname, async move {
         let value = fut.await?;
-        Python::attach(|py| value.into_py_any(py))
+        Python::attach(|py| {
+            if TypeId::of::<T>() == TypeId::of::<()>() {
+                return Ok(py.None());
+            }
+            value.into_py_any(py)
+        })
     })
 }
 

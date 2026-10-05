@@ -96,10 +96,14 @@ async def test_invalid_option_does_not_start_the_body():
         started.set()
         yield b"first"
 
+    form = wreq.Multipart(wreq.Part("file", iter([b"x"])))
     async with local_server() as (url, _), wreq.Client(proxies=[]) as client:
-        # Options are validated before the body generator is consumed.
+        # Every option, `zstd` last, is validated before the body or form is taken.
         with pytest.raises(TypeError):
-            await client.post(url, body=chunks(), timeout=5)
+            await client.post(url, body=chunks(), zstd=1)
+        for _ in range(2):
+            with pytest.raises(TypeError):
+                await client.post(url, multipart=form, zstd=1)
         await asyncio.sleep(0.1)
         assert not started.is_set()
 

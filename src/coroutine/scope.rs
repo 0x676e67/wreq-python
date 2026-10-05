@@ -13,18 +13,18 @@ use pyo3::{
 use super::awaitable::{Coroutine, Step, ensure_done};
 
 /// Whether a result's `__aenter__` returns the result itself, so it can be skipped.
-pub(super) type EntersSelf = fn(&Bound<'_, PyAny>) -> bool;
+pub(super) type EntersSelfFn = fn(Python<'_>) -> bool;
 
 /// The `async with` state of a coroutine.
 pub(super) enum Scope {
     /// `async with` is unsupported.
     Unsupported,
     /// Not yet awaited; `async with` may enter it.
-    Ready(EntersSelf),
+    Ready(EntersSelfFn),
     /// Awaited, entered or exited already.
     Spent,
     /// Awaited by `async with` until the result, an async context manager, is ready.
-    Entering(EntersSelf),
+    Entering(EntersSelfFn),
     /// Awaiting the manager's `__aenter__` through `delegate`. Like `async with`, its
     /// bound `__aexit__` is looked up before entering.
     Opening {
@@ -104,12 +104,12 @@ impl Coroutine {
         &mut self,
         py: Python<'_>,
         manager: Py<PyAny>,
-        enters_self: EntersSelf,
+        enters_self: EntersSelfFn,
     ) -> PyResult<Step> {
         self.finish();
         let manager = manager.into_bound(py);
         // Its `__aenter__` would return the manager itself: enter without awaiting it.
-        if enters_self(&manager) {
+        if enters_self(py) {
             let exit = manager.getattr(intern!(py, "__aexit__"))?;
             self.scope = Scope::Entered(exit.unbind());
             return Ok(Step::Return(manager.unbind()));

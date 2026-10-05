@@ -454,7 +454,7 @@ class Response:
         """
 
     async def __aenter__(self) -> Any: ...
-    async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> Any:
+    async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
         r"""
         Release the body without forbidding reuse: a fully read connection returns
         to the pool, while an unread HTTP/1 body drains or closes its connection.
@@ -528,7 +528,7 @@ class WebSocket:
         """
 
     async def __aenter__(self) -> Any: ...
-    async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> Any:
+    async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
         r"""
         Close the WebSocket connection without a close code or reason, unless already closed.
         """
@@ -1134,7 +1134,7 @@ class _RequestCoroutine(Coroutine[Any, Any, _T]):
     """
 
     async def __aenter__(self) -> _T: ...
-    async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> Any: ...
+    async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None: ...
 
 
 class Client:
@@ -1458,7 +1458,7 @@ class Client:
         ...
 
     async def __aenter__(self) -> Any: ...
-    async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> Any:
+    async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
         r"""
         Close the client like `close()`: cancel pending requests and reject new ones.
         """

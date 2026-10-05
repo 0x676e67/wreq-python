@@ -10,15 +10,14 @@ use std::{
 use futures_util::{FutureExt, future::BoxFuture};
 use pyo3::{
     PyTraverseError, PyVisit,
-    exceptions::{PyBaseException, PyRuntimeError, PyStopIteration},
-    ffi, intern,
+    exceptions::{PyRuntimeError, PyStopIteration},
+    intern,
     prelude::*,
-    types::PyTuple,
 };
 
 use super::{
     Port,
-    scope::{EntersSelf, Scope},
+    scope::{EntersSelfFn, Scope},
 };
 
 /// An awaitable driving a Rust future on the asyncio event loop thread.
@@ -83,7 +82,7 @@ impl Coroutine {
     }
 
     /// Let `async with` enter the coroutine; see [`coroutine::managed`](super::managed).
-    pub(super) fn managed(mut self, enters_self: EntersSelf) -> Self {
+    pub(super) fn managed(mut self, enters_self: EntersSelfFn) -> Self {
         self.scope = Scope::Ready(enters_self);
         self
     }
@@ -176,8 +175,9 @@ impl Coroutine {
 
     fn __next__(&mut self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         match self.step(py, None)? {
-            Step::Yield(value) => Ok(Some(value)),
-            Step::Return(value) => stop_iteration(value.into_bound(py)),
+            // A `NULL` return without an error ends iteration with `None`, no `StopIteration`.
+            Step::Return(value) if value.is_none(py) => Ok(None),
+            step => step.into_result().map(Some),
         }
     }
 
@@ -211,28 +211,6 @@ impl Step {
             Step::Return(value) => Err(PyStopIteration::new_err((value,))),
         }
     }
-}
-
-/// End `__next__` with `value`, skipping PyO3's lazy `StopIteration`.
-///
-/// A `NULL` return without an error means `None`. Other values are raised with
-/// `PyErr_SetObject`, as CPython does for generators: 3.11 keeps `(StopIteration, value)`
-/// unnormalized for `_PyGen_FetchStopIterationValue`, while 3.12+ builds the instance at once.
-/// Tuples and exceptions keep PyO3's path, since CPython would unpack or adopt them.
-fn stop_iteration(value: Bound<'_, PyAny>) -> PyResult<Option<Py<PyAny>>> {
-    if value.is_none() {
-        return Ok(None);
-    }
-    if value.is_instance_of::<PyTuple>() || value.is_instance_of::<PyBaseException>() {
-        return Err(PyStopIteration::new_err((value.unbind(),)));
-    }
-    // SAFETY: the thread is attached and `value` is a valid object for the call;
-    // `PyErr_SetObject` takes its own references to the type and the value.
-    #[allow(unsafe_code)]
-    unsafe {
-        ffi::PyErr_SetObject(ffi::PyExc_StopIteration, value.as_ptr())
-    };
-    Ok(None)
 }
 
 /// Fail if `waiter`, the future a task waits on for this coroutine, is still pending.
