@@ -29,9 +29,9 @@ abi3-py314 = ["pyo3/abi3-py314"]
 
 [dependencies]
 pingora-runtime = "0.9.0"
-tokio = { version = "1.52.2", features = ["rt-multi-thread", "sync", "time", "net"] }
+tokio = { version = "1.53.2", features = ["rt-multi-thread", "sync", "time", "net"] }
 tokio-util = { version = "0.7.18", features = ["rt"] }
-pyo3 = { version = "0.29.0", features = [
+pyo3 = { version = "0.29.3", features = [
     "indexmap",
     "multiple-pymethods",
     "extension-module",
@@ -47,6 +47,7 @@ http = "1.4.2"
 http-body = "1.1.0"
 http-body-util = "0.1.4"
 wreq = { version = "0.16.1", default-features = false, features = [
+    "parking_lot",
     "webpki-roots",
     "tokio-rt",
     "query",
@@ -62,9 +63,8 @@ wreq = { version = "0.16.1", default-features = false, features = [
     "deflate",
     "zstd",
     "ws",
-    "parking_lot",
 ] }
-wreq-util = { version = "0.2.0", features = ["emulation-compression"] }
+wreq-util = { version = "0.2.0", features = ["emulation-compression", "emulation-chromium-pki"] }
 hickory-resolver = "0.26.3"
 cookie = "0.18.2"
 mimalloc = { version = "0.1.43", default-features = false, features = [
@@ -77,13 +77,11 @@ tikv-jemallocator = { version = "0.7.0", default-features = false, features = [
 # Keep the latest emulation profiles and their required TLS support in sync.
 [patch.crates-io]
 wreq-util = { git = "https://github.com/0x676e67/wreq-util", rev = "5715529002738f46eea86a7271f918f9374d3582" }
-# demo/netty-migration
 wreq = { git = "https://github.com/0x676e67/wreq", rev = "54fdc7c9e0c1290e2f70f38d271ba954e3d86cc2" }
-btls = { git = "https://github.com/0x676e67/btls", rev = "main" }
-btls-sys = { git = "https://github.com/0x676e67/btls", rev = "main" }
-tokio-btls = { git = "https://github.com/0x676e67/btls", rev = "main" }
-# main (0x676e67/netty#145)
-netty = { git = "https://github.com/0x676e67/netty", rev = "f8652ddf5e386d66b7f03cceedbc6b319d849762" }
+btls = { git = "https://github.com/0x676e67/btls", branch = "main" }
+btls-sys = { git = "https://github.com/0x676e67/btls", branch = "main" }
+tokio-btls = { git = "https://github.com/0x676e67/btls", branch = "main" }
+netty = { git = "https://github.com/0x676e67/netty", branch = "main" }
 
 [profile.release]
 codegen-units = 1
