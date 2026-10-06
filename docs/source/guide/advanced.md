@@ -119,10 +119,11 @@ client = Client(runtime=runtime)
 
 With `work_steal=False`, workers use independent single-thread Tokio runtimes.
 Each client is assigned one worker for its lifetime; requests, response reads,
-streams and WebSocket operations use that worker. With multiple workers, newly
-created clients select a worker randomly and keep that selection. This is not
-CPU pinning. Sharing the same `Runtime` between clients is supported, and
-`client.runtime` returns the shared runtime object.
+streams and WebSocket operations use that worker. Async reads of small HTTP/1
+bodies that have already arrived finish on the event loop thread instead. With
+multiple workers, newly created clients select a worker randomly and keep that
+selection. This is not CPU pinning. Sharing the same `Runtime` between clients
+is supported, and `client.runtime` returns the shared runtime object.
 
 `workers=None` uses the available CPU parallelism, or 1 if it cannot be determined.
 Custom runtimes start their threads during construction, before any client is

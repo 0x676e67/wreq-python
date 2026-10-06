@@ -64,7 +64,8 @@ enum Body {
 enum BodyRead {
     /// Read in full now.
     Ready(Bytes),
-    /// Not fully buffered yet; collected on the runtime by [`Response::collect_later`].
+    /// Not read now: still arriving, over the read's limit or of unknown length; collected
+    /// on the runtime by [`Response::collect_later`].
     Pending(Collect<wreq::Body>),
 }
 
@@ -372,9 +373,9 @@ impl Response {
         })
     }
 
-    /// Get the JSON content of the response. Buffered JSON up to 8 KiB is parsed on the event
-    /// loop, larger bodies on the runtime.
+    /// Get the JSON content of the response.
     pub fn json(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
+        // Buffered HTTP/1 JSON up to 8 KiB is parsed on the event loop; see `loop_limit`.
         Self::read(slf, "Response.json", 8 * 1024, ResponseExt::json::<Json>)
     }
 
