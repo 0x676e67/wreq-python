@@ -202,7 +202,9 @@ async def test_empty_body_and_unit_results():
         async def get():
             task = asyncio.create_task(client.get(url))
             _, writer = await asyncio.wait_for(connections.get(), 5)
-            writer.write(b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 0\r\n\r\n")
+            writer.write(
+                b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
+            )
             return await asyncio.wait_for(task, 5)
 
         response = await get()
