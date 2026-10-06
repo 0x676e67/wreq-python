@@ -8,6 +8,8 @@ import pytest
 import wreq
 from wreq.runtime import Runtime, Scheduler
 
+from upload_test import read_chunked
+
 
 @asynccontextmanager
 async def upload_server():
@@ -135,6 +137,68 @@ async def test_sync_upload_iterator_errors(blocking, current_thread, multipart):
                 assert finalized.is_set()
     finally:
         client.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("blocking", [False, True])
+async def test_sync_upload_reads_ahead_within_the_budget(blocking):
+    # A huge first chunk keeps the connection's write buffer full while the peer waits, so
+    # only the budget bounds the read-ahead: 64 small chunks queue at the minimum charge
+    # and the next parks with the pump. Once the peer reads, the parked chunk goes first.
+    release, bodies, calls = threading.Event(), asyncio.Queue(), []
+    parts = [b"\0" * (1 << 24)] + [bytes((index,)) * 4096 for index in range(100)]
+
+    def chunks():
+        for part in parts:
+            calls.append(None)
+            yield part
+
+    async def accept(reader, writer):
+        try:
+            await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 5)
+            await asyncio.to_thread(release.wait, 5)
+            bodies.put_nowait(await asyncio.wait_for(read_chunked(reader), 10))
+            writer.write(
+                b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 2\r\n\r\nok"
+            )
+            await writer.drain()
+        finally:
+            writer.close()
+
+    server = await asyncio.start_server(accept, "127.0.0.1", 0)
+    url = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}/"
+    client = upload_client(blocking, False)
+    try:
+        if blocking:
+
+            def send_blocking():
+                with client.post(url, body=chunks()) as response:
+                    return response.bytes()
+
+            task = asyncio.create_task(asyncio.to_thread(send_blocking))
+        else:
+
+            async def send():
+                response = await client.post(url, body=chunks())
+                async with response:
+                    return await response.bytes()
+
+            task = asyncio.create_task(send())
+        seen, stable = -1, 0
+        for _ in range(250):
+            await asyncio.sleep(0.02)
+            seen, stable = len(calls), stable + 1 if len(calls) == seen else 0
+            if stable == 5:
+                break
+        assert len(calls) == 66
+        release.set()
+        assert await asyncio.wait_for(task, 10) == b"ok"
+        assert await asyncio.wait_for(bodies.get(), 5) == b"".join(parts)
+    finally:
+        release.set()
+        client.close()
+        server.close()
+        await server.wait_closed()
 
 
 @pytest.mark.asyncio

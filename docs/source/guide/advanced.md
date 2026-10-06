@@ -15,8 +15,10 @@ Keep the loop running until generator cleanup has finished. This also applies to
 Construct async-generator `Part` objects inside a running event loop; their producers
 start at construction. A producer runs at most 256 KiB, or 64 small chunks, ahead of the
 upload.
-Use synchronous iterators for blocking uploads. A blocking call on the producer's
-event-loop thread prevents async generators from progressing.
+Use synchronous iterators for blocking uploads. They run on the runtime's blocking pool,
+also at most 256 KiB or 64 small chunks ahead, except on a current-thread runtime. A
+blocking call on the producer's event-loop thread prevents async generators from
+progressing.
 
 ```python
 import asyncio

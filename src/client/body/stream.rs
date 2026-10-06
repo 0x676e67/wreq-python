@@ -24,10 +24,7 @@ use pyo3::{
 };
 use tokio::{
     runtime::Handle,
-    sync::{
-        OwnedSemaphorePermit, Semaphore, TryAcquireError,
-        mpsc::{self, error::TrySendError},
-    },
+    sync::{OwnedSemaphorePermit, Semaphore, TryAcquireError, mpsc},
     task::{spawn_blocking, yield_now},
     time,
 };
@@ -81,23 +78,26 @@ enum SyncStream {
     Done,
 }
 
-/// An iterator read by pump tasks on the blocking pool. A pump reads an item only once
-/// the channel has room, staying at most one item ahead of the upload. When the upload
-/// stalls, it parks the iterator and frees its thread; the next item taken restarts it.
+/// An iterator read by pump tasks on the blocking pool, up to [`UPLOAD_BUDGET`] ahead of
+/// the upload. When the budget stays full, a pump parks the iterator with the chunk it read
+/// and frees its thread; the next item taken restarts it.
 struct Pumped {
-    rx: mpsc::Receiver<Item>,
-    /// The iterator and sender while no pump runs: before the first poll, or once a pump
-    /// parked at a full channel.
+    rx: mpsc::UnboundedReceiver<Queued>,
+    budget: Arc<Semaphore>,
+    /// The pump while none runs: before the first poll, or once parked at a full budget.
     parked: Arc<Mutex<Option<Pump>>>,
 }
 
 /// What a pump task needs to read the iterator into the body.
 struct Pump {
     iter: Py<PyAny>,
-    tx: mpsc::Sender<Item>,
+    tx: mpsc::UnboundedSender<Queued>,
+    budget: Arc<Semaphore>,
+    /// A chunk read before the pump parked, queued first when it restarts.
+    pending: Option<PyBytesLike>,
 }
 
-/// Bytes an async upload may queue ahead of the connection.
+/// Bytes an upload may queue ahead of the connection.
 const UPLOAD_BUDGET: usize = 256 * 1024;
 
 /// The least budget a queued chunk holds, so small chunks queue at most 64 items.
@@ -257,16 +257,28 @@ impl SyncStream {
 
 impl Pumped {
     fn new(iter: Py<PyAny>) -> Self {
-        let (tx, rx) = mpsc::channel(1);
+        let (tx, rx) = mpsc::unbounded_channel();
+        let budget = Arc::new(Semaphore::new(UPLOAD_BUDGET));
+        let pump = Pump {
+            iter,
+            tx,
+            budget: budget.clone(),
+            pending: None,
+        };
         Pumped {
             rx,
-            parked: Arc::new(Mutex::new(Some(Pump { iter, tx }))),
+            budget,
+            parked: Arc::new(Mutex::new(Some(pump))),
         }
     }
 
     fn poll_next(&mut self, cx: &mut Context<'_>) -> Poll<Option<Item>> {
-        let poll = self.rx.poll_recv(cx);
-        // A parked pump waits for room, which the first poll or a taken item makes. The
+        // Taking an item returns its share of the budget before the parked check.
+        let poll = self
+            .rx
+            .poll_recv(cx)
+            .map(|queued| queued.map(|queued| queued.item));
+        // A parked pump waits for budget, which the first poll or a taken item frees. The
         // check follows the take, so a pump parking concurrently is seen here.
         let parked = lock(&self.parked).take();
         if let Some(pump) = parked {
@@ -277,36 +289,65 @@ impl Pumped {
     }
 }
 
+impl Drop for Pumped {
+    fn drop(&mut self) {
+        // A pump waiting for budget stops at once, without reading another item.
+        self.budget.close();
+    }
+}
+
 // ===== impl Pump =====
 
 impl Pump {
-    /// How long a pump waits for room before parking to free its thread.
+    /// How long a pump waits for budget before parking to free its thread.
     const PARK_AFTER: Duration = Duration::from_millis(10);
 
-    /// Send items until the iterator ends or raises, the body is dropped, or the channel
+    /// Queue chunks until the iterator ends or raises, the body is dropped, or the budget
     /// stays full past [`PARK_AFTER`](Self::PARK_AFTER).
-    fn run(self, parked: &Mutex<Option<Pump>>) {
+    fn run(mut self, parked: &Mutex<Option<Pump>>) {
         let handle = Handle::current();
         // Once Python is unavailable, stop reading without creating a PyErr that could
         // require another attachment to format.
         Python::try_attach(|py| {
             loop {
-                let permit = match self.tx.clone().try_reserve_owned() {
-                    Ok(permit) => permit,
-                    Err(TrySendError::Closed(_)) => return,
-                    Err(TrySendError::Full(tx)) => {
-                        let wait = time::timeout(Self::PARK_AFTER, tx.reserve_owned());
+                if self.tx.is_closed() {
+                    return;
+                }
+                let chunk = match self.pending.take() {
+                    Some(chunk) => chunk,
+                    None => match next_item(py, &self.iter) {
+                        Some(Ok(chunk)) => chunk,
+                        Some(Err(err)) => {
+                            let _ = self.tx.send(Queued {
+                                item: Err(err),
+                                _share: None,
+                            });
+                            return;
+                        }
+                        None => return,
+                    },
+                };
+                let share = match self.budget.clone().try_acquire_many_owned(chunk.share()) {
+                    Ok(share) => share,
+                    Err(TryAcquireError::Closed) => return,
+                    Err(TryAcquireError::NoPermits) => {
+                        let budget = self.budget.clone();
+                        let wait = time::timeout(
+                            Self::PARK_AFTER,
+                            budget.acquire_many_owned(chunk.share()),
+                        );
                         match py.detach(|| handle.block_on(wait)) {
-                            Ok(Ok(permit)) => permit,
+                            Ok(Ok(share)) => share,
                             Ok(Err(_)) => return,
                             Err(_) => {
                                 // Park under the lock the body takes after receiving, so
-                                // either it sees the pump parked or the pump sees room.
+                                // either it sees the pump parked or the pump sees budget.
                                 let mut slot = lock(parked);
-                                match self.tx.clone().try_reserve_owned() {
-                                    Ok(permit) => permit,
-                                    Err(TrySendError::Closed(_)) => return,
-                                    Err(TrySendError::Full(_)) => {
+                                match self.budget.clone().try_acquire_many_owned(chunk.share()) {
+                                    Ok(share) => share,
+                                    Err(TryAcquireError::Closed) => return,
+                                    Err(TryAcquireError::NoPermits) => {
+                                        self.pending = Some(chunk);
                                         *slot = Some(self);
                                         return;
                                     }
@@ -315,12 +356,11 @@ impl Pump {
                         }
                     }
                 };
-                let Some(item) = next_item(py, &self.iter) else {
-                    return;
+                let queued = Queued {
+                    item: Ok(chunk),
+                    _share: Some(share),
                 };
-                let failed = item.is_err();
-                permit.send(item);
-                if failed {
+                if self.tx.send(queued).is_err() {
                     return;
                 }
             }
