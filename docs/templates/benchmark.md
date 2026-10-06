@@ -42,8 +42,9 @@ the chart: it identifies the code tested, which may differ from the docs revisio
 | Repetition | Case order is shuffled; warm-up batches are excluded from all reported rates |
 
 The default suite tests seven body sizes from 1 KiB to 4 MiB, with Full and
-Stream uploads at concurrency 10, 50, 100, and 150. Each timed batch has 300 requests,
-and each case runs for three rounds. Earlier snapshots may cover fewer cases.
+Stream uploads at concurrency 2, 10, 50, and 100. Each round has 200 warm-up requests
+and 300 timed requests, and each case runs for three rounds. Historical snapshots
+may use different concurrency and request budgets.
 The charts and raw JSON show the cases actually measured, including the upload
 chunk sizes recorded in the JSON.
 
@@ -94,7 +95,8 @@ and per-round rates, along with runtime settings, interpreter information,
 the source revision and native artifact hashes.
 
 Other programs on the machine compete for CPU and I/O, and that can change
-results between runs. Small differences may be noise. Repeat a measurement with
+results between runs. These are fixed-batch rates: short batches can include worker startup and
+scheduling overhead. Small differences may be noise. Repeat a measurement with
 matching configurations before drawing conclusions; this suite isn't a strict
 regression check.
 

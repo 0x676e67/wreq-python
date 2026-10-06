@@ -7,7 +7,7 @@ are reported separately.
 
 ## Workload
 
-- Async: one reused client per case, with 10, 50, 100, or 150 closed-loop workers.
+- Async: one reused client per case, with 2, 10, 50, or 100 closed-loop workers.
 - Blocking: one reused client per logical worker, using a persistent thread
   pool. Submit a whole worker batch, not one executor task per request.
 - Seven payload and upload-chunk cases matching the Rust benchmark, listed below.
@@ -16,7 +16,8 @@ are reported separately.
   single-threaded and multithreaded runtimes, ry, httpx, aiohttp, niquests, and
   curl_cffi.
 - Blocking variants: wreq MT/ST, ry, requests, httpx, niquests, curl_cffi, and pycurl.
-- Three rounds, each with one warmup and one timed batch of 300 requests.
+- Three rounds, each with one warm-up batch of 200 requests and one timed
+  batch of 300 requests.
   Case order is shuffled with a recorded seed.
 - Status, negotiated HTTP version, and total response length are checked for
   every request. Unsupported protocol or upload combinations are reported as
@@ -42,9 +43,9 @@ worker clients have separate connection pools.
 | 4 MiB | 256 KiB |
 
 Both Full and Stream uploads are tested for every payload and concurrency.
-The complete matrix contains 1,680 supported cells across 16 client variants;
+The complete matrix contains 1,792 supported cells across 17 client variants;
 each cell has three measured rounds. The Rust benchmark uses Criterion and
-600 requests per iteration; this suite uses fixed batches of 300 requests.
+600 requests per iteration; this suite uses fixed timed batches of 300 requests.
 Custom payload sizes use upload chunks of at most 64 KiB.
 
 ## Run locally
@@ -70,16 +71,15 @@ Cargo uses a custom target directory, pass the actual executable path to `--serv
 starts, it prints the number of cases and batches. It saves stdout/stderr logs
 beside the raw JSON and generates an English `.report.md` once validation passes.
 
-The default suite has 1,680 supported cases, 5,040 timed batches and the same
+The default suite has 1,792 supported cases, 5,376 timed batches and the same
 number of warm-up batches. Allow several hours for a full run. The setup commands
 above prepare the dependencies and native binaries; the runner won't install or
 build them for you. Publishing the results to the docs is optional.
 
-For a warm-up experiment, pass `--warmup-requests 150`. This keeps the default
-300 timed requests and three rounds, but sends 150 requests per warm-up batch.
-The budget must reach every concurrent worker. Compare against the default on
-the same machine before using these results; reduced warm-up runs can be
-previewed with `docs/build.py --data RUN.json` but cannot replace published data.
+The default warm-up budget is 200 requests. Every concurrent worker must
+receive a warm-up request. Override it with `--warmup-requests`; compare any
+smaller budget against the default on the same machine before ranking clients.
+Historical snapshots keep their recorded concurrency and request counts.
 
 Use the same allocator and release flags for both wreq revisions in a comparison,
 and record them in the run's build provenance. jemalloc controls Rust allocations
@@ -170,7 +170,7 @@ The async source and all historical files stay unchanged. The two publication
 options cannot be combined.
 
 Smoke runs belong in `bench/data/smoke/` and cannot be published. Publication
-requires the complete default or blocking matrix, at least 300 requests per
+requires the complete default or blocking matrix, at least 300 timed and 200 warm-up requests per
 batch and three rounds, with at least one warm-up and timed sample per round.
 These checks confirm coverage; you still need to review the quality of the measurements.
 
@@ -199,7 +199,8 @@ Explicit `--blocking-data` overrides may preview a blocking subset or a reduced
 warm-up run, provided their workload axes match the async snapshot. Publishing
 still requires the complete current matrix and full publication budget.
 Combined preview JSON may record `measurement_sources`; each entry must assign
-distinct clients, and together they must cover the configured clients. The page
+distinct client/concurrency pairs, and together they must cover the configured
+matrix. Entries without a concurrency field cover every configured concurrency. The page
 shows each run's revision and collection time separately.
 
 ## Blocking wreq runtimes

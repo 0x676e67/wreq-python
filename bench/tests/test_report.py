@@ -649,3 +649,29 @@ def test_explicit_data_preview_does_not_select_default_blocking_overlay(tmp_path
     )
     assert not list(charts.glob("*.svg"))
     assert latest.read_bytes() == baseline_raw and overlay.read_bytes() == blocking_raw
+
+
+def test_measurement_sources_can_partition_concurrency_without_overlap():
+    document = make_document({"clients": ["wreq", "wreq_st"], "concurrency": [2, 10]})
+    document["measurement_sources"] = [
+        {
+            "label": f"Concurrency {concurrency}",
+            "clients": list(document["configuration"]["clients"]),
+            "concurrency": [concurrency],
+            "source": copy.deepcopy(document["source"]),
+            "generated_at": document["generated_at"],
+        }
+        for concurrency in (2, 10)
+    ]
+    results.validate_document(document)
+    for axis in ([2], [2, 10], [10, 10], [50], [True], []):
+        invalid = copy.deepcopy(document)
+        invalid["measurement_sources"][1]["concurrency"] = axis
+        with pytest.raises(ValueError):
+            results.validate_document(invalid)
+    text = provenance(document, "Async clients")
+    assert "Async clients · Combined preview" in text
+    assert "Concurrency 2" in text and "Concurrency 10" in text
+    text = report.render_markdown(document)
+    assert "Combined results from separate measured runs" in text
+    assert "Concurrency 2" in text and "Concurrency 10" in text
