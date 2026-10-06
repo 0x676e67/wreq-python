@@ -1178,7 +1178,7 @@ checksum = "27b02d87554356db9e9a873add8782d4ea6e3e58ea071a9adb9a2e8ddb884a8b"
 [[package]]
 name = "netty"
 version = "0.2.5"
-source = "git+https://github.com/0x676e67/netty?branch=demo%2Fskip-stale-drop-wake#27d2077f5ad6022efc267d8b8cfda1f164c6fb48"
+source = "git+https://github.com/0x676e67/netty?branch=main#663b094fe80389c393880d8d5168c73131629336"
 dependencies = [
  "bytes",
  "futures-channel",
