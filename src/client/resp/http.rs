@@ -23,7 +23,7 @@ use crate::{
     header::HeaderMap,
     http::{StatusCode, Version},
     redirect::History,
-    runtime::Runtime,
+    runtime::{self, Runtime},
     tls::TlsInfo,
 };
 
@@ -488,12 +488,14 @@ impl BlockingResponse {
         Fut: Future<Output = Result<T, Error>> + Send + 'static,
         T: Send,
     {
+        // Refused before the body is taken, so it can still be read afterwards.
+        runtime::refuse_nested()?;
         let runtime = &self.0.runtime;
         let (read, inline) = self.0.read_body(Some(READ_ATTACHED), read)?;
         if inline {
             nogil::run(py, runtime, read)
         } else {
-            py.detach(|| runtime.handle().block_on(read))
+            py.detach(|| runtime.block_on(read))
         }
     }
 }
@@ -583,6 +585,7 @@ impl BlockingResponse {
 
     /// Read the body as a read-only memoryview, retaining its data after the response closes.
     pub fn bytes(&self, py: Python) -> PyResult<PyBuffer> {
+        runtime::refuse_nested()?;
         let response = &self.0;
         match response.take_bytes(Some(READ_ATTACHED))? {
             BodyRead::Ready(bytes) => Ok(PyBuffer::from(bytes)),
@@ -591,7 +594,7 @@ impl BlockingResponse {
                     .collect_later(collect)
                     .map_ok(|(_, bytes)| PyBuffer::from(bytes))
                     .map_err(Into::into);
-                py.detach(|| response.runtime.handle().block_on(read))
+                py.detach(|| response.runtime.block_on(read))
             }
         }
     }

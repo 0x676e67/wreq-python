@@ -6,20 +6,26 @@ use std::{future::Future, pin::pin};
 use futures_util::FutureExt;
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
-use crate::runtime::Runtime;
+use crate::runtime::{self, Runtime};
 
-/// Run network work on its selected worker; only wait for completion on the caller.
-/// The caller must be detached from Python and outside an async Tokio context.
-/// Its runtime borrow keeps the workers alive until the join completes.
+/// Run network work on its selected worker and only wait on the caller, or drive it here
+/// on a current-thread runtime. The caller must be detached from Python and outside an
+/// async Tokio context. Its runtime borrow keeps the workers alive until the join completes.
 pub fn block_on<F, T>(runtime: &Runtime, future: F) -> PyResult<T>
 where
     F: Future<Output = PyResult<T>> + Send + 'static,
     T: Send + 'static,
 {
-    runtime
-        .handle()
-        .block_on(runtime.handle().spawn(future))
-        .map_err(|err| PyRuntimeError::new_err(err.to_string()))?
+    if runtime.is_current_thread() {
+        return runtime.block_on(future);
+    }
+    runtime.block_on(async {
+        runtime
+            .handle()
+            .spawn(future)
+            .await
+            .map_err(|err| PyRuntimeError::new_err(err.to_string()))?
+    })
 }
 
 /// Poll `future` on the caller instead of spawning it: return still attached when it is
@@ -30,14 +36,15 @@ where
     F: Future<Output = PyResult<T>> + Send,
     T: Send,
 {
-    let handle = runtime.handle();
+    // Refused before the first poll, which a later refusal would leave half done.
+    runtime::refuse_nested()?;
     let mut future = pin!(future);
     let ready = {
-        let _runtime = handle.enter();
+        let _runtime = runtime.handle().enter();
         future.as_mut().now_or_never()
     };
     match ready {
         Some(output) => output,
-        None => py.detach(|| handle.block_on(future)),
+        None => py.detach(|| runtime.block_on(future)),
     }
 }

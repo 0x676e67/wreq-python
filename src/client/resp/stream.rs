@@ -29,7 +29,7 @@ use crate::{
     coroutine::{self, Coroutine},
     error::Error,
     header::HeaderMap,
-    runtime::Runtime,
+    runtime::{self, Runtime},
 };
 
 /// A response frame exposed as a read-only memoryview or a header map.
@@ -254,6 +254,17 @@ impl Streamer {
         }
     }
 
+    /// Refuse async use on a current-thread runtime: nothing would drive the read while a
+    /// coroutine waits, so iteration would hang once the buffered frames run out.
+    fn refuse_async(&self) -> PyResult<()> {
+        if self.runtime.is_current_thread() {
+            return Err(PyRuntimeError::new_err(
+                "Streams on a CURRENT_THREAD runtime only support blocking iteration",
+            ));
+        }
+        Ok(())
+    }
+
     /// Wait for the next frame; `end` builds the error that ends iteration.
     async fn next(&self, end: fn() -> Error) -> PyResult<Frame> {
         loop {
@@ -276,6 +287,8 @@ impl Streamer {
     }
 
     fn __next__(&self, py: Python) -> PyResult<Frame> {
+        // Refused before any frame, so a nested read never leaves a stream half consumed.
+        runtime::refuse_nested()?;
         // Frames already received are returned without releasing the GIL.
         if let Some(frame) = self.ready_frame(None, || Error::StopIteration) {
             return frame;
@@ -300,12 +313,14 @@ impl Streamer {
 
 #[pymethods]
 impl Streamer {
-    fn __aiter__(slf: PyRef<Self>) -> PyRef<Self> {
-        slf
+    fn __aiter__(slf: PyRef<Self>) -> PyResult<PyRef<Self>> {
+        slf.refuse_async()?;
+        Ok(slf)
     }
 
     /// Read the next frame when awaited.
     fn __anext__(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
+        slf.get().refuse_async()?;
         let py = slf.py();
         let slf = slf.unbind();
         coroutine::local(py, "Streamer.__anext__", async move {
@@ -326,6 +341,7 @@ impl Streamer {
     }
 
     fn __aenter__(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
+        slf.get().refuse_async()?;
         coroutine::ready("Streamer.__aenter__", slf)
     }
 

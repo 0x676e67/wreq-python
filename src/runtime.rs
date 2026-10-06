@@ -1,4 +1,6 @@
 use std::{
+    cell::{Cell, RefCell},
+    future::Future,
     sync::{Arc, OnceLock},
     thread,
     time::Duration,
@@ -9,22 +11,87 @@ use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
 };
-use tokio::runtime::Handle;
+use tokio::runtime::{Builder, Handle};
+
+/// How a [`Runtime`] schedules client work.
+#[pyclass(eq, eq_int, frozen, from_py_object)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[allow(non_camel_case_types)]
+pub enum Scheduler {
+    /// Worker threads share client work and steal it from each other.
+    WORK_STEALING,
+    /// Each worker runs its own single-thread runtime, and a client stays on one worker.
+    PER_WORKER,
+    /// No worker threads: blocking calls drive its IO, taking turns when threads share it,
+    /// and nothing runs between calls. Best with a client and runtime per thread; only
+    /// blocking clients can use it.
+    CURRENT_THREAD,
+}
 
 /// Shared Tokio runtime, released after its clients and active work are dropped.
 #[derive(Clone)]
 #[pyclass(frozen, skip_from_py_object)]
 pub struct Runtime {
     /// Shared owner; `None` only once `Drop` has taken it to shut the runtime down.
-    inner: Option<Arc<PingoraRuntime>>,
-    /// The worker this copy runs on; without work stealing its client's tasks stay there.
+    inner: Option<Arc<Shared>>,
+    /// The worker this copy runs on; per-worker clients keep their tasks there.
     handle: Handle,
 }
+
+/// The runtime behind [`Runtime`].
+enum Shared {
+    Workers(PingoraRuntime),
+    /// Driven only by the threads blocked in [`Runtime::block_on`].
+    CurrentThread(tokio::runtime::Runtime),
+}
+
+/// Marks the calling thread as driving a current-thread runtime until dropped.
+struct Driving;
+
+thread_local! {
+    static DRIVING: Cell<bool> = const { Cell::new(false) };
+    /// A KeyboardInterrupt or other non-`Exception` error that this thread's upload
+    /// iterator raised while it drove the runtime, re-raised by its call instead of the
+    /// wrapped request error.
+    static INTERRUPT: RefCell<Option<PyErr>> = const { RefCell::new(None) };
+}
+
+/// Whether this thread drives a current-thread runtime, which then runs the Python code
+/// its tasks call, such as upload iterators.
+pub fn driving() -> bool {
+    DRIVING.get()
+}
+
+/// Re-raise `err` from the blocking call this thread is driving, once it returns.
+pub fn interrupt(err: PyErr) {
+    INTERRUPT.set(Some(err));
+}
+
+// ===== impl Runtime =====
 
 impl Runtime {
     /// Borrow the selected worker's handle without changing the selection.
     pub fn handle(&self) -> &Handle {
         &self.handle
+    }
+
+    /// Whether blocking calls drive this runtime on their own thread.
+    pub fn is_current_thread(&self) -> bool {
+        matches!(self.inner.as_deref(), Some(Shared::CurrentThread(_)))
+    }
+
+    /// Poll `future` to completion on the calling thread, which must be detached from
+    /// Python. A current-thread runtime runs its tasks and IO here meanwhile.
+    pub fn block_on<T>(&self, future: impl Future<Output = PyResult<T>>) -> PyResult<T> {
+        refuse_nested()?;
+        match self.inner.as_deref() {
+            Some(Shared::CurrentThread(runtime)) => {
+                let _driving = Driving::enter();
+                let output = runtime.block_on(future);
+                INTERRUPT.take().map_or(output, Err)
+            }
+            _ => self.handle.block_on(future),
+        }
     }
 
     /// Share the runtime and select a worker for a new client.
@@ -34,20 +101,25 @@ impl Runtime {
             .as_ref()
             .ok_or_else(|| PyRuntimeError::new_err("Runtime is unavailable"))?;
         Ok(Self {
+            handle: inner.handle(),
             inner: Some(inner.clone()),
-            handle: inner.get_handle().clone(),
         })
+    }
+}
+
+impl From<Shared> for Runtime {
+    fn from(runtime: Shared) -> Self {
+        let handle = runtime.handle();
+        Self {
+            inner: Some(Arc::new(runtime)),
+            handle,
+        }
     }
 }
 
 impl From<PingoraRuntime> for Runtime {
     fn from(runtime: PingoraRuntime) -> Self {
-        // No-steal workers are lazy upstream. Start them before sharing the runtime.
-        let handle = runtime.get_handle().clone();
-        Self {
-            inner: Some(Arc::new(runtime)),
-            handle,
-        }
+        Shared::Workers(runtime).into()
     }
 }
 
@@ -61,52 +133,76 @@ impl FromPyObject<'_, '_> for Runtime {
 
 #[pymethods]
 impl Runtime {
-    /// Create and start the runtime's workers.
-    /// Without work stealing, each client stays on one worker (not CPU-pinned).
-    /// Workers default to CPU parallelism and names to the package name.
+    /// Create the runtime and start its workers.
+    /// Workers default to CPU parallelism and do not apply to CURRENT_THREAD.
+    /// Thread names default to the package name.
     /// Thread counts must be positive; thread_keep_alive is a nonnegative timedelta.
     #[new]
     #[pyo3(signature = (
         *,
+        scheduler = Scheduler::WORK_STEALING,
         workers = None,
-        work_steal = true,
         thread_name = None,
         max_blocking_threads = None,
         thread_keep_alive = None,
     ))]
     fn new(
         py: Python<'_>,
+        scheduler: Scheduler,
         workers: Option<usize>,
-        work_steal: bool,
         thread_name: Option<&str>,
         max_blocking_threads: Option<usize>,
         thread_keep_alive: Option<Duration>,
     ) -> PyResult<Self> {
-        let workers = workers.unwrap_or_else(parallelism);
-        if workers == 0
-            || max_blocking_threads == Some(0)
-            || workers
-                .checked_add(max_blocking_threads.unwrap_or(512))
-                .is_none()
-        {
+        if max_blocking_threads == Some(0) {
             return Err(PyValueError::new_err("Invalid runtime thread counts"));
         }
-
         let thread_name = thread_name.unwrap_or(env!("CARGO_PKG_NAME"));
         if thread_name.contains('\0') {
             return Err(PyValueError::new_err("thread_name must not contain NUL"));
         }
 
-        Ok(py.detach(|| {
-            RuntimeBuilder::new(workers, thread_name)
-                .work_steal(work_steal)
-                .blocking_pool_opts(BlockingPoolOpts {
-                    max_threads: max_blocking_threads,
-                    thread_keep_alive,
+        Ok(match scheduler {
+            Scheduler::CURRENT_THREAD => {
+                if workers.is_some() {
+                    return Err(PyValueError::new_err(
+                        "CURRENT_THREAD runtimes have no workers",
+                    ));
+                }
+                let mut builder = Builder::new_current_thread();
+                builder.enable_all().thread_name(thread_name);
+                if let Some(max_threads) = max_blocking_threads {
+                    builder.max_blocking_threads(max_threads);
+                }
+                if let Some(keep_alive) = thread_keep_alive {
+                    builder.thread_keep_alive(keep_alive);
+                }
+                let runtime = builder
+                    .build()
+                    .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
+                Shared::CurrentThread(runtime).into()
+            }
+            _ => {
+                let workers = workers.unwrap_or_else(parallelism);
+                if workers == 0
+                    || workers
+                        .checked_add(max_blocking_threads.unwrap_or(512))
+                        .is_none()
+                {
+                    return Err(PyValueError::new_err("Invalid runtime thread counts"));
+                }
+                py.detach(|| {
+                    RuntimeBuilder::new(workers, thread_name)
+                        .work_steal(scheduler == Scheduler::WORK_STEALING)
+                        .blocking_pool_opts(BlockingPoolOpts {
+                            max_threads: max_blocking_threads,
+                            thread_keep_alive,
+                        })
+                        .build()
+                        .into()
                 })
-                .build()
-                .into()
-        }))
+            }
+        })
     }
 }
 
@@ -115,11 +211,52 @@ impl Drop for Runtime {
         // The final owner may be released on a worker or while holding the GIL.
         if let Some(runtime) = self.inner.take().and_then(Arc::into_inner) {
             match runtime {
-                PingoraRuntime::Steal { runtime, .. } => runtime.shutdown_background(),
-                PingoraRuntime::NoSteal(runtime) => drop(runtime),
+                Shared::Workers(PingoraRuntime::Steal { runtime, .. })
+                | Shared::CurrentThread(runtime) => runtime.shutdown_background(),
+                Shared::Workers(PingoraRuntime::NoSteal(runtime)) => drop(runtime),
             }
         }
     }
+}
+
+// ===== impl Shared =====
+
+impl Shared {
+    fn handle(&self) -> Handle {
+        match self {
+            // No-steal workers are lazy upstream; this starts them.
+            Shared::Workers(runtime) => runtime.get_handle().clone(),
+            Shared::CurrentThread(runtime) => runtime.handle().clone(),
+        }
+    }
+}
+
+// ===== impl Driving =====
+
+impl Driving {
+    fn enter() -> Self {
+        DRIVING.set(true);
+        Driving
+    }
+}
+
+impl Drop for Driving {
+    fn drop(&mut self) {
+        DRIVING.set(false);
+        // Left only by an unwinding call; a later call must not raise it.
+        INTERRUPT.take();
+    }
+}
+
+/// Fail a blocking wait on a thread driving a current-thread runtime, where Tokio would
+/// panic, as when an upload iterator it reads sends a blocking request.
+pub fn refuse_nested() -> PyResult<()> {
+    if driving() {
+        return Err(PyRuntimeError::new_err(
+            "Cannot make a blocking call from code a CURRENT_THREAD runtime is running",
+        ));
+    }
+    Ok(())
 }
 
 /// Workers used when none are given: one per available CPU.
@@ -180,6 +317,39 @@ mod tests {
         assert_eq!(ids[0], ids[2]);
         assert_eq!(ids[1], ids[3]);
         // Different clients may select the same worker; each selection stays fixed.
+    }
+
+    #[test]
+    fn current_thread_runs_on_its_callers() {
+        let current_thread = || {
+            Runtime::from(Shared::CurrentThread(
+                Builder::new_current_thread().enable_all().build().unwrap(),
+            ))
+        };
+        let runtime = current_thread();
+        // Spawned tasks and timers run on the blocked caller.
+        let child = crate::client::nogil::block_on(&runtime, async {
+            Ok(tokio::spawn(async {
+                tokio::time::sleep(Duration::from_millis(1)).await;
+                thread::current().id()
+            })
+            .await
+            .unwrap())
+        })
+        .unwrap();
+        assert_eq!(child, thread::current().id());
+        // A blocking call from code the runtime runs fails instead of panicking, and the
+        // last owner of another runtime can be released there.
+        let other = current_thread();
+        let nested = runtime
+            .block_on(async {
+                let nested = other.block_on(async { Ok(()) }).is_err();
+                drop(other);
+                Ok(nested)
+            })
+            .unwrap();
+        assert!(nested);
+        assert!(!driving());
     }
 
     #[test]

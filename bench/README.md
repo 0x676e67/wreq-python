@@ -205,8 +205,9 @@ shows each run's revision and collection time separately.
 ## Blocking wreq runtimes
 
 `wreq_blocking` uses the default shared multi-thread network runtime (MT).
-`wreq_blocking_st` shares one `Runtime(workers=1, work_steal=False)` across
-all logical workers in each case (ST). Both retain one client per logical
+`wreq_blocking_st` shares one
+`Runtime(scheduler=Scheduler.PER_WORKER, workers=1)` across all logical workers
+in each case (ST). Both retain one client per logical
 worker and the same Python thread pool for concurrent blocking calls.
 
 The default full run includes both async and blocking wreq MT/ST, for 17

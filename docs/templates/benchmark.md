@@ -60,8 +60,8 @@ both the upload and download.
 
 `wreq (MT)` uses the shared multithreaded runtime, with its worker count set by
 available CPU parallelism. `wreq (ST)` uses
-`Runtime(workers=1, work_steal=False)`. The ST and MT labels refer to the Rust
-runtime, not Python threads. `ry` uses its default runtime; the two `pyreqwest`
+`Runtime(scheduler=Scheduler.PER_WORKER, workers=1)`. The ST and MT labels refer
+to the Rust runtime, not Python threads. `ry` uses its default runtime; the two `pyreqwest`
 variants use single-threaded and multithreaded runtimes.
 
 New runs also include `wreq (blocking MT)` and `wreq (blocking ST)`. Blocking

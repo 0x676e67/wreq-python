@@ -105,11 +105,11 @@ start a separate worker pool for an async or blocking client:
 from datetime import timedelta
 
 from wreq import Client
-from wreq.runtime import Runtime
+from wreq.runtime import Runtime, Scheduler
 
 runtime = Runtime(
+    scheduler=Scheduler.PER_WORKER,
     workers=1,
-    work_steal=False,
     thread_name="http-client",
     max_blocking_threads=8,
     thread_keep_alive=timedelta(seconds=10),
@@ -117,15 +117,25 @@ runtime = Runtime(
 client = Client(runtime=runtime)
 ```
 
-With `work_steal=False`, workers use independent single-thread Tokio runtimes.
-Each client is assigned one worker for its lifetime; requests, response reads,
-streams and WebSocket operations use that worker. Async reads of small HTTP/1
+`scheduler` selects how the runtime runs client work:
+
+- `Scheduler.WORK_STEALING` (the default) uses one multi-thread pool whose
+  workers steal work from each other.
+- `Scheduler.PER_WORKER` gives each worker its own single-thread Tokio runtime.
+- `Scheduler.CURRENT_THREAD` has no workers: blocking calls drive its IO, which
+  is fastest with a client and runtime per thread. It serves only blocking
+  clients; see the [blocking guide](blocking.md#current-thread-runtime).
+
+With `Scheduler.PER_WORKER`, each client is assigned one worker for its
+lifetime; requests, response reads, streams and WebSocket operations use that
+worker. Async reads of small HTTP/1
 bodies that have already arrived finish on the event loop thread instead. With
 multiple workers, newly created clients select a worker randomly and keep that
 selection. This is not CPU pinning. Sharing the same `Runtime` between clients
 is supported, and `client.runtime` returns the shared runtime object.
 
-`workers=None` uses the available CPU parallelism, or 1 if it cannot be determined.
+`workers=None` uses the available CPU parallelism, or 1 if it cannot be determined;
+`Scheduler.CURRENT_THREAD` requires it.
 Custom runtimes start their threads during construction, before any client is
 bound or request is sent.
 
@@ -133,9 +143,9 @@ bound or request is sent.
 
 `thread_keep_alive` accepts a nonnegative `datetime.timedelta`.
 `max_blocking_threads` and `thread_keep_alive` default to Tokio's settings
-(512 and 10 seconds). In
-no-steal mode these limits apply to **each worker's** blocking pool, not the pool
-as a whole. Python async upload generators still run on the caller's event loop.
+(512 and 10 seconds). With
+`Scheduler.PER_WORKER` these limits apply to **each worker's** blocking pool, not
+the pool as a whole. Python async upload generators still run on the caller's event loop.
 Standalone multipart file preparation and upload-task cleanup can use the
 shared runtime; a dedicated client runtime does not isolate Python's GIL or
 every process resource. DNS resolvers are owned by individual clients so their

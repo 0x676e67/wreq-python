@@ -135,13 +135,13 @@ impl Part {
             Value::Text(text) => multipart::Part::stream(text.0),
             Value::Bytes(bytes) => multipart::Part::stream(bytes.0),
             // Opening the file blocks, so only that waits detached.
-            Value::File(path) => py
-                .detach(|| {
-                    runtime::get()
-                        .handle()
-                        .block_on(multipart::Part::file(path))
+            Value::File(path) => py.detach(|| {
+                runtime::get().block_on(async {
+                    multipart::Part::file(path)
+                        .await
+                        .map_err(|err| Error::from(err).into())
                 })
-                .map_err(Error::from)?,
+            })?,
             Value::Stream(stream) => {
                 let stream = Body::wrap_stream(stream);
                 match self.length {

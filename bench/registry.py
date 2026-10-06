@@ -59,7 +59,7 @@ SPECS = {
     "wreq_st": ClientSpec(
         "wreq",
         "wreq (ST)",
-        runtime={"kind": "custom", "workers": 1, "work_steal": False},
+        runtime={"kind": "custom", "workers": 1, "scheduler": "PER_WORKER"},
         color="wreq_st",
     ),
     "pyreqwest_st": ClientSpec(
@@ -117,7 +117,7 @@ SPECS = {
         runtime={
             "kind": "custom",
             "workers": 1,
-            "work_steal": False,
+            "scheduler": "PER_WORKER",
             "scope": "shared per case",
         },
         color="wreq_st",

@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 import pytest
 import wreq
+from wreq.runtime import Runtime, Scheduler
 
 
 @asynccontextmanager
@@ -65,12 +66,24 @@ async def upload_server():
         assert not errors, errors
 
 
+def upload_client(blocking, current_thread):
+    """A client whose iterators run on the blocking pool, or inline on a current-thread
+    runtime's driving thread."""
+    if current_thread:
+        return wreq.blocking.Client(
+            proxies=[], runtime=Runtime(scheduler=Scheduler.CURRENT_THREAD)
+        )
+    return (wreq.blocking.Client if blocking else wreq.Client)(proxies=[])
+
+
+UPLOAD_CLIENTS = [(False, False), (True, False), (True, True)]
+
+
 @pytest.mark.asyncio
-@pytest.mark.parametrize("blocking", [False, True])
+@pytest.mark.parametrize(("blocking", "current_thread"), UPLOAD_CLIENTS)
 @pytest.mark.parametrize("multipart", [False, True])
-async def test_sync_upload_iterator_errors(blocking, multipart):
-    factory = wreq.blocking.Client if blocking else wreq.Client
-    client = factory(proxies=[])
+async def test_sync_upload_iterator_errors(blocking, current_thread, multipart):
+    client = upload_client(blocking, current_thread)
     try:
         async with upload_server() as (url, bodies):
             for failure in (False, True):
@@ -151,8 +164,8 @@ async def test_blocking_upload_iterator_can_send_requests():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("blocking", [False, True])
-async def test_sync_upload_sends_each_chunk_as_yielded(blocking):
+@pytest.mark.parametrize(("blocking", "current_thread"), UPLOAD_CLIENTS)
+async def test_sync_upload_sends_each_chunk_as_yielded(blocking, current_thread):
     # A chunk goes out once yielded, before the iterator produces the next one.
     first_seen = threading.Event()
     bodies = asyncio.Queue()
@@ -182,8 +195,7 @@ async def test_sync_upload_sends_each_chunk_as_yielded(blocking):
 
     server = await asyncio.start_server(accept, "127.0.0.1", 0)
     url = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}/"
-    factory = wreq.blocking.Client if blocking else wreq.Client
-    client = factory(proxies=[])
+    client = upload_client(blocking, current_thread)
     try:
         if blocking:
 
@@ -251,6 +263,50 @@ async def test_blocking_upload_returns_on_early_response():
         finished.set()
         client.close()
         server.close()
+        await server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_current_thread_upload_sees_an_early_response():
+    # An inline iterator yields to the runtime before each item, so a response sent
+    # before the body is read ends the call within an item or two.
+    writers, calls = [], []
+
+    async def accept(reader, writer):
+        writers.append(writer)
+        try:
+            await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 5)
+            writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
+            await writer.drain()
+            await asyncio.wait_for(reader.read(), 10)
+        except (asyncio.TimeoutError, ConnectionError):
+            pass
+        finally:
+            writer.close()
+
+    def chunks():
+        for _ in range(400):
+            calls.append(None)
+            time.sleep(0.005)
+            yield b"x"
+
+    server = await asyncio.start_server(accept, "127.0.0.1", 0)
+    url = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}/"
+    client = upload_client(True, True)
+    try:
+
+        def send():
+            timeout = datetime.timedelta(seconds=1)
+            with client.post(url, body=chunks(), timeout=timeout) as response:
+                return response.status
+
+        assert await asyncio.wait_for(asyncio.to_thread(send), 5) == 200
+        assert len(calls) < 20, len(calls)
+    finally:
+        client.close()
+        server.close()
+        for writer in writers:
+            writer.close()
         await server.wait_closed()
 
 

@@ -44,6 +44,9 @@ def runtime_label(runtime: dict) -> str:
         return "Multi-thread runtime"
     if kind == "custom":
         workers = runtime.get("workers", "not recorded")
+        if "scheduler" in runtime:
+            return f"Custom: workers={workers}, scheduler={runtime['scheduler']}"
+        # Snapshots recorded before Scheduler.
         steal = runtime.get("work_steal", "not recorded")
         return f"Custom: workers={workers}, work_steal={steal}"
     if kind == "thread_pool":

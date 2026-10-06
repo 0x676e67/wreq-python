@@ -1,25 +1,36 @@
 import asyncio
 import base64
 import hashlib
+import threading
+from contextlib import asynccontextmanager
 from datetime import timedelta
 
 import pytest
 import wreq
-from wreq.runtime import Runtime
+from wreq.runtime import Runtime, Scheduler
 
 from cancellation_test import local_server
 from upload_test import read_chunked
 
 
+def custom_runtime(scheduler, **options):
+    """A one-worker runtime, or a current-thread one, which has no workers."""
+    if scheduler != Scheduler.CURRENT_THREAD:
+        options["workers"] = 1
+    return Runtime(scheduler=scheduler, **options)
+
+
 def test_runtime_configuration():
     assert Runtime is wreq.Runtime
     assert Runtime is wreq.runtime.Runtime
-    assert "Runtime" in wreq.__all__
+    assert Scheduler is wreq.Scheduler
+    assert {"Runtime", "Scheduler"} <= set(wreq.__all__)
     for kwargs in (
         {"workers": 0},
         {"max_blocking_threads": 0},
         {"thread_name": "bad\0name"},
         {"thread_keep_alive": timedelta(microseconds=-1)},
+        {"scheduler": Scheduler.CURRENT_THREAD, "workers": 1},
     ):
         with pytest.raises(ValueError):
             Runtime(**kwargs)
@@ -29,8 +40,8 @@ def test_runtime_configuration():
         wreq.Client(runtime=object())
     for duration in (None, timedelta(), timedelta(microseconds=250001)):
         runtime = Runtime(
+            scheduler=Scheduler.PER_WORKER,
             workers=1,
-            work_steal=False,
             thread_name=None if duration is None else "isolated",
             max_blocking_threads=3,
             thread_keep_alive=duration,
@@ -52,9 +63,9 @@ def test_runtime_configuration():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("steal", [False, True])
-async def test_response_and_stream_keep_runtime_alive(steal):
-    runtime = wreq.Runtime(workers=1, work_steal=steal)
+@pytest.mark.parametrize("scheduler", [Scheduler.PER_WORKER, Scheduler.WORK_STEALING])
+async def test_response_and_stream_keep_runtime_alive(scheduler):
+    runtime = custom_runtime(scheduler)
     async with local_server() as (url, connections):
         client = wreq.Client(runtime=runtime, proxies=[])
         task = asyncio.create_task(client.get(url))
@@ -77,7 +88,7 @@ async def test_response_and_stream_keep_runtime_alive(steal):
 
 @pytest.mark.asyncio
 async def test_shared_runtime_cancellation_and_upload():
-    runtime = wreq.Runtime(workers=2, work_steal=False, max_blocking_threads=2)
+    runtime = Runtime(scheduler=Scheduler.PER_WORKER, workers=2, max_blocking_threads=2)
     async with local_server() as (url, connections):
         first = wreq.Client(runtime=runtime, proxies=[])
         second = wreq.Client(runtime=runtime, proxies=[])
@@ -114,12 +125,13 @@ async def test_shared_runtime_cancellation_and_upload():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("steal", [None, False, True])
-async def test_blocking_client_runtime(steal):
+@pytest.mark.parametrize(
+    "scheduler",
+    [None, Scheduler.PER_WORKER, Scheduler.WORK_STEALING, Scheduler.CURRENT_THREAD],
+)
+async def test_blocking_client_runtime(scheduler):
     runtime = (
-        None
-        if steal is None
-        else wreq.Runtime(workers=1, work_steal=steal, max_blocking_threads=2)
+        None if scheduler is None else custom_runtime(scheduler, max_blocking_threads=2)
     )
 
     def request(url):
@@ -147,6 +159,163 @@ async def test_blocking_client_runtime(steal):
         del task
 
 
+async def run_blocking(func, *args, timeout=5):
+    """Run a blocking call on a daemon thread, so a call that never returns fails the
+    test instead of hanging executor shutdown."""
+    loop = asyncio.get_running_loop()
+    future = loop.create_future()
+
+    def run():
+        try:
+            outcome = (func(*args), None)
+        except BaseException as error:
+            outcome = (None, error)
+
+        def settle():
+            if not future.done():
+                if outcome[1] is None:
+                    future.set_result(outcome[0])
+                else:
+                    future.set_exception(outcome[1])
+
+        loop.call_soon_threadsafe(settle)
+
+    threading.Thread(target=run, daemon=True).start()
+    return await asyncio.wait_for(future, timeout)
+
+
+@asynccontextmanager
+async def path_server():
+    """Answer each request with its path, sending the body after the head so reading it
+    must drive the runtime. `/hold` waits for `release`; `arrived` records paths."""
+    arrived, release, uploads, writers = asyncio.Queue(), asyncio.Event(), [], []
+
+    async def accept(reader, writer):
+        writers.append(writer)
+        try:
+            head = await reader.readuntil(b"\r\n\r\n")
+            path = head.split(b" ", 2)[1]
+            arrived.put_nowait(path.decode())
+            if b"transfer-encoding: chunked" in head.lower():
+                uploads.append(await read_chunked(reader))
+            if path == b"/hold":
+                await release.wait()
+            writer.write(
+                b"HTTP/1.1 200 OK\r\nConnection: close\r\n"
+                b"Content-Length: %d\r\n\r\n" % len(path)
+            )
+            await writer.drain()
+            await asyncio.sleep(0.05)
+            writer.write(path)
+            await writer.drain()
+        except (asyncio.IncompleteReadError, ConnectionError, ValueError):
+            # Interrupted uploads end mid-body.
+            pass
+        finally:
+            writer.close()
+
+    server = await asyncio.start_server(accept, "127.0.0.1", 0)
+    try:
+        url = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}"
+        yield url, arrived, release, uploads
+    finally:
+        release.set()
+        server.close()
+        for writer in writers:
+            writer.close()
+        await server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_current_thread_runtime():
+    runtime = Runtime(scheduler=Scheduler.CURRENT_THREAD)
+    with pytest.raises(ValueError):
+        wreq.Client(runtime=runtime)
+    client = wreq.blocking.Client(runtime=runtime, proxies=[])
+
+    class Interrupt(BaseException):
+        pass
+
+    def fetch(path):
+        with client.get(url + path) as response:
+            return response.text()
+
+    def interrupted():
+        yield b"x"
+        raise Interrupt
+
+    def upload_interrupted():
+        client.post(url + "/interrupted", body=interrupted())
+
+    def run():
+        caller, readers = threading.get_ident(), []
+        pending = client.get(url + "/pending")
+        streamed = client.get(url + "/streamed").stream()
+
+        def chunks():
+            # Read on the thread driving the runtime, which refuses blocking calls
+            # before they consume anything.
+            readers.append(threading.get_ident())
+            yield b"sync"
+            for read in (lambda: fetch("/nested"), pending.text, pending.bytes):
+                with pytest.raises(RuntimeError, match="CURRENT_THREAD"):
+                    read()
+            with pytest.raises(RuntimeError, match="CURRENT_THREAD"):
+                next(streamed)
+            yield b" upload"
+
+        with client.post(url + "/upload", body=chunks()) as response:
+            uploaded = response.text()
+        # Nothing would drive an async read, so it is refused up front.
+        for entry in (streamed.__aiter__, streamed.__anext__, streamed.__aenter__):
+            with pytest.raises(RuntimeError):
+                entry()
+
+        # A KeyboardInterrupt-like error from the caller's own iterator surfaces as
+        # itself.
+        with pytest.raises(Interrupt):
+            upload_interrupted()
+        return readers == [caller], uploaded, pending.text(), b"".join(streamed)
+
+    try:
+        async with path_server() as (url, arrived, release, uploads):
+            assert await run_blocking(run) == (
+                True,
+                "/upload",
+                "/pending",
+                b"/streamed",
+            )
+            assert uploads == [b"sync upload"]
+            seen = []
+            while not seen or seen[-1] != "/interrupted":
+                seen.append(await asyncio.wait_for(arrived.get(), 5))
+            assert "/nested" not in seen
+
+            # Threads sharing the runtime take turns driving it, so a request waiting
+            # on the server does not hold up another thread's request.
+            held = asyncio.create_task(run_blocking(fetch, "/hold"))
+            assert await asyncio.wait_for(arrived.get(), 5) == "/hold"
+            assert await run_blocking(fetch, "/other") == "/other"
+            # This upload's iterator runs on the held thread, which keeps its own
+            # result; the uploading call gets the wrapped error.
+            with pytest.raises(wreq.exceptions.RequestError, match="Interrupt"):
+                await run_blocking(upload_interrupted)
+            assert not held.done()
+            release.set()
+            assert await held == "/hold"
+
+            # Closing the client from another thread ends a call driving the runtime.
+            release.clear()
+            held = asyncio.create_task(run_blocking(fetch, "/hold"))
+            while await asyncio.wait_for(arrived.get(), 5) != "/hold":
+                pass
+            client.close()
+            with pytest.raises(asyncio.CancelledError):
+                await held
+    finally:
+        client.close()
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("blocking", "operation"),
@@ -155,7 +324,7 @@ async def test_blocking_client_runtime(steal):
 async def test_client_close_cancels_requests(blocking, operation):
     factory = wreq.blocking.Client if blocking else wreq.Client
     client = factory(
-        runtime=Runtime(workers=1, work_steal=False),
+        runtime=custom_runtime(Scheduler.PER_WORKER),
         proxies=[],
         timeout=timedelta(seconds=10),
     )
@@ -196,8 +365,15 @@ async def test_client_close_cancels_requests(blocking, operation):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("blocking", [False, True])
-async def test_websocket_outlives_client(blocking):
+@pytest.mark.parametrize(
+    ("blocking", "scheduler"),
+    [
+        (False, Scheduler.PER_WORKER),
+        (True, Scheduler.PER_WORKER),
+        (True, Scheduler.CURRENT_THREAD),
+    ],
+)
+async def test_websocket_outlives_client(blocking, scheduler):
     connections = asyncio.Queue()
 
     async def accept(reader, writer):
@@ -218,7 +394,7 @@ async def test_websocket_outlives_client(blocking):
         connections.put_nowait((reader, writer))
 
     server = await asyncio.start_server(accept, "127.0.0.1", 0)
-    runtime = wreq.Runtime(workers=1, work_steal=False)
+    runtime = custom_runtime(scheduler)
     writer = None
     try:
         url = f"ws://127.0.0.1:{server.sockets[0].getsockname()[1]}/"
@@ -226,7 +402,7 @@ async def test_websocket_outlives_client(blocking):
             runtime=runtime, proxies=[]
         )
         ws = (
-            await asyncio.to_thread(client.websocket, url)
+            await run_blocking(client.websocket, url)
             if blocking
             else await client.websocket(url)
         )
@@ -235,11 +411,11 @@ async def test_websocket_outlives_client(blocking):
         del client, runtime
         writer.write(b"\x81\x04pong")
         await writer.drain()
-        message = await asyncio.to_thread(ws.recv) if blocking else await ws.recv()
+        message = await run_blocking(ws.recv) if blocking else await ws.recv()
         assert message.text == "pong"
         outgoing = wreq.Message.from_text("ping")
         if blocking:
-            await asyncio.to_thread(ws.send, outgoing)
+            await run_blocking(ws.send, outgoing)
         else:
             await ws.send(outgoing)
         frame = await asyncio.wait_for(reader.readexactly(10), 5)
@@ -249,7 +425,7 @@ async def test_websocket_outlives_client(blocking):
             == b"ping"
         )
         if blocking:
-            await asyncio.to_thread(ws.close)
+            await run_blocking(ws.close)
         else:
             await ws.close()
         del ws
@@ -262,8 +438,8 @@ async def test_websocket_outlives_client(blocking):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("steal", [False, True])
-async def test_http2_multiplexing_on_custom_runtime(steal):
+@pytest.mark.parametrize("scheduler", [Scheduler.PER_WORKER, Scheduler.WORK_STEALING])
+async def test_http2_multiplexing_on_custom_runtime(scheduler):
     # Minimal h2c responder: indexed :status=200, then a two-byte DATA frame.
     # No HPACK decoder is needed because the test does not inspect request headers.
     def frame(kind, flags, stream, payload=b""):
@@ -307,7 +483,7 @@ async def test_http2_multiplexing_on_custom_runtime(steal):
         finally:
             handlers.discard(asyncio.current_task())
 
-    runtime = wreq.Runtime(workers=2, work_steal=steal)
+    runtime = Runtime(scheduler=scheduler, workers=2)
     server = await asyncio.start_server(accept, "127.0.0.1", 0)
     try:
         url = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}/"

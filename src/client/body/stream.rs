@@ -1,19 +1,21 @@
 //! Request bodies streamed from Python iterators and async generators.
 
 use std::{
-    pin::Pin,
+    mem,
+    pin::{Pin, pin},
     sync::{
         Arc, Mutex, MutexGuard, PoisonError,
         atomic::{AtomicBool, Ordering},
     },
     task::{Context, Poll},
+    thread::{self, ThreadId},
     time::Duration,
 };
 
 use bytes::Bytes;
 use futures_util::Stream;
 use pyo3::{
-    exceptions::{PyRuntimeError, PyStopIteration},
+    exceptions::{PyException, PyKeyboardInterrupt, PyRuntimeError, PyStopIteration},
     intern,
     prelude::*,
     sync::PyOnceLock,
@@ -22,7 +24,7 @@ use pyo3::{
 use tokio::{
     runtime::Handle,
     sync::mpsc::{self, error::TrySendError},
-    task::spawn_blocking,
+    task::{spawn_blocking, yield_now},
     time,
 };
 
@@ -50,13 +52,35 @@ enum Source {
     Async(PyAsyncStream),
 }
 
-/// A request body from a Python iterator, read on Tokio's blocking pool.
+/// A request body from a Python iterator.
 ///
-/// Neither a Tokio worker nor a blocked caller runs the iterator, so a slow `__next__`
-/// cannot delay the response, a timeout or cancellation. A pump task reads an item only
-/// once the channel has room, staying at most one item ahead of the upload. When the
-/// upload stalls, it parks the iterator and frees its thread; the next item taken restarts it.
-struct SyncStream {
+/// Worker runtimes read the iterator on Tokio's blocking pool: neither a worker nor a
+/// blocked caller runs it, so a slow `__next__` cannot delay the response, a timeout or
+/// cancellation. A current-thread runtime reads it on its driving thread instead, which
+/// waits for the request anyway.
+enum SyncStream {
+    /// Not polled yet; the first poll picks where the iterator is read. `owner` passed the
+    /// iterator to the request.
+    Idle {
+        iter: Py<PyAny>,
+        owner: ThreadId,
+    },
+    /// Read on the thread driving a current-thread runtime; `flushed` once a poll has
+    /// returned to the connection since the last item.
+    Inline {
+        iter: Py<PyAny>,
+        owner: ThreadId,
+        flushed: bool,
+    },
+    Pumped(Pumped),
+    /// The inline iterator ended or raised.
+    Done,
+}
+
+/// An iterator read by pump tasks on the blocking pool. A pump reads an item only once
+/// the channel has room, staying at most one item ahead of the upload. When the upload
+/// stalls, it parks the iterator and frees its thread; the next item taken restarts it.
+struct Pumped {
     rx: mpsc::Receiver<Item>,
     /// The iterator and sender while no pump runs: before the first poll, or once a pump
     /// parked at a full channel.
@@ -121,7 +145,10 @@ impl FromPyObject<'_, '_> for PyStream {
         let source = if ob.cast::<PyIterator>().is_err() && ob.hasattr(intern!(ob.py(), "asend"))? {
             Source::Async(PyAsyncStream::new(ob.to_owned())?)
         } else {
-            Source::Sync(SyncStream::new(ob.to_owned().unbind()))
+            Source::Sync(SyncStream::Idle {
+                iter: ob.to_owned().unbind(),
+                owner: thread::current().id(),
+            })
         };
         Ok(PyStream(source))
     }
@@ -141,9 +168,66 @@ impl Stream for PyStream {
 // ===== impl SyncStream =====
 
 impl SyncStream {
+    fn poll_next(&mut self, cx: &mut Context<'_>) -> Poll<Option<Item>> {
+        if let SyncStream::Idle { .. } = self
+            && let SyncStream::Idle { iter, owner } = mem::replace(self, SyncStream::Done)
+        {
+            *self = if runtime::driving() {
+                SyncStream::Inline {
+                    iter,
+                    owner,
+                    flushed: false,
+                }
+            } else {
+                SyncStream::Pumped(Pumped::new(iter))
+            };
+        }
+        match self {
+            SyncStream::Inline {
+                iter,
+                owner,
+                flushed,
+            } => {
+                // Return to the connection before each read, so the request head and the
+                // chunks already yielded go out before `__next__` can block. The deferred
+                // wake lets the runtime poll its IO and the caller first.
+                if !mem::replace(flushed, true) {
+                    let _ = pin!(yield_now()).poll(cx);
+                    return Poll::Pending;
+                }
+                *flushed = false;
+                // Like a pump, stop reading once Python is unavailable.
+                let item = Python::try_attach(|py| {
+                    let item = next_item(py, iter);
+                    // A KeyboardInterrupt or SystemExit reaches the caller as itself: the
+                    // owner's call, or for Ctrl+C the main thread signals reach.
+                    if let Some(Err(err)) = &item
+                        && !err.is_instance_of::<PyException>(py)
+                        && (*owner == thread::current().id()
+                            || err.is_instance_of::<PyKeyboardInterrupt>(py))
+                    {
+                        runtime::interrupt(err.clone_ref(py));
+                    }
+                    item
+                })
+                .flatten();
+                if !matches!(item, Some(Ok(_))) {
+                    *self = SyncStream::Done;
+                }
+                Poll::Ready(item)
+            }
+            SyncStream::Pumped(pumped) => pumped.poll_next(cx),
+            SyncStream::Idle { .. } | SyncStream::Done => Poll::Ready(None),
+        }
+    }
+}
+
+// ===== impl Pumped =====
+
+impl Pumped {
     fn new(iter: Py<PyAny>) -> Self {
         let (tx, rx) = mpsc::channel(1);
-        SyncStream {
+        Pumped {
             rx,
             parked: Arc::new(Mutex::new(Some(Pump { iter, tx }))),
         }

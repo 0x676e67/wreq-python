@@ -7,7 +7,7 @@ from itertools import product
 import json
 import time
 import sys
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -370,12 +370,13 @@ def test_blocking_st_shares_one_network_runtime(monkeypatch):
     runtime_module = ModuleType("wreq.runtime")
 
     def create_runtime(**options):
-        assert options == {"workers": 1, "work_steal": False}
+        assert options == {"scheduler": "per-worker", "workers": 1}
         runtime = object()
         runtimes.append(runtime)
         return runtime
 
     runtime_module.Runtime = create_runtime
+    runtime_module.Scheduler = SimpleNamespace(PER_WORKER="per-worker")
     monkeypatch.setitem(sys.modules, "wreq.runtime", runtime_module)
 
     @contextmanager

@@ -11,7 +11,9 @@ use std::{
     time::Duration,
 };
 
-use pyo3::{IntoPyObjectExt, prelude::*, pybacked::PyBackedStr, types::PyDict};
+use pyo3::{
+    IntoPyObjectExt, exceptions::PyValueError, prelude::*, pybacked::PyBackedStr, types::PyDict,
+};
 use req::{Request, WebSocketRequest};
 use tokio_util::sync::CancellationToken;
 use wreq::tls::trust::CertStore;
@@ -312,12 +314,9 @@ impl Default for Client {
     }
 }
 
-#[pymethods]
 impl Client {
-    /// Creates a new Client instance.
-    #[new]
-    #[pyo3(signature = (**kwds))]
-    fn new(py: Python, kwds: Option<Builder>) -> PyResult<Client> {
+    /// Build a client for either API from its options.
+    fn build(py: Python, kwds: Option<Builder>) -> PyResult<Client> {
         py.detach(|| {
             let runtime = match kwds.as_ref().and_then(|config| config.runtime.as_ref()) {
                 Some(runtime) => runtime.select()?,
@@ -541,6 +540,26 @@ impl Client {
                 .map_err(Into::into)
         })
     }
+}
+
+#[pymethods]
+impl Client {
+    /// Creates a new Client instance.
+    #[new]
+    #[pyo3(signature = (**kwds))]
+    fn new(py: Python, kwds: Option<Builder>) -> PyResult<Client> {
+        // Nothing would drive its work while a coroutine waits.
+        if kwds
+            .as_ref()
+            .and_then(|config| config.runtime.as_ref())
+            .is_some_and(runtime::Runtime::is_current_thread)
+        {
+            return Err(PyValueError::new_err(
+                "CURRENT_THREAD runtimes only serve blocking clients",
+            ));
+        }
+        Client::build(py, kwds)
+    }
 
     /// Cancel pending requests and reject new ones with asyncio.CancelledError.
     /// Existing responses, WebSockets and the shared runtime remain usable.
@@ -703,7 +722,7 @@ impl BlockingClient {
     #[new]
     #[pyo3(signature = (**kwds))]
     fn new(py: Python, kwds: Option<Builder>) -> PyResult<BlockingClient> {
-        Client::new(py, kwds).map(BlockingClient)
+        Client::build(py, kwds).map(BlockingClient)
     }
 
     /// Get the cookie jar of the client.

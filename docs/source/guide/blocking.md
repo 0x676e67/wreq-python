@@ -72,9 +72,9 @@ it uses the shared global multi-thread runtime.
 
 ```python
 from wreq.blocking import Client
-from wreq.runtime import Runtime
+from wreq.runtime import Runtime, Scheduler
 
-runtime = Runtime(workers=1, work_steal=False)
+runtime = Runtime(scheduler=Scheduler.PER_WORKER, workers=1)
 with Client(runtime=runtime) as client:
     with client.get("https://httpbin.io/get") as response:
         print(response.text())
@@ -85,6 +85,39 @@ Network work runs on the selected worker while the calling thread waits.
 runtime; it cancels pending requests and rejects new ones with
 `asyncio.CancelledError`. See [custom runtimes](advanced.md#custom-runtimes) for
 configuration and lifetime details.
+
+### Current-thread runtime
+
+A `Scheduler.CURRENT_THREAD` runtime has no worker threads: the thread in a
+blocking call drives its IO, with no handoff to another thread. It is fastest
+with a client and runtime per thread, like one curl handle per thread:
+
+```python
+import threading
+
+from wreq.blocking import Client
+from wreq.runtime import Runtime, Scheduler
+
+local = threading.local()
+
+
+def client() -> Client:
+    if not hasattr(local, "client"):
+        local.client = Client(runtime=Runtime(scheduler=Scheduler.CURRENT_THREAD))
+    return local.client
+```
+
+- Nothing runs between calls. HTTP/2 pings, idle-connection cleanup, closing
+  cancelled connections and WebSocket keepalive progress only during a call.
+- Threads sharing the runtime take turns driving it, and the driving thread
+  also runs the other threads' connections and upload iterators. A client
+  shared by many threads is faster with `Scheduler.PER_WORKER`.
+- Upload iterators run on the driving thread. A slow `__next__` holds back the
+  call's timeout and every thread sharing the runtime, and an iterator that
+  waits for another call on the same runtime never returns. Blocking wreq calls
+  from an iterator, including reading a response or stream, raise `RuntimeError`.
+- Async clients reject the runtime, and its response streams support only
+  blocking iteration.
 
 ### Cookies
 
