@@ -122,6 +122,14 @@ SPECS = {
         },
         color="wreq_st",
     ),
+    "wreq_blocking_ct": ClientSpec(
+        "wreq",
+        "wreq (blocking CT)",
+        "blocking",
+        response_read="stream(): native transport chunks",
+        runtime={"kind": "current_thread", "scope": "one per client"},
+        color="wreq_ct",
+    ),
     "ry_blocking": ClientSpec(
         "ry",
         "ry (blocking)",

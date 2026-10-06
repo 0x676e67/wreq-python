@@ -207,12 +207,15 @@ shows each run's revision and collection time separately.
 `wreq_blocking` uses the default shared multi-thread network runtime (MT).
 `wreq_blocking_st` shares one
 `Runtime(scheduler=Scheduler.PER_WORKER, workers=1)` across all logical workers
-in each case (ST). Both retain one client per logical
-worker and the same Python thread pool for concurrent blocking calls.
+in each case (ST). `wreq_blocking_ct` gives each logical worker its own
+`Runtime(scheduler=Scheduler.CURRENT_THREAD)`, driven by the calling thread
+(CT). All three retain one client per logical worker and the same Python thread
+pool for concurrent blocking calls.
 
-The default full run includes both async and blocking wreq MT/ST, for 17
-variants and 1,792 supported cells. No `--clients` option is needed. Historical
-published snapshots remain readable; new full/blocking publication requires ST.
+The default full run includes async wreq MT/ST and blocking wreq MT/ST/CT, for
+18 variants and 1,904 supported cells. No `--clients` option is needed.
+Historical published snapshots remain readable; new full/blocking publication
+requires ST and CT. CT needs a wreq release with `Scheduler`.
 
 ## Maintaining the suite
 

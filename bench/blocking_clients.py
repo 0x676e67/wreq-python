@@ -100,8 +100,18 @@ def operations(client_id, protocol, url, body, body_kind, *, chunks=None, runtim
         from wreq.blocking import Client
         from wreq.tls import TlsVersion
 
-        if SPECS[client_id].runtime["kind"] == "custom" and runtime is None:
+        kind = SPECS[client_id].runtime["kind"]
+        if kind == "custom" and runtime is None:
             raise ValueError("Blocking ST requires one runtime shared by the case")
+        if kind == "current_thread":
+            from wreq.runtime import Runtime
+
+            try:
+                from wreq.runtime import Scheduler
+            except ImportError as error:
+                raise ValueError("Blocking CT requires wreq with Scheduler") from error
+            # Each logical worker drives its own runtime, like one curl handle each.
+            runtime = Runtime(scheduler=Scheduler.CURRENT_THREAD)
         with Client(
             runtime=runtime,
             tls_verify=False,
@@ -117,8 +127,9 @@ def operations(client_id, protocol, url, body, body_kind, *, chunks=None, runtim
                 response = client.post(
                     url, body=iter(chunks) if body_kind == "stream" else body
                 )
-                status, version = response.status.as_int(), native_protocol(
-                    response.version
+                status, version = (
+                    response.status.as_int(),
+                    native_protocol(response.version),
                 )
                 total = 0
                 with response.stream() as stream:

@@ -42,6 +42,8 @@ def runtime_label(runtime: dict) -> str:
         return "Single-thread runtime"
     if kind == "multi_thread":
         return "Multi-thread runtime"
+    if kind == "current_thread":
+        return "Current-thread runtime per client"
     if kind == "custom":
         workers = runtime.get("workers", "not recorded")
         if "scheduler" in runtime:

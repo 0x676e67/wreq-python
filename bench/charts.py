@@ -24,6 +24,7 @@ PALETTES = {
         "track": "#edf1f8",
         "wreq": "#4657d9",
         "wreq_st": "#0f8a76",
+        "wreq_ct": "#b45309",
         "peer": "#8393aa",
     },
     "dark": {
@@ -34,6 +35,7 @@ PALETTES = {
         "track": "#223047",
         "wreq": "#a0aaff",
         "wreq_st": "#55ccb3",
+        "wreq_ct": "#f6b14b",
         "peer": "#8b9db8",
     },
 }
