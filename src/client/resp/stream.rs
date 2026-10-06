@@ -171,7 +171,8 @@ impl Streamer {
             && !resp
                 .size_hint()
                 .exact()
-                .is_some_and(|len| len <= loop_limit(resp.version(), limit))
+                .zip(loop_limit(resp.version(), limit))
+                .is_some_and(|(len, limit)| len <= limit)
         {
             return None;
         }
