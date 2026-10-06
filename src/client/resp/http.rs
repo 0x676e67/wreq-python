@@ -112,9 +112,10 @@ impl Response {
     }
 
     /// Take the body for reading. Cached bytes are shared at once, and a body of known
-    /// length up to `limit` that is already buffered is read now on the calling thread;
-    /// overlapping reads and `stream()` fail with [`Error::Memory`] while a read runs.
-    fn take_bytes(&self, limit: u64) -> Result<BodyRead, Error> {
+    /// length up to `limit` that is already buffered is read now on the calling thread, none
+    /// without a `limit`; overlapping reads and `stream()` fail with [`Error::Memory`] while
+    /// a read runs.
+    fn take_bytes(&self, limit: Option<u64>) -> Result<BodyRead, Error> {
         let mut slot = self.slot();
         let body = match mem::replace(&mut *slot, Body::Taken) {
             Body::Unread(body) => body,
@@ -128,7 +129,11 @@ impl Response {
             }
         };
         drop(slot);
-        let attached = body.size_hint().exact().is_some_and(|len| len <= limit);
+        let attached = body
+            .size_hint()
+            .exact()
+            .zip(limit)
+            .is_some_and(|(len, limit)| len <= limit);
         let mut collect = body.collect();
         let ready = if attached {
             // A read timeout starts a timer on its first poll, which needs the runtime.
@@ -176,7 +181,7 @@ impl Response {
     /// the body is still arriving or too large to decode on the caller.
     fn read_body<F, Fut, T>(
         &self,
-        limit: u64,
+        limit: Option<u64>,
         read: F,
     ) -> Result<(impl Future<Output = PyResult<T>> + Send + 'static, bool), Error>
     where
@@ -185,7 +190,7 @@ impl Response {
     {
         let (decode, inline) = match self.take_bytes(limit)? {
             BodyRead::Ready(bytes) => {
-                let inline = bytes.len() as u64 <= limit;
+                let inline = limit.is_some_and(|limit| bytes.len() as u64 <= limit);
                 (Either::Left(read(self.build_response(bytes))), inline)
             }
             BodyRead::Pending(collect) => (
@@ -484,7 +489,7 @@ impl BlockingResponse {
         T: Send,
     {
         let runtime = &self.0.runtime;
-        let (read, inline) = self.0.read_body(READ_ATTACHED, read)?;
+        let (read, inline) = self.0.read_body(Some(READ_ATTACHED), read)?;
         if inline {
             nogil::run(py, runtime, read)
         } else {
@@ -579,7 +584,7 @@ impl BlockingResponse {
     /// Read the body as a read-only memoryview, retaining its data after the response closes.
     pub fn bytes(&self, py: Python) -> PyResult<PyBuffer> {
         let response = &self.0;
-        match response.take_bytes(READ_ATTACHED)? {
+        match response.take_bytes(Some(READ_ATTACHED))? {
             BodyRead::Ready(bytes) => Ok(PyBuffer::from(bytes)),
             BodyRead::Pending(collect) => {
                 let read = response

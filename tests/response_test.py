@@ -3,6 +3,7 @@ import json
 import socket
 import threading
 import time
+from contextlib import asynccontextmanager
 from datetime import timedelta
 
 import pytest
@@ -249,6 +250,102 @@ async def test_pending_read_holds_the_body_until_it_ends():
             await asyncio.wait_for(response.bytes(), 5)
         with pytest.raises(RuntimeError):
             await response.text()
+
+
+async def steps(coroutine):
+    """Drive `coroutine` by hand; return its result and how often it suspended."""
+    suspended = 0
+    while True:
+        try:
+            waiter = coroutine.send(None)
+        except StopIteration as stop:
+            return stop.value, suspended
+        except StopAsyncIteration:
+            return None, suspended
+        suspended += 1
+        if waiter is None:
+            await asyncio.sleep(0)
+        else:
+            await asyncio.wait({waiter}, timeout=5)
+
+
+@asynccontextmanager
+async def body_server(http2, body):
+    """Answer every request with `body` and its Content-Length, over HTTP/1 or h2c."""
+    length = str(len(body)).encode()
+    handlers, writers = set(), []
+
+    def frame(kind, flags, stream, payload=b""):
+        size = len(payload).to_bytes(3, "big")
+        return size + bytes((kind, flags)) + stream.to_bytes(4, "big") + payload
+
+    async def accept(reader, writer):
+        handlers.add(asyncio.current_task())
+        writers.append(writer)
+        try:
+            if not http2:
+                await reader.readuntil(b"\r\n\r\n")
+                head = b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: "
+                writer.write(head + length + b"\r\n\r\n" + body)
+                await writer.drain()
+                await reader.read()
+                return
+            assert await reader.readexactly(24) == b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+            writer.write(frame(4, 0, 0))
+            while True:
+                header = await reader.readexactly(9)
+                payload = await reader.readexactly(int.from_bytes(header[:3], "big"))
+                kind, flags = header[3:5]
+                stream = int.from_bytes(header[5:], "big") & 0x7FFFFFFF
+                if kind == 4 and not flags & 1:
+                    writer.write(frame(4, 1, 0))
+                elif kind == 1:
+                    # `:status: 200` and `content-length`, then the body ending the stream.
+                    block = b"\x88\x0f\x0d" + bytes((len(length),)) + length
+                    if body:
+                        writer.write(
+                            frame(1, 4, stream, block) + frame(0, 1, stream, body)
+                        )
+                    else:
+                        writer.write(frame(1, 5, stream, block))
+                await writer.drain()
+        except (asyncio.IncompleteReadError, ConnectionError):
+            pass
+        finally:
+            handlers.discard(asyncio.current_task())
+            writer.close()
+
+    server = await asyncio.start_server(accept, "127.0.0.1", 0)
+    try:
+        yield f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}/"
+    finally:
+        server.close()
+        for writer in writers:
+            writer.close()
+        await asyncio.gather(*handlers, return_exceptions=True)
+        await server.wait_closed()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("read", ["bytes", "stream"])
+@pytest.mark.parametrize("body", [b"ok", b""], ids=["body", "empty"])
+@pytest.mark.parametrize("http2", [False, True], ids=["http1", "http2"])
+async def test_only_http1_bodies_are_read_on_the_event_loop(http2, body, read):
+    # A buffered HTTP/1 body is read in the first step of the coroutine. An HTTP/2 body,
+    # even an empty one, is always read on the runtime, so the coroutine suspends first.
+    async with body_server(http2, body) as url:
+        async with wreq.Client(http2_only=http2, proxies=[]) as client:
+            response = await asyncio.wait_for(client.get(url), 5)
+            assert response.version == (Version.HTTP_2 if http2 else Version.HTTP_11)
+            # Let the whole body arrive before the read starts.
+            await asyncio.sleep(0.05)
+            if read == "bytes":
+                result, suspended = await steps(response.bytes())
+                assert bytes(result) == body
+            else:
+                result, suspended = await steps(response.stream().__anext__())
+                assert (bytes(result) if result is not None else b"") == body
+            assert (suspended > 0) == http2
 
 
 @pytest.mark.asyncio
