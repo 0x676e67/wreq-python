@@ -2,7 +2,10 @@
 
 use std::{
     pin::Pin,
-    sync::{Arc, Mutex, MutexGuard, PoisonError},
+    sync::{
+        Arc, Mutex, MutexGuard, PoisonError,
+        atomic::{AtomicBool, Ordering},
+    },
     task::{Context, Poll},
     time::Duration,
 };
@@ -69,14 +72,19 @@ struct Pump {
 /// A request body from a Python async generator, forwarded with one chunk of buffering
 /// by a task on the loop that was running at extraction. Dropping it cancels that task.
 struct PyAsyncStream {
-    rx: mpsc::Receiver<Option<Item>>,
+    rx: mpsc::Receiver<Item>,
+    /// Set by [`Sender::finish`], so the channel closing reads as the end of the body.
+    finished: Arc<AtomicBool>,
     task: Option<(Py<PyAny>, Py<PyAny>)>,
 }
 
 /// The channel end given to the forwarding coroutine; awaiting `send` applies upload
 /// backpressure. Closing it without `finish` fails the body.
 #[pyclass(frozen)]
-struct Sender(Mutex<Option<mpsc::Sender<Option<Item>>>>);
+struct Sender {
+    tx: Mutex<Option<mpsc::Sender<Item>>>,
+    finished: Arc<AtomicBool>,
+}
 
 // ===== impl PyBytesLike =====
 
@@ -253,7 +261,7 @@ async def forward(gen, sender):
     except BaseException as error:
         await sender.send(error, True)
     else:
-        await sender.finish()
+        sender.finish()
 ",
                 c"wreq/_async_stream.py",
                 c"wreq._async_stream",
@@ -262,9 +270,12 @@ async def forward(gen, sender):
             .map(Bound::unbind)
         })?;
         let (tx, rx) = mpsc::channel(1);
-        let coroutine = forward
-            .bind(py)
-            .call1((generator, Sender(Mutex::new(Some(tx)))))?;
+        let finished = Arc::new(AtomicBool::new(false));
+        let sender = Sender {
+            tx: Mutex::new(Some(tx)),
+            finished: finished.clone(),
+        };
+        let coroutine = forward.bind(py).call1((generator, sender))?;
         // create_task captures the caller's contextvars on the running loop.
         let task = event_loop
             .call_method1(intern!(py, "create_task"), (&coroutine,))
@@ -273,6 +284,7 @@ async def forward(gen, sender):
             })?;
         Ok(Self {
             rx,
+            finished,
             task: Some((task.unbind(), event_loop.unbind())),
         })
     }
@@ -284,17 +296,16 @@ impl Stream for PyAsyncStream {
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
         match this.rx.poll_recv(cx) {
-            Poll::Ready(Some(Some(item))) => Poll::Ready(Some(item)),
-            Poll::Ready(Some(None)) => {
-                this.rx.close();
-                this.task.take();
-                Poll::Ready(None)
+            Poll::Ready(Some(item)) => Poll::Ready(Some(item)),
+            // Every sender is gone: the end after `finish`. Otherwise the forwarding task was
+            // cancelled or destroyed, so the body is incomplete.
+            Poll::Ready(None)
+                if this.task.take().is_some() && !this.finished.load(Ordering::Acquire) =>
+            {
+                Poll::Ready(Some(Err(PyRuntimeError::new_err(
+                    "async body generator stopped before it finished",
+                ))))
             }
-            // Every sender is gone without `finish`: the forwarding task was cancelled or
-            // destroyed, so the body is incomplete.
-            Poll::Ready(None) if this.task.take().is_some() => Poll::Ready(Some(Err(
-                PyRuntimeError::new_err("async body generator stopped before it finished"),
-            ))),
             Poll::Ready(None) => Poll::Ready(None),
             Poll::Pending => Poll::Pending,
         }
@@ -340,41 +351,34 @@ impl Sender {
         } else {
             Ok(item.extract()?)
         };
-        let tx = self.sender();
+        let tx = self.lock().clone();
         // Channel readiness is runtime-independent, so this waits on the Python loop.
         coroutine::local(py, "Sender.send", async move {
             Ok(match tx {
-                Some(tx) => tx.send(Some(item)).await.is_ok(),
+                Some(tx) => tx.send(item).await.is_ok(),
                 None => false,
             })
         })
     }
 
-    /// Mark the normal end of the body.
-    fn finish<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, Coroutine>> {
+    /// Mark the normal end of the body. The last chunk may still be queued: it is read
+    /// before the closed channel, so finishing never waits for room.
+    fn finish(&self) {
+        self.finished.store(true, Ordering::Release);
         // Python may retain the sender after completion, especially on PyPy.
-        let tx = self.sender();
-        coroutine::local(py, "Sender.finish", async move {
-            Ok(match tx {
-                Some(tx) => tx.send(None).await.is_ok(),
-                None => false,
-            })
-        })
+        self.close();
     }
 
     /// Drop the channel end at once, so the body fails instead of waiting for more.
     fn close(&self) {
-        let tx = self.0.lock().unwrap_or_else(PoisonError::into_inner).take();
+        let tx = self.lock().take();
         drop(tx);
     }
 }
 
 impl Sender {
     #[inline]
-    fn sender(&self) -> Option<mpsc::Sender<Option<Item>>> {
-        self.0
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone()
+    fn lock(&self) -> MutexGuard<'_, Option<mpsc::Sender<Item>>> {
+        self.tx.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
