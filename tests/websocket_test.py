@@ -73,7 +73,7 @@ async def test_websocket_close_frame(code, reason, expected):
         async with wreq.Client(proxies=[]) as client:
             # Leaving the block after an explicit close must not fail.
             async with client.websocket(url) as ws:
-                await ws.close(code, reason)
+                assert await ws.close(code, reason) is None
             assert await asyncio.wait_for(frames.get(), 5) == expected
     finally:
         server.close()
@@ -137,7 +137,10 @@ async def test_websocket_reads_and_writes_do_not_block_each_other():
                     await asyncio.wait_for(ws.recv(), 0.2)
                 # A pending receive does not hold up a send.
                 pending = asyncio.ensure_future(ws.recv())
-                await asyncio.wait_for(ws.send(wreq.Message.from_text("ping")), 5)
+                assert (
+                    await asyncio.wait_for(ws.send(wreq.Message.from_text("ping")), 5)
+                    is None
+                )
                 assert await asyncio.wait_for(received.get(), 5) == (0x1, b"ping")
                 release.set()
                 assert (await asyncio.wait_for(pending, 5)).text == "first"
