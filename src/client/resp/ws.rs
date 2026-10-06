@@ -7,13 +7,13 @@ use std::{
 };
 
 use msg::Message;
-use pyo3::prelude::*;
+use pyo3::{prelude::*, sync::PyOnceLock};
 use wreq::{header::HeaderValue, ws::WebSocketResponse};
 
 use crate::{
     client::{SocketAddr, nogil},
     cookie::Cookie,
-    coroutine::{self, Coroutine},
+    coroutine::{self, Coroutine, EntersSelf},
     extractor::Text,
     header::HeaderMap,
     http::{StatusCode, Version},
@@ -177,6 +177,13 @@ impl WebSocket {
             &self.runtime,
             cmd::close_on_exit(self.cmd.clone()),
         )
+    }
+}
+
+impl EntersSelf for WebSocket {
+    fn native_aenter() -> &'static PyOnceLock<Py<PyAny>> {
+        static NATIVE: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        &NATIVE
     }
 }
 

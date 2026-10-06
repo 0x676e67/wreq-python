@@ -67,15 +67,7 @@ impl Port {
 
     /// Return the running loop and its port, opening the port on first use.
     fn current(py: Python<'_>) -> PyResult<(Bound<'_, PyAny>, Arc<Port>)> {
-        static GET_RUNNING_LOOP: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
-        let event_loop = GET_RUNNING_LOOP
-            .get_or_try_init(py, || {
-                py.import("asyncio")?
-                    .getattr("get_running_loop")
-                    .map(Bound::unbind)
-            })?
-            .bind(py)
-            .call0()?;
+        let event_loop = running_loop(py)?;
 
         // A loop drops its drain or keeper when closed or freed, so a reused address
         // never matches.
@@ -316,6 +308,14 @@ impl Drop for Keeper {
     fn drop(&mut self) {
         self.__clear__();
     }
+}
+
+/// The running asyncio loop, through a cached `asyncio.get_running_loop`.
+pub(crate) fn running_loop(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+    static GET_RUNNING_LOOP: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+    GET_RUNNING_LOOP
+        .import(py, "asyncio", "get_running_loop")?
+        .call0()
 }
 
 #[cfg(unix)]

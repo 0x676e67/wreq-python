@@ -24,6 +24,37 @@ macro_rules! extract_option {
     };
 }
 
+/// Like [`extract_option!`] for several fields, but stop looking up keys once every key
+/// of a dict has been found. `$last` fields are looked up first and extracted after the
+/// rest. Unknown keys are never found, so they make the scan run to the end and stay ignored.
+macro_rules! extract_options {
+    ($ob:expr, $params:expr, [$($field:ident),* $(,)?], [$($last:ident),* $(,)?]) => {{
+        $(
+            let $last =
+                $crate::macros::lookup(&$ob, pyo3::intern!($ob.py(), stringify!($last)));
+        )*
+        // A dict's length bounds the keys left to find; other mappings are scanned in full.
+        let mut remaining = $ob
+            .cast::<pyo3::types::PyDict>()
+            .map_or(usize::MAX, |dict| dict.len())
+            $(.saturating_sub(usize::from($last.is_some())))*;
+        $(
+            if remaining > 0
+                && let Some(value) =
+                    $crate::macros::lookup(&$ob, pyo3::intern!($ob.py(), stringify!($field)))
+            {
+                $params.$field = value.extract()?;
+                remaining -= 1;
+            }
+        )*
+        $(
+            if let Some(value) = $last {
+                $params.$last = value.extract()?;
+            }
+        )*
+    }};
+}
+
 macro_rules! apply_option {
     (set_if_some, $builder:expr, $option:expr, $method:ident) => {
         if let Some(value) = $option.take() {

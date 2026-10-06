@@ -12,16 +12,19 @@ use pyo3::{
 
 use super::awaitable::{Coroutine, Step, ensure_done};
 
+/// Whether a result's `__aenter__` returns the result itself, so it can be skipped.
+pub(super) type EntersSelfFn = fn(Python<'_>) -> bool;
+
 /// The `async with` state of a coroutine.
 pub(super) enum Scope {
     /// `async with` is unsupported.
     Unsupported,
     /// Not yet awaited; `async with` may enter it.
-    Ready,
+    Ready(EntersSelfFn),
     /// Awaited, entered or exited already.
     Spent,
     /// Awaited by `async with` until the result, an async context manager, is ready.
-    Entering,
+    Entering(EntersSelfFn),
     /// Awaiting the manager's `__aenter__` through `delegate`. Like `async with`, its
     /// bound `__aexit__` is looked up before entering.
     Opening {
@@ -53,7 +56,7 @@ impl Scope {
     /// Mark a first await, after which `async with` can no longer enter.
     #[inline]
     pub(super) fn start(&mut self) {
-        if let Scope::Ready = self {
+        if let Scope::Ready(_) = self {
             *self = Scope::Spent;
         }
     }
@@ -88,7 +91,12 @@ impl Coroutine {
     /// Finish with `value`, first entering it when awaited by `async with`.
     pub(super) fn complete(&mut self, py: Python<'_>, value: Py<PyAny>) -> PyResult<Step> {
         match mem::replace(&mut self.scope, Scope::Spent) {
-            Scope::Entering => return self.open(py, value),
+            // Its `__aenter__` would return the result itself: enter without awaiting it.
+            Scope::Entering(enters_self) if enters_self(py) => {
+                let exit = value.bind(py).getattr(intern!(py, "__aexit__"))?;
+                self.scope = Scope::Entered(exit.unbind());
+            }
+            Scope::Entering(_) => return self.open(py, value),
             Scope::Opening { exit, .. } => self.scope = Scope::Entered(exit),
             scope => self.scope = scope,
         }
@@ -175,7 +183,7 @@ impl Coroutine {
     /// Finish without entering, dropping any context manager being entered.
     pub(super) fn abandon(&mut self) {
         self.finish();
-        if let Scope::Entering | Scope::Opening { .. } = self.scope {
+        if let Scope::Entering(_) | Scope::Opening { .. } = self.scope {
             self.scope = Scope::Spent;
         }
     }
@@ -200,8 +208,8 @@ impl Coroutine {
             Scope::Unsupported => Err(PyTypeError::new_err(
                 "coroutine does not support the asynchronous context manager protocol",
             )),
-            Scope::Ready if pending => {
-                slf.scope = Scope::Entering;
+            Scope::Ready(enters_self) if pending => {
+                slf.scope = Scope::Entering(enters_self);
                 Ok(slf)
             }
             _ => Err(PyRuntimeError::new_err(

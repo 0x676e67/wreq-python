@@ -6,22 +6,19 @@ use std::{
 };
 
 use bytes::Bytes;
-use futures_util::{
-    FutureExt, TryFutureExt,
-    future::{self, BoxFuture},
-};
+use futures_util::{FutureExt, TryFutureExt, future::Either};
 use http::response::{Parts, Response as HttpResponse};
 use http_body::Body as _;
-use http_body_util::{BodyExt, Collected};
-use pyo3::{prelude::*, pybacked::PyBackedStr};
+use http_body_util::{BodyExt, Collected, combinators::Collect};
+use pyo3::{prelude::*, pybacked::PyBackedStr, sync::PyOnceLock};
 use wreq::Uri;
 
-use super::{ext::ResponseExt, stream::Streamer};
+use super::{READ_ATTACHED, ext::ResponseExt, loop_limit, stream::Streamer};
 use crate::{
     buffer::PyBuffer,
     client::{SocketAddr, body::Json, nogil},
     cookie::Cookie,
-    coroutine::{self, Coroutine},
+    coroutine::{self, Coroutine, EntersSelf},
     error::Error,
     header::HeaderMap,
     http::{StatusCode, Version},
@@ -32,8 +29,9 @@ use crate::{
 
 /// A response from a request.
 ///
-/// Body reads are written once as futures ([`Response::read_body`]); the async methods
-/// run them on the runtime when awaited and [`BlockingResponse`] waits on the caller.
+/// Reads take the body with [`Response::take_bytes`]: a buffered body of known length up to
+/// the read's limit finishes on the caller, the event loop or a blocking thread, and any other
+/// body is collected on the runtime by [`Response::collect_later`].
 #[pyclass(subclass, frozen, str, skip_from_py_object)]
 pub struct Response {
     uri: Uri,
@@ -62,21 +60,27 @@ enum Body {
     Released,
 }
 
+/// A body taken for reading.
+enum BodyRead {
+    /// Read in full now.
+    Ready(Bytes),
+    /// Not read now: still arriving, over the read's limit or of unknown length; collected
+    /// on the runtime by [`Response::collect_later`].
+    Pending(Collect<wreq::Body>),
+}
+
 /// A blocking response from a request.
 #[pyclass(name = "Response", subclass, frozen, str, skip_from_py_object)]
 pub struct BlockingResponse(Response);
 
-/// Forbids connection reuse on drop unless disarmed by taking the parts. Held while
-/// [`Response::cache_response`] collects the body, so a failed or cancelled read is not
-/// pooled.
+/// Forbids connection reuse on drop unless disarmed by taking the parts. Held by
+/// [`Response::collect_later`] from its creation until the body is read in full, so a failed
+/// or cancelled read is not pooled.
 struct RecycleGuard(Option<Parts>);
 
 // ===== impl Response =====
 
 impl Response {
-    /// Bodies up to this size are read on a blocking caller without first releasing the GIL.
-    const READ_ATTACHED: u64 = 64 * 1024;
-
     /// Create a new [`Response`] instance.
     pub fn new(response: wreq::Response, runtime: Runtime) -> Self {
         let uri = response.uri().clone();
@@ -107,75 +111,99 @@ impl Response {
         wreq::Response::from(response)
     }
 
-    /// Take the body and return a future that reads it in full, caching the bytes for later
-    /// reads; a cached body is shared at once. While a first read runs, overlapping reads and
-    /// `stream()` fail with [`Error::Memory`], as do later ones if it fails or is dropped.
-    fn cache_response(&self) -> BoxFuture<'static, Result<wreq::Response, Error>> {
-        let mut slot = self.slot();
-        let stream = match mem::replace(&mut *slot, Body::Taken) {
-            Body::Unread(stream) => stream,
-            other => {
-                let cached = match &other {
-                    Body::Cached(bytes) => Some(bytes.clone()),
-                    _ => None,
-                };
-                *slot = other;
-                drop(slot);
-                let response = cached.map(|bytes| self.build_response(bytes));
-                return future::ready(response.ok_or(Error::Memory)).boxed();
-            }
-        };
-        drop(slot);
-        let parts = self.parts.clone();
-        let body = self.body.clone();
-        async move {
-            // Keep the connection out of the pool unless the body is read in full.
-            let mut guard = RecycleGuard(Some(parts));
-            let bytes = stream
-                .collect()
-                .await
-                .map(Collected::to_bytes)
-                .map_err(Error::Library)?;
-            let parts = guard.0.take().ok_or(Error::Memory)?;
-            // A release during the read wins over caching.
-            let mut slot = lock(&body);
-            if let Body::Taken = *slot {
-                *slot = Body::Cached(bytes.clone());
-            }
-            drop(slot);
-            Ok(wreq::Response::from(HttpResponse::from_parts(parts, bytes)))
-        }
-        .boxed()
-    }
-
-    /// Take the unread body for a [`Streamer`]; fails with [`Error::Memory`] otherwise,
-    /// leaving any cached bytes readable.
-    fn stream_response(&self) -> Result<wreq::Response, Error> {
+    /// Take the body for reading. Cached bytes are shared at once, and a body of known
+    /// length up to `limit` that is already buffered is read now on the calling thread;
+    /// overlapping reads and `stream()` fail with [`Error::Memory`] while a read runs.
+    fn take_bytes(&self, limit: u64) -> Result<BodyRead, Error> {
         let mut slot = self.slot();
         let body = match mem::replace(&mut *slot, Body::Taken) {
             Body::Unread(body) => body,
+            Body::Cached(bytes) => {
+                *slot = Body::Cached(bytes.clone());
+                return Ok(BodyRead::Ready(bytes));
+            }
             other => {
                 *slot = other;
                 return Err(Error::Memory);
             }
         };
         drop(slot);
-        Ok(self.build_response(body))
+        let attached = body.size_hint().exact().is_some_and(|len| len <= limit);
+        let mut collect = body.collect();
+        let ready = if attached {
+            // A read timeout starts a timer on its first poll, which needs the runtime.
+            let _runtime = self.runtime.handle().enter();
+            (&mut collect).now_or_never()
+        } else {
+            None
+        };
+        match ready {
+            Some(Ok(collected)) => {
+                let bytes = collected.to_bytes();
+                cache(&self.body, &bytes);
+                Ok(BodyRead::Ready(bytes))
+            }
+            Some(Err(err)) => {
+                self.forbid_recycle();
+                Err(Error::Library(err))
+            }
+            None => Ok(BodyRead::Pending(collect)),
+        }
     }
 
-    /// Read the body with `read`: the body is taken now and its bytes cached for later reads.
-    fn read_body<F, Fut, T>(&self, read: F) -> impl Future<Output = PyResult<T>> + Send + 'static
+    /// Collect a taken body, caching its bytes and returning them with a copy of the head.
+    /// The connection stays out of the pool unless the body is read in full, including
+    /// when the future is dropped before its first poll.
+    fn collect_later(
+        &self,
+        collect: Collect<wreq::Body>,
+    ) -> impl Future<Output = Result<(Parts, Bytes), Error>> + Send + 'static {
+        let mut guard = RecycleGuard(Some(self.parts.clone()));
+        let body = self.body.clone();
+        async move {
+            let bytes = collect
+                .await
+                .map(Collected::to_bytes)
+                .map_err(Error::Library)?;
+            let parts = guard.0.take().ok_or(Error::Memory)?;
+            cache(&body, &bytes);
+            Ok((parts, bytes))
+        }
+    }
+
+    /// Take the body and return a future decoding it with `read`, and whether that future
+    /// finishes at once: the bytes, cached or already buffered, are at most `limit`. Otherwise
+    /// the body is still arriving or too large to decode on the caller.
+    fn read_body<F, Fut, T>(
+        &self,
+        limit: u64,
+        read: F,
+    ) -> Result<(impl Future<Output = PyResult<T>> + Send + 'static, bool), Error>
     where
         F: FnOnce(wreq::Response) -> Fut + Send + 'static,
         Fut: Future<Output = Result<T, Error>> + Send + 'static,
     {
-        self.cache_response().and_then(read).map_err(Into::into)
+        let (decode, inline) = match self.take_bytes(limit)? {
+            BodyRead::Ready(bytes) => {
+                let inline = bytes.len() as u64 <= limit;
+                (Either::Left(read(self.build_response(bytes))), inline)
+            }
+            BodyRead::Pending(collect) => (
+                Either::Right(self.collect_later(collect).and_then(|(parts, bytes)| {
+                    read(wreq::Response::from(HttpResponse::from_parts(parts, bytes)))
+                })),
+                false,
+            ),
+        };
+        Ok((decode.map_err(Into::into), inline))
     }
 
-    /// Read the body on the runtime once awaited; the body is taken on first await.
+    /// Read and decode the body once awaited; the body is taken on first await. Bytes that
+    /// [`read_body`](Self::read_body) can decode at once are decoded on the event loop.
     fn read<'py, F, Fut, T>(
         slf: Bound<'py, Self>,
         qualname: &'static str,
+        limit: u64,
         read: F,
     ) -> PyResult<Bound<'py, Coroutine>>
     where
@@ -187,22 +215,13 @@ impl Response {
         let slf = slf.unbind();
         coroutine::local(py, qualname, async move {
             let this = slf.get();
-            coroutine::run(this.runtime.clone(), this.read_body(read)).await
+            let (read, inline) = this.read_body(loop_limit(this.parts.version, limit), read)?;
+            if inline {
+                read.await
+            } else {
+                coroutine::run(this.runtime.clone(), read).await
+            }
         })
-    }
-
-    /// Whether the body is small enough for a blocking read to finish without first
-    /// releasing the GIL. An unknown length, as of a chunked or decompressed body, is not:
-    /// decoding everything already buffered could hold the GIL for long.
-    fn read_attached(&self) -> bool {
-        match &*self.slot() {
-            Body::Unread(body) => body
-                .size_hint()
-                .exact()
-                .is_some_and(|len| len <= Self::READ_ATTACHED),
-            Body::Cached(bytes) => bytes.len() as u64 <= Self::READ_ATTACHED,
-            Body::Taken | Body::Released => true,
-        }
     }
 
     /// Keep the connection out of the pool; a rebuilt response shares its reuse flag.
@@ -231,6 +250,14 @@ impl Response {
 #[inline]
 fn lock(body: &Mutex<Body>) -> MutexGuard<'_, Body> {
     body.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Cache the bytes of a finished read; a release during the read wins over caching.
+fn cache(body: &Mutex<Body>, bytes: &Bytes) {
+    let mut slot = lock(body);
+    if let Body::Taken = *slot {
+        *slot = Body::Cached(bytes.clone());
+    }
 }
 
 #[pymethods]
@@ -317,11 +344,22 @@ impl Response {
             .map_err(Into::into)
     }
 
-    /// Stream read-only memoryviews and any trailing headers from the body.
+    /// Stream read-only memoryviews and any trailing headers from the body. Only an unread
+    /// body can be streamed; cached bytes stay readable.
     pub fn stream(&self) -> PyResult<Streamer> {
-        self.stream_response()
-            .map(|response| Streamer::new(response, self.runtime.clone()))
-            .map_err(Into::into)
+        let mut slot = self.slot();
+        let body = match mem::replace(&mut *slot, Body::Taken) {
+            Body::Unread(body) => body,
+            other => {
+                *slot = other;
+                return Err(Error::Memory.into());
+            }
+        };
+        drop(slot);
+        Ok(Streamer::new(
+            self.build_response(body),
+            self.runtime.clone(),
+        ))
     }
 
     /// Get the text content with the response encoding, defaulting to utf-8 when unspecified.
@@ -330,19 +368,34 @@ impl Response {
         slf: Bound<'_, Self>,
         encoding: Option<PyBackedStr>,
     ) -> PyResult<Bound<'_, Coroutine>> {
-        Self::read(slf, "Response.text", |resp| {
+        Self::read(slf, "Response.text", READ_ATTACHED, |resp| {
             ResponseExt::text(resp, encoding)
         })
     }
 
     /// Get the JSON content of the response.
     pub fn json(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
-        Self::read(slf, "Response.json", ResponseExt::json::<Json>)
+        // Buffered HTTP/1 JSON up to 8 KiB is parsed on the event loop; see `loop_limit`.
+        Self::read(slf, "Response.json", 8 * 1024, ResponseExt::json::<Json>)
     }
 
     /// Read the body as a read-only memoryview, retaining its data after the response closes.
     pub fn bytes(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
-        Self::read(slf, "Response.bytes", ResponseExt::bytes)
+        let py = slf.py();
+        let slf = slf.unbind();
+        coroutine::local(py, "Response.bytes", async move {
+            let this = slf.get();
+            match this.take_bytes(loop_limit(this.parts.version, READ_ATTACHED))? {
+                BodyRead::Ready(bytes) => Ok(PyBuffer::from(bytes)),
+                BodyRead::Pending(collect) => {
+                    let read = this
+                        .collect_later(collect)
+                        .map_ok(|(_, bytes)| PyBuffer::from(bytes))
+                        .map_err(Into::into);
+                    coroutine::run(this.runtime.clone(), read).await
+                }
+            }
+        })
     }
 
     /// Discard the retained body and mark its connection as non-reusable.
@@ -383,6 +436,13 @@ impl Response {
     }
 }
 
+impl EntersSelf for Response {
+    fn native_aenter() -> &'static PyOnceLock<Py<PyAny>> {
+        static NATIVE: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        &NATIVE
+    }
+}
+
 impl Display for Response {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -415,22 +475,20 @@ impl Drop for RecycleGuard {
 // ===== impl BlockingResponse =====
 
 impl BlockingResponse {
-    /// Read the body with `read` on the calling thread, like [`Response::read`] on the
-    /// runtime. A small body is read without releasing the GIL unless it must wait.
+    /// Read the body with `read` on the calling thread. Bytes that
+    /// [`Response::read_body`] can decode at once are decoded without releasing the GIL.
     fn read<F, Fut, T>(&self, py: Python, read: F) -> PyResult<T>
     where
         F: FnOnce(wreq::Response) -> Fut + Send + 'static,
         Fut: Future<Output = Result<T, Error>> + Send + 'static,
         T: Send,
     {
-        let (response, runtime) = (&self.0, &self.0.runtime);
-        // Decide before the read takes the body.
-        let attached = response.read_attached();
-        let fut = response.read_body(read);
-        if attached {
-            nogil::run(py, runtime, fut)
+        let runtime = &self.0.runtime;
+        let (read, inline) = self.0.read_body(READ_ATTACHED, read)?;
+        if inline {
+            nogil::run(py, runtime, read)
         } else {
-            py.detach(|| runtime.handle().block_on(fut))
+            py.detach(|| runtime.handle().block_on(read))
         }
     }
 }
@@ -520,7 +578,17 @@ impl BlockingResponse {
 
     /// Read the body as a read-only memoryview, retaining its data after the response closes.
     pub fn bytes(&self, py: Python) -> PyResult<PyBuffer> {
-        self.read(py, ResponseExt::bytes)
+        let response = &self.0;
+        match response.take_bytes(READ_ATTACHED)? {
+            BodyRead::Ready(bytes) => Ok(PyBuffer::from(bytes)),
+            BodyRead::Pending(collect) => {
+                let read = response
+                    .collect_later(collect)
+                    .map_ok(|(_, bytes)| PyBuffer::from(bytes))
+                    .map_err(Into::into);
+                py.detach(|| response.runtime.handle().block_on(read))
+            }
+        }
     }
 
     /// Discard the retained body and mark its connection as non-reusable.

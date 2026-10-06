@@ -67,6 +67,35 @@ async def test_async_upload(multipart, no_automatic_gc):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("size", [0, 1 << 24], ids=["empty", "queued_tail"])
+async def test_finish_delivers_queued_chunks(size):
+    # The peer reads nothing until forwarding has finished. A first chunk far above netty's
+    # ~408 KiB write buffer stalls the upload, so b"tail" is still queued when `finish`
+    # drops the sender; it and the end chunk must still be sent.
+    parts = (b"x" * size, b"tail") if size else ()
+    yielded = asyncio.Event()
+
+    async def chunks():
+        for part in parts:
+            yield part
+        yielded.set()
+
+    async with local_server() as (url, connections), wreq.Client(proxies=[]) as client:
+        task = asyncio.create_task(client.post(url, body=chunks()))
+        reader, writer = await asyncio.wait_for(connections.get(), 5)
+        await asyncio.wait_for(yielded.wait(), 5)
+        forwarding = [
+            t for t in asyncio.all_tasks() if t.get_coro().__qualname__ == "forward"
+        ]
+        # `finish` does not wait for room, so forwarding ends before the peer reads.
+        await asyncio.wait_for(asyncio.gather(*forwarding), 5)
+        assert await asyncio.wait_for(read_chunked(reader), 10) == b"".join(parts)
+        writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+        await writer.drain()
+        await (await asyncio.wait_for(task, 5)).close()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("failure", ["exception", "type", "cancelled"])
 async def test_upload_errors(failure):
     closed = asyncio.Event()
@@ -86,6 +115,26 @@ async def test_upload_errors(failure):
         with pytest.raises(wreq.exceptions.RequestError):
             await asyncio.wait_for(client.post(url, body=chunks()), 5)
         await asyncio.wait_for(closed.wait(), 5)
+
+
+@pytest.mark.asyncio
+async def test_invalid_option_does_not_start_the_body():
+    started = asyncio.Event()
+
+    async def chunks():
+        started.set()
+        yield b"first"
+
+    form = wreq.Multipart(wreq.Part("file", iter([b"x"])))
+    async with local_server() as (url, _), wreq.Client(proxies=[]) as client:
+        # Every option, `zstd` last, is validated before the body or form is taken.
+        with pytest.raises(TypeError):
+            await client.post(url, body=chunks(), zstd=1)
+        for _ in range(2):
+            with pytest.raises(TypeError):
+                await client.post(url, multipart=form, zstd=1)
+        await asyncio.sleep(0.1)
+        assert not started.is_set()
 
 
 @pytest.mark.asyncio

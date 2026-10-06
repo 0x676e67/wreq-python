@@ -186,36 +186,39 @@ impl FromPyObject<'_, '_> for Request {
 
     fn extract(ob: Borrowed<PyAny>) -> PyResult<Request> {
         let mut request = Self::default();
-        extract_option!(ob, request, emulation);
-        extract_option!(ob, request, proxy);
-        extract_option!(ob, request, local_address);
-        extract_option!(ob, request, local_addresses);
-        extract_option!(ob, request, interface);
-
-        extract_option!(ob, request, timeout);
-        extract_option!(ob, request, read_timeout);
-
-        extract_option!(ob, request, version);
-        extract_option!(ob, request, headers);
-        extract_option!(ob, request, orig_headers);
-        extract_option!(ob, request, default_headers);
-        extract_option!(ob, request, cookies);
-        extract_option!(ob, request, redirect);
-        extract_option!(ob, request, cookie_provider);
-        extract_option!(ob, request, auth);
-        extract_option!(ob, request, bearer_auth);
-        extract_option!(ob, request, basic_auth);
-        extract_option!(ob, request, query);
-        extract_option!(ob, request, form);
-        extract_option!(ob, request, json);
-        extract_option!(ob, request, body);
-        extract_option!(ob, request, multipart);
-
-        extract_option!(ob, request, gzip);
-        extract_option!(ob, request, brotli);
-        extract_option!(ob, request, deflate);
-        extract_option!(ob, request, zstd);
-
+        // Common keys first. A body or multipart form can start a generator or take stream
+        // parts, so they are extracted last, after every other option has been validated.
+        extract_options!(
+            ob,
+            request,
+            [
+                json,
+                form,
+                query,
+                headers,
+                timeout,
+                read_timeout,
+                cookies,
+                auth,
+                bearer_auth,
+                basic_auth,
+                emulation,
+                proxy,
+                local_address,
+                local_addresses,
+                interface,
+                version,
+                orig_headers,
+                default_headers,
+                redirect,
+                cookie_provider,
+                gzip,
+                brotli,
+                deflate,
+                zstd,
+            ],
+            [body, multipart]
+        );
         Ok(request)
     }
 }

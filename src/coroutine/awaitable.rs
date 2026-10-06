@@ -23,7 +23,7 @@ use super::{Port, scope::Scope};
 /// the C task fast path work unchanged. A throw or close drops the Rust future,
 /// which aborts any spawned work. PyO3's borrow flag rejects reentrant polls.
 ///
-/// A coroutine built with [`managed`](Self::managed) also works as `async with`, as
+/// A coroutine built with [`managed`](super::managed) also works as `async with`, as
 /// `async with await` would; the `scope` module holds that state.
 #[pyclass(module = "wreq")]
 pub struct Coroutine {
@@ -76,12 +76,6 @@ impl Coroutine {
             slot,
             scope: Scope::Unsupported,
         }
-    }
-
-    /// Let `async with` enter the coroutine; see [`coroutine::managed`](super::managed).
-    pub(super) fn managed(mut self) -> Self {
-        self.scope = Scope::Ready;
-        self
     }
 
     #[inline]
@@ -170,8 +164,12 @@ impl Coroutine {
         slf
     }
 
-    fn __next__(&mut self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        self.step(py, None).and_then(Step::into_result)
+    fn __next__(&mut self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
+        match self.step(py, None)? {
+            // A `NULL` return without an error ends iteration with `None`, no `StopIteration`.
+            Step::Return(value) if value.is_none(py) => Ok(None),
+            step => step.into_result().map(Some),
+        }
     }
 
     fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {

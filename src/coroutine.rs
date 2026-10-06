@@ -15,16 +15,20 @@ mod awaitable;
 mod scope;
 
 use std::{
+    any::TypeId,
     future::{Future, poll_fn},
     mem,
     task::Poll,
 };
 
-use pyo3::{IntoPyObjectExt, exceptions::PyRuntimeError, prelude::*};
+use pyo3::{
+    IntoPyObjectExt, PyTypeInfo, exceptions::PyRuntimeError, intern, prelude::*, sync::PyOnceLock,
+};
 use tokio_util::task::AbortOnDropHandle;
 
-use self::asyncio::Port;
+pub(crate) use self::asyncio::running_loop;
 pub use self::awaitable::Coroutine;
+use self::{asyncio::Port, scope::Scope};
 use crate::runtime::Runtime;
 
 /// Run `fut` on the runtime once the coroutine named `qualname` is first awaited.
@@ -51,9 +55,23 @@ pub fn local<'py, F, T>(
 ) -> PyResult<Bound<'py, Coroutine>>
 where
     F: Future<Output = PyResult<T>> + Send + 'static,
-    T: for<'a> IntoPyObject<'a>,
+    T: for<'a> IntoPyObject<'a> + 'static,
 {
     Bound::new(py, coroutine(qualname, fut))
+}
+
+/// A result type whose native `__aenter__` returns the object itself, so `async with` on a
+/// [`managed`] coroutine enters it without awaiting `__aenter__`.
+pub trait EntersSelf: PyTypeInfo {
+    /// The native `__aenter__`, recorded by [`record_enters_self`].
+    fn native_aenter() -> &'static PyOnceLock<Py<PyAny>>;
+}
+
+/// Record `T`'s native `__aenter__` at module init, before user code can replace it.
+pub fn record_enters_self<T: EntersSelf>(py: Python<'_>) -> PyResult<()> {
+    let aenter = T::type_object(py).getattr(intern!(py, "__aenter__"))?;
+    let _ = T::native_aenter().set(py, aenter.unbind());
+    Ok(())
 }
 
 /// Like [`local`], but `async with` may enter the coroutine directly, as `async with await`
@@ -66,9 +84,19 @@ pub fn managed<'py, F, T>(
 ) -> PyResult<Bound<'py, Coroutine>>
 where
     F: Future<Output = PyResult<T>> + Send + 'static,
-    T: for<'a> IntoPyObject<'a>,
+    T: EntersSelf + for<'a> IntoPyObject<'a> + 'static,
 {
-    Bound::new(py, coroutine(qualname, fut).managed())
+    let mut coroutine = coroutine(qualname, fut);
+    // The result is always exactly a `T`, so it enters itself unless user code replaced
+    // `T.__aenter__`.
+    coroutine.scope = Scope::Ready(|py| {
+        T::native_aenter().get(py).is_some_and(|native| {
+            T::type_object(py)
+                .getattr(intern!(py, "__aenter__"))
+                .is_ok_and(|aenter| aenter.is(native))
+        })
+    });
+    Bound::new(py, coroutine)
 }
 
 /// A coroutine that returns `value` without suspending.
@@ -97,15 +125,21 @@ pub async fn yield_now() {
     .await;
 }
 
-/// A coroutine awaiting `fut` and converting its output to a Python object.
+/// A coroutine awaiting `fut` and converting its output to a Python object. Like a sync
+/// method, one with no result returns `None`, where `()` would convert to an empty tuple.
 fn coroutine<F, T>(qualname: &'static str, fut: F) -> Coroutine
 where
     F: Future<Output = PyResult<T>> + Send + 'static,
-    T: for<'a> IntoPyObject<'a>,
+    T: for<'a> IntoPyObject<'a> + 'static,
 {
     Coroutine::new(qualname, async move {
         let value = fut.await?;
-        Python::attach(|py| value.into_py_any(py))
+        Python::attach(|py| {
+            if TypeId::of::<T>() == TypeId::of::<()>() {
+                return Ok(py.None());
+            }
+            value.into_py_any(py)
+        })
     })
 }
 
