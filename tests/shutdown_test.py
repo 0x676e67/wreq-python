@@ -118,7 +118,8 @@ async def main(retain):
     try:
         await asyncio.wait_for(full.wait(), 5)
         await asyncio.sleep(0.05)
-        assert produced == [0, 1]
+        # 64 small chunks fill the upload budget at its minimum charge; the next waits.
+        assert produced == list(range(65))
         if retain:
             return part
     finally:

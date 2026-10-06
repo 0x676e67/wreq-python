@@ -13,7 +13,8 @@ Their exceptions fail the request. When an upload ends, the generator is closed;
 cancelling or dropping the upload schedules producer cancellation and cleanup on that loop.
 Keep the loop running until generator cleanup has finished. This also applies to async multipart parts.
 Construct async-generator `Part` objects inside a running event loop; their producers
-start at construction, with bounded buffering before the request consumes them.
+start at construction. A producer runs at most 256 KiB, or 64 small chunks, ahead of the
+upload.
 Use synchronous iterators for blocking uploads. A blocking call on the producer's
 event-loop thread prevents async generators from progressing.
 
@@ -128,11 +129,13 @@ client = Client(runtime=runtime)
 
 With `Scheduler.PER_WORKER`, each client is assigned one worker for its
 lifetime; requests, response reads, streams and WebSocket operations use that
-worker. Async reads of small HTTP/1
-bodies that have already arrived finish on the event loop thread instead. With
-multiple workers, newly created clients select a worker randomly and keep that
-selection. This is not CPU pinning. Sharing the same `Runtime` between clients
-is supported, and `client.runtime` returns the shared runtime object.
+worker. Async reads of HTTP/1 data that has already arrived, and is not
+content-encoded, finish on the event loop thread instead: `bytes()` and `text()`
+up to 64 KiB, `json()` up to 8 KiB, and the first frame of a stream whose length
+is known; later frames are read on the worker. With multiple workers, newly
+created clients select a worker randomly and keep that selection. This is not CPU
+pinning. Sharing the same `Runtime` between clients is supported, and
+`client.runtime` returns the shared runtime object.
 
 `workers=None` uses the available CPU parallelism, or 1 if it cannot be determined;
 `Scheduler.CURRENT_THREAD` requires it.

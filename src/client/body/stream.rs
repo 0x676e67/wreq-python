@@ -15,6 +15,7 @@ use std::{
 use bytes::Bytes;
 use futures_util::Stream;
 use pyo3::{
+    IntoPyObjectExt,
     exceptions::{PyException, PyKeyboardInterrupt, PyRuntimeError, PyStopIteration},
     intern,
     prelude::*,
@@ -23,7 +24,10 @@ use pyo3::{
 };
 use tokio::{
     runtime::Handle,
-    sync::mpsc::{self, error::TrySendError},
+    sync::{
+        OwnedSemaphorePermit, Semaphore, TryAcquireError,
+        mpsc::{self, error::TrySendError},
+    },
     task::{spawn_blocking, yield_now},
     time,
 };
@@ -93,20 +97,35 @@ struct Pump {
     tx: mpsc::Sender<Item>,
 }
 
-/// A request body from a Python async generator, forwarded with one chunk of buffering
-/// by a task on the loop that was running at extraction. Dropping it cancels that task.
+/// Bytes an async upload may queue ahead of the connection.
+const UPLOAD_BUDGET: usize = 256 * 1024;
+
+/// The least budget a queued chunk holds, so small chunks queue at most 64 items.
+const UPLOAD_CHARGE: usize = 4 * 1024;
+
+/// A request body from a Python async generator, forwarded by a task on the loop that was
+/// running at extraction, up to [`UPLOAD_BUDGET`] ahead. Dropping it cancels that task.
 struct PyAsyncStream {
-    rx: mpsc::Receiver<Item>,
+    rx: mpsc::UnboundedReceiver<Queued>,
+    budget: Arc<Semaphore>,
     /// Set by [`Sender::finish`], so the channel closing reads as the end of the body.
     finished: Arc<AtomicBool>,
     task: Option<(Py<PyAny>, Py<PyAny>)>,
 }
 
-/// The channel end given to the forwarding coroutine; awaiting `send` applies upload
-/// backpressure. Closing it without `finish` fails the body.
+/// A queued item and the share of the upload budget it holds until the body takes it.
+struct Queued {
+    item: Item,
+    _share: Option<OwnedSemaphorePermit>,
+}
+
+/// The channel end given to the forwarding coroutine: `try_send` queues a chunk within the
+/// budget or waits for room, and `send` also queues the error that ends the body. Closing
+/// it without `finish` fails the body.
 #[pyclass(frozen)]
 struct Sender {
-    tx: Mutex<Option<mpsc::Sender<Item>>>,
+    tx: Mutex<Option<mpsc::UnboundedSender<Queued>>>,
+    budget: Arc<Semaphore>,
     finished: Arc<AtomicBool>,
 }
 
@@ -122,6 +141,18 @@ impl FromPyObject<'_, '_> for PyBytesLike {
         } else {
             ob.extract().map(PyBytesLike::Bytes)
         }
+    }
+}
+
+impl PyBytesLike {
+    /// The share of the upload budget this chunk holds while queued; one larger than the
+    /// budget takes all of it.
+    fn share(&self) -> u32 {
+        let len = match self {
+            PyBytesLike::Bytes(b) => b.0.len(),
+            PyBytesLike::String(s) => s.0.len(),
+        };
+        u32::try_from(len.clamp(UPLOAD_CHARGE, UPLOAD_BUDGET)).unwrap_or(u32::MAX)
     }
 }
 
@@ -328,7 +359,11 @@ async def forward(gen, sender):
     try:
         try:
             async for item in gen:
-                if not await sender.send(item, False):
+                # Queued at once while the upload budget has room, otherwise awaited.
+                sent = sender.try_send(item)
+                if not isinstance(sent, bool):
+                    sent = await sent
+                if not sent:
                     return
         finally:
             close = getattr(gen, 'aclose', None)
@@ -353,10 +388,12 @@ async def forward(gen, sender):
             .getattr("forward")
             .map(Bound::unbind)
         })?;
-        let (tx, rx) = mpsc::channel(1);
+        let (tx, rx) = mpsc::unbounded_channel();
+        let budget = Arc::new(Semaphore::new(UPLOAD_BUDGET));
         let finished = Arc::new(AtomicBool::new(false));
         let sender = Sender {
             tx: Mutex::new(Some(tx)),
+            budget: budget.clone(),
             finished: finished.clone(),
         };
         let coroutine = forward.bind(py).call1((generator, sender))?;
@@ -368,6 +405,7 @@ async def forward(gen, sender):
             })?;
         Ok(Self {
             rx,
+            budget,
             finished,
             task: Some((task.unbind(), event_loop.unbind())),
         })
@@ -380,7 +418,8 @@ impl Stream for PyAsyncStream {
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
         match this.rx.poll_recv(cx) {
-            Poll::Ready(Some(item)) => Poll::Ready(Some(item)),
+            // Taking the item returns its share of the budget.
+            Poll::Ready(Some(queued)) => Poll::Ready(Some(queued.item)),
             // Every sender is gone: the end after `finish`. Otherwise the forwarding task was
             // cancelled or destroyed, so the body is incomplete.
             Poll::Ready(None)
@@ -399,6 +438,8 @@ impl Stream for PyAsyncStream {
 impl Drop for PyAsyncStream {
     fn drop(&mut self) {
         self.rx.close();
+        // A send waiting for room resolves to `False` at once.
+        self.budget.close();
         if let Some((task, event_loop)) = self.task.take() {
             // Body drop can run on Tokio: cancel from a blocking thread, preferring the current
             // runtime so a drop on a client's own runtime does not start the shared one.
@@ -422,8 +463,34 @@ impl Drop for PyAsyncStream {
 
 #[pymethods]
 impl Sender {
-    /// Queue a chunk, or `item` as the error that ends the body. Resolves to `False`
-    /// once the body is dropped or the sender closed, which stops forwarding.
+    /// Queue a chunk: `True` once queued within the budget, `False` once the body is dropped
+    /// or the sender closed, and otherwise a coroutine that queues it once there is room.
+    fn try_send<'py>(&self, item: Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        let py = item.py();
+        let chunk = item.extract::<PyBytesLike>()?;
+        let tx = self.lock().clone();
+        let sent = match &tx {
+            None => false,
+            Some(queue) => match self.budget.clone().try_acquire_many_owned(chunk.share()) {
+                Ok(share) => queue
+                    .send(Queued {
+                        item: Ok(chunk),
+                        _share: Some(share),
+                    })
+                    .is_ok(),
+                Err(TryAcquireError::Closed) => false,
+                // The coroutine keeps the extracted chunk, so it is never copied twice.
+                Err(TryAcquireError::NoPermits) => {
+                    return self.send_later(py, tx, Ok(chunk)).map(Bound::into_any);
+                }
+            },
+        };
+        sent.into_bound_py_any(py)
+    }
+
+    /// Queue `item` as the error that ends the body, or a chunk once the budget has room.
+    /// Resolves to `False` once the body is dropped or the sender closed, which stops
+    /// forwarding.
     fn send<'py>(
         &self,
         py: Python<'py>,
@@ -435,14 +502,7 @@ impl Sender {
         } else {
             Ok(item.extract()?)
         };
-        let tx = self.lock().clone();
-        // Channel readiness is runtime-independent, so this waits on the Python loop.
-        coroutine::local(py, "Sender.send", async move {
-            Ok(match tx {
-                Some(tx) => tx.send(item).await.is_ok(),
-                None => false,
-            })
-        })
+        self.send_later(py, self.lock().clone(), item)
     }
 
     /// Mark the normal end of the body. The last chunk may still be queued: it is read
@@ -462,7 +522,37 @@ impl Sender {
 
 impl Sender {
     #[inline]
-    fn lock(&self) -> MutexGuard<'_, Option<mpsc::Sender<Item>>> {
+    fn lock(&self) -> MutexGuard<'_, Option<mpsc::UnboundedSender<Queued>>> {
         self.tx.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// A coroutine that queues `item` on `tx` once the budget has room; an error, which ends
+    /// the body, never waits.
+    fn send_later<'py>(
+        &self,
+        py: Python<'py>,
+        tx: Option<mpsc::UnboundedSender<Queued>>,
+        item: Item,
+    ) -> PyResult<Bound<'py, Coroutine>> {
+        let budget = self.budget.clone();
+        // Budget readiness is runtime-independent, so this waits on the Python loop.
+        coroutine::local(py, "Sender.send", async move {
+            let Some(tx) = tx else {
+                return Ok(false);
+            };
+            let share = match &item {
+                Ok(chunk) => match budget.acquire_many_owned(chunk.share()).await {
+                    Ok(share) => Some(share),
+                    Err(_) => return Ok(false),
+                },
+                Err(_) => None,
+            };
+            Ok(tx
+                .send(Queued {
+                    item,
+                    _share: share,
+                })
+                .is_ok())
+        })
     }
 }

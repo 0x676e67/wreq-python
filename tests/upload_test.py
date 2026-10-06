@@ -96,6 +96,24 @@ async def test_finish_delivers_queued_chunks(size):
 
 
 @pytest.mark.asyncio
+async def test_async_upload_beyond_the_budget_keeps_order():
+    # 1 MiB in small chunks queues within the budget, then waits for room, in order.
+    parts = [bytes((index % 256,)) * 4096 for index in range(256)]
+
+    async def chunks():
+        for part in parts:
+            yield part
+
+    async with local_server() as (url, connections), wreq.Client(proxies=[]) as client:
+        task = asyncio.create_task(client.post(url, body=chunks()))
+        reader, writer = await asyncio.wait_for(connections.get(), 5)
+        assert await asyncio.wait_for(read_chunked(reader), 10) == b"".join(parts)
+        writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+        await writer.drain()
+        await (await asyncio.wait_for(task, 5)).close()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("failure", ["exception", "type", "cancelled"])
 async def test_upload_errors(failure):
     closed = asyncio.Event()
