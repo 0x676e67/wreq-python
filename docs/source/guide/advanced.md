@@ -13,12 +13,14 @@ Their exceptions fail the request. When an upload ends, the generator is closed;
 cancelling or dropping the upload schedules producer cancellation and cleanup on that loop.
 Keep the loop running until generator cleanup has finished. This also applies to async multipart parts.
 Construct async-generator `Part` objects inside a running event loop; their producers
-start at construction. A producer runs at most 256 KiB, or 64 small chunks, ahead of the
-upload.
-Use synchronous iterators for blocking uploads. They run on the runtime's blocking pool,
-also at most 256 KiB or 64 small chunks ahead, except on a current-thread runtime. A
-blocking call on the producer's event-loop thread prevents async generators from
-progressing.
+start at construction. A producer reads ahead until its queued chunks fill a 256 KiB
+budget. Each chunk counts as at least 4 KiB, so at most 64 small chunks queue, and a chunk
+above 256 KiB queues alone at its full size. One more chunk can wait for room outside the
+budget, so memory held ahead of the upload also grows with the chunk size.
+Use synchronous iterators for blocking uploads. They run on the runtime's blocking pool
+with the same budget, except on a current-thread runtime, which reads each chunk only when
+the upload needs it. A blocking call on the producer's event-loop thread prevents async
+generators from progressing.
 
 ```python
 import asyncio

@@ -1,8 +1,8 @@
 //! Request bodies streamed from Python iterators and async generators.
 //!
 //! `iter` reads a Python iterator, inline on a current-thread runtime or ahead of the upload
-//! through `pump`, and `async_gen` forwards an async generator from its event loop. Both
-//! queue chunks through `queue`, which bounds the bytes read ahead of the connection.
+//! through `pump`, and `async_gen` forwards an async generator from its event loop. The pump
+//! and the forwarder queue chunks through `queue`, which bounds how far they read ahead.
 
 mod async_gen;
 mod iter;

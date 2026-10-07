@@ -16,7 +16,7 @@ use tokio::sync::{
 
 use super::{Item, PyBytesLike};
 
-/// Bytes an upload may queue ahead of the connection.
+/// Chunk bytes an upload may queue ahead of the connection; a larger chunk queues alone.
 const UPLOAD_BUDGET: usize = 256 * 1024;
 
 /// The least budget a queued chunk holds, so small chunks queue at most 64 items.
