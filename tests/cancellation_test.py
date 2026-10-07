@@ -1,6 +1,5 @@
 import asyncio
 import gc
-import sys
 import weakref
 from contextlib import asynccontextmanager
 
@@ -13,12 +12,7 @@ class Cancellation(asyncio.CancelledError):
     pass
 
 
-@pytest.mark.skipif(
-    sys.implementation.name != "pypy", reason="PyPy legacy throw protocol"
-)
 def test_legacy_coroutine_throw():
-    from wreq._compat import _install
-
     try:
         raise RuntimeError("traceback origin")
     except RuntimeError as error:
@@ -105,9 +99,6 @@ def test_legacy_coroutine_throw():
 
     coroutine = wreq.get("")
     try:
-        installed = vars(type(coroutine))["throw"]
-        _install(type(coroutine))
-        assert vars(type(coroutine))["throw"] is installed
         for args in (
             (object(),),
             (ValueError, None, object()),
