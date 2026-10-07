@@ -40,7 +40,8 @@ pub enum Frame {
 
 /// A response stream yielding read-only memoryviews and any trailing headers.
 ///
-/// Sync and async iteration share [`Streamer::next`]; only the wait differs.
+/// Sync and async iteration share [`Streamer::next`]; [`Iteration`] picks the ready frames
+/// the caller reads and the error that ends iteration.
 #[pyclass(subclass, frozen, skip_from_py_object)]
 pub struct Streamer {
     reader: Arc<Reader>,

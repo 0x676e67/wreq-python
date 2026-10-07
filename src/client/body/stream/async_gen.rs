@@ -120,9 +120,8 @@ impl Sender {
             None => return false.into_bound_py_any(py),
         };
         // The coroutine keeps the extracted chunk, so it is never copied twice. Budget
-        // readiness is runtime-independent, so it waits on the Python loop. Its name is the
-        // pending send that shutdown inspects.
-        coroutine::local(py, "Sender.send", async move {
+        // readiness is runtime-independent, so it waits on the Python loop.
+        coroutine::local(py, "Sender.try_send", async move {
             let permit = tx.reserve(&chunk).await;
             Ok(permit.is_some_and(|permit| permit.send(chunk)))
         })

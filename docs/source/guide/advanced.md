@@ -122,7 +122,9 @@ runtime = Runtime(
 client = Client(runtime=runtime)
 ```
 
-`scheduler` selects how the runtime runs client work:
+`scheduler` selects how the runtime runs client work. It replaces `work_steal`:
+`work_steal=False` is `Scheduler.PER_WORKER`, and the old default is
+`Scheduler.WORK_STEALING`.
 
 - `Scheduler.WORK_STEALING` (the default) uses one multi-thread pool whose
   workers steal work from each other.

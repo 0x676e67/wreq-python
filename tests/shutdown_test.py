@@ -62,7 +62,8 @@ loop.run_until_complete(asyncio.sleep(0.1))
 assert not task.done(), "request must remain pending"
 if upload:
     assert any(
-        getattr(getattr(t.get_coro(), "cr_await", None), "__name__", None) == "send"
+        getattr(getattr(t.get_coro(), "cr_await", None), "__name__", None)
+        == "try_send"
         for t in asyncio.all_tasks(loop)
     ), "upload producer must be waiting for upload budget"
 hold = HoldTeardown(peer, task)
