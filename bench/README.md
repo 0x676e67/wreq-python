@@ -15,7 +15,7 @@ are reported separately.
 - Async clients: wreq default runtime, wreq single worker, pyreqwest
   single-threaded and multithreaded runtimes, ry, httpx, aiohttp, niquests, and
   curl_cffi.
-- Blocking variants: wreq MT/ST, ry, requests, httpx, niquests, curl_cffi, and pycurl.
+- Blocking variants: wreq MT/ST/CT, ry, requests, httpx, niquests, curl_cffi, and pycurl.
 - Three rounds, each with one warmup and one timed batch of 300 requests.
   Case order is shuffled with a recorded seed.
 - Status, negotiated HTTP version, and total response length are checked for
@@ -42,7 +42,7 @@ worker clients have separate connection pools.
 | 4 MiB | 256 KiB |
 
 Both Full and Stream uploads are tested for every payload and concurrency.
-The complete matrix contains 1,680 supported cells across 16 client variants;
+The complete matrix contains 1,904 supported cells across 18 client variants;
 each cell has three measured rounds. The Rust benchmark uses Criterion and
 600 requests per iteration; this suite uses fixed batches of 300 requests.
 Custom payload sizes use upload chunks of at most 64 KiB.
@@ -70,7 +70,7 @@ Cargo uses a custom target directory, pass the actual executable path to `--serv
 starts, it prints the number of cases and batches. It saves stdout/stderr logs
 beside the raw JSON and generates an English `.report.md` once validation passes.
 
-The default suite has 1,680 supported cases, 5,040 timed batches and the same
+The default suite has 1,904 supported cases, 5,712 timed batches and the same
 number of warm-up batches. Allow several hours for a full run. The setup commands
 above prepare the dependencies and native binaries; the runner won't install or
 build them for you. Publishing the results to the docs is optional.
@@ -163,7 +163,7 @@ To update only the blocking results without rerunning the async clients:
 uv run --no-sync python bench/run.py --input bench/data/BLOCKING.json --publish-blocking
 ```
 
-This requires all eight blocking variants and the same complete workload and
+This requires all nine blocking variants and the same complete workload and
 batch minimums. It freezes the candidate and existing `latest.json` for the docs
 build, then selects `bench/data/latest-blocking.json` only if the build succeeds.
 The async source and all historical files stay unchanged. The two publication

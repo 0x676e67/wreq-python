@@ -20,14 +20,15 @@ class Scheduler(Enum):
     share it, and nothing runs between calls.
 
     Best with a client and runtime per thread; only blocking clients can use it.
-    Upload iterators run on the driving thread and must not wait for, or make,
-    other calls on this runtime.
+    Upload iterators run on whichever thread drives it: blocking wreq calls from
+    them raise RuntimeError, and one that waits for another call on this runtime
+    never returns.
     """
 
 
 @final
 class Runtime:
-    """Shared Tokio runtime whose workers start when constructed.
+    """Shared Tokio runtime; worker schedulers start their threads when constructed.
 
     Clients, responses and active work keep it alive; the last owner releases
     it automatically.

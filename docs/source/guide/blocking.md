@@ -80,7 +80,9 @@ with Client(runtime=runtime) as client:
         print(response.text())
 ```
 
-Network work runs on the selected worker while the calling thread waits.
+With a worker scheduler, network work runs on the selected worker while the
+calling thread waits; with `Scheduler.CURRENT_THREAD` the calling thread runs it
+(below).
 `client.runtime` is read-only. Closing the client does not shut down a shared
 runtime; it cancels pending requests and rejects new ones with
 `asyncio.CancelledError`. See [custom runtimes](advanced.md#custom-runtimes) for
@@ -88,9 +90,11 @@ configuration and lifetime details.
 
 ### Current-thread runtime
 
-A `Scheduler.CURRENT_THREAD` runtime has no worker threads: the thread in a
-blocking call drives its IO, with no handoff to another thread. It is fastest
-with a client and runtime per thread, like one curl handle per thread:
+A `Scheduler.CURRENT_THREAD` runtime has no worker threads: a blocking call drives
+the runtime on the calling thread instead of waiting on a worker. Redirect
+callbacks, multipart file reads and `system_dns` lookups still use its blocking
+pool. It is fastest with a client and runtime per thread, like one curl handle per
+thread:
 
 ```python
 import threading
@@ -107,8 +111,9 @@ def client() -> Client:
     return local.client
 ```
 
-- Nothing runs between calls. HTTP/2 pings, idle-connection cleanup, closing
-  cancelled connections and WebSocket keepalive progress only during a call.
+- Nothing runs between calls. HTTP/2 keep-alive pings, idle-connection cleanup,
+  and closing cancelled connections or dropped WebSockets progress only during a
+  call.
 - Threads sharing the runtime take turns driving it, and the driving thread
   also runs the other threads' connections and upload iterators. A client
   shared by many threads is faster with `Scheduler.PER_WORKER`.

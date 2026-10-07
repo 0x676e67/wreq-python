@@ -103,8 +103,8 @@ if __name__ == "__main__":
 ### Custom runtimes
 
 Clients share a global multi-thread runtime when `runtime` is omitted or `None`.
-It starts on first use. Construct a `Runtime` to
-start a separate worker pool for an async or blocking client:
+It starts on first use. Construct a `Runtime` to give an async or blocking
+client its own runtime:
 
 ```python
 from datetime import timedelta
@@ -133,18 +133,20 @@ client = Client(runtime=runtime)
 
 With `Scheduler.PER_WORKER`, each client is assigned one worker for its
 lifetime; requests, response reads, streams and WebSocket operations use that
-worker. Async reads of HTTP/1 data that has already arrived, and is not
-content-encoded, finish on the event loop thread instead: `bytes()` and `text()`
-up to 64 KiB, `json()` up to 8 KiB, and the first frame of a stream whose length
-is known; later frames are read on the worker. With multiple workers, newly
-created clients select a worker randomly and keep that selection. This is not CPU
-pinning. Sharing the same `Runtime` between clients is supported, and
-`client.runtime` returns the shared runtime object.
+worker. With multiple workers, newly created clients select a worker randomly and
+keep that selection. This is not CPU pinning. Sharing the same `Runtime` between
+clients is supported, and `client.runtime` returns the shared runtime object.
+
+With either worker scheduler, async reads of an HTTP/1 body of known length that
+the client does not decompress finish on the event loop thread once the data has
+arrived: `bytes()` and `text()` up to 64 KiB, `json()` up to 8 KiB, and a stream's
+first frame of any size, plus the next one if it is already buffered. Other reads
+and later stream frames run on the runtime.
 
 `workers=None` uses the available CPU parallelism, or 1 if it cannot be determined;
 `Scheduler.CURRENT_THREAD` requires it.
-Custom runtimes start their threads during construction, before any client is
-bound or request is sent.
+Worker schedulers start their threads during construction, before any client is
+bound or request is sent; `Scheduler.CURRENT_THREAD` starts none.
 
 `thread_name=None` uses the package name, `wreq-python`, as the thread name.
 
