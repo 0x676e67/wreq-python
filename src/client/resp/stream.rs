@@ -25,7 +25,6 @@ use tokio_util::task::AbortOnDropHandle;
 use super::loop_polls;
 use crate::{
     buffer::PyBuffer,
-    client::nogil,
     coroutine::{self, Coroutine},
     error::Error,
     header::HeaderMap,
@@ -287,7 +286,8 @@ impl Streamer {
         if let Some(frame) = self.ready_frame(false, || Error::StopIteration) {
             return frame;
         }
-        nogil::run(py, &self.runtime, self.next(|| Error::StopIteration))
+        self.runtime
+            .block_on_eager(py, self.next(|| Error::StopIteration))
     }
 
     fn __enter__(slf: PyRef<Self>) -> PyRef<Self> {

@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use futures_util::TryFutureExt;
 use pyo3::{prelude::*, types::PyTuple};
 use wreq::{Body, multipart};
 
@@ -135,13 +136,10 @@ impl Part {
             Value::Text(text) => multipart::Part::stream(text.0),
             Value::Bytes(bytes) => multipart::Part::stream(bytes.0),
             // Opening the file blocks, so only that waits detached.
-            Value::File(path) => py.detach(|| {
-                runtime::get().block_on(async {
-                    multipart::Part::file(path)
-                        .await
-                        .map_err(|err| Error::from(err).into())
-                })
-            })?,
+            Value::File(path) => runtime::get().block_on(
+                py,
+                multipart::Part::file(path).map_err(|err| Error::from(err).into()),
+            )?,
             Value::Stream(stream) => {
                 let stream = Body::wrap_stream(stream);
                 match self.length {

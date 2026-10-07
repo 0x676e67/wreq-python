@@ -1,17 +1,30 @@
+//! The Tokio runtime behind clients, and how calls wait on it.
+//!
+//! Requests, and async reads that must wait, run as tasks on the client's selected worker
+//! ([`Runtime::block_on_task`], [`Runtime::run_task`]); blocking reads are polled by the
+//! caller ([`Runtime::block_on`], [`Runtime::block_on_eager`]). The `block_on*` calls release
+//! the GIL while they wait, and drive a current-thread runtime meanwhile.
+
 use std::{
     cell::{Cell, RefCell},
     future::Future,
+    pin::pin,
     sync::{Arc, OnceLock},
     thread,
     time::Duration,
 };
 
+use futures_util::FutureExt;
 use pingora_runtime::{BlockingPoolOpts, Runtime as PingoraRuntime, RuntimeBuilder};
 use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
 };
-use tokio::runtime::{Builder, Handle};
+use tokio::{
+    runtime::{Builder, Handle},
+    task::JoinError,
+};
+use tokio_util::task::AbortOnDropHandle;
 
 /// How a [`Runtime`] schedules client work.
 #[pyclass(eq, eq_int, frozen, from_py_object)]
@@ -41,7 +54,7 @@ pub struct Runtime {
 /// The runtime behind [`Runtime`].
 enum Shared {
     Workers(PingoraRuntime),
-    /// Driven only by the threads blocked in [`Runtime::block_on`].
+    /// Driven only by threads in a blocking call, through [`Driving::drive`].
     CurrentThread(tokio::runtime::Runtime),
 }
 
@@ -80,20 +93,6 @@ impl Runtime {
         matches!(self.inner.as_deref(), Some(Shared::CurrentThread(_)))
     }
 
-    /// Poll `future` to completion on the calling thread, which must be detached from
-    /// Python. A current-thread runtime runs its tasks and IO here meanwhile.
-    pub fn block_on<T>(&self, future: impl Future<Output = PyResult<T>>) -> PyResult<T> {
-        refuse_nested()?;
-        match self.inner.as_deref() {
-            Some(Shared::CurrentThread(runtime)) => {
-                let _driving = Driving::enter();
-                let output = runtime.block_on(future);
-                INTERRUPT.take().map_or(output, Err)
-            }
-            _ => self.handle.block_on(future),
-        }
-    }
-
     /// Share the runtime and select a worker for a new client.
     pub fn select(&self) -> PyResult<Self> {
         let inner = self
@@ -104,6 +103,91 @@ impl Runtime {
             handle: inner.handle(),
             inner: Some(inner.clone()),
         })
+    }
+
+    /// Poll `future` once inside the runtime, where a read timeout can start its timer;
+    /// `None` if it must wait.
+    pub fn poll_now<F: Future + Unpin>(&self, future: &mut F) -> Option<F::Output> {
+        let _runtime = self.handle.enter();
+        future.now_or_never()
+    }
+
+    /// Poll `future` to completion on the caller, detached from Python. A current-thread
+    /// runtime runs its tasks and IO here meanwhile.
+    pub fn block_on<F, T>(&self, py: Python<'_>, future: F) -> PyResult<T>
+    where
+        F: Future<Output = PyResult<T>> + Send,
+        T: Send,
+    {
+        py.detach(|| self.wait(future))
+    }
+
+    /// Like [`block_on`](Self::block_on), but poll once still attached first and return
+    /// without releasing the GIL when ready, as a buffered body or frame usually is.
+    pub fn block_on_eager<F, T>(&self, py: Python<'_>, future: F) -> PyResult<T>
+    where
+        F: Future<Output = PyResult<T>> + Send,
+        T: Send,
+    {
+        // Refused before the first poll, which a later refusal would leave half done.
+        refuse_nested()?;
+        let mut future = pin!(future);
+        match self.poll_now(&mut future) {
+            Some(output) => output,
+            None => self.block_on(py, future),
+        }
+    }
+
+    /// Run `future` as a task on the selected worker while the caller waits detached. A
+    /// current-thread runtime's only worker is its caller, which drives the future itself.
+    pub fn block_on_task<F, T>(&self, py: Python<'_>, future: F) -> PyResult<T>
+    where
+        F: Future<Output = PyResult<T>> + Send + 'static,
+        T: Send + 'static,
+    {
+        py.detach(|| self.wait_task(future))
+    }
+
+    /// Run `future` as a task on the selected worker and wait for it from any executor.
+    /// Dropping the wait aborts the task, which keeps the runtime alive until it ends.
+    #[inline]
+    pub async fn run_task<F, T>(self, future: F) -> PyResult<T>
+    where
+        F: Future<Output = PyResult<T>> + Send + 'static,
+        T: Send + 'static,
+    {
+        let task = self.handle.clone().spawn(async move {
+            let _owner = self;
+            future.await
+        });
+        AbortOnDropHandle::new(task).await.map_err(join_error)?
+    }
+
+    /// [`block_on`](Self::block_on) for a caller already detached. It refuses a nested call
+    /// itself, where Tokio would panic.
+    fn wait<T>(&self, future: impl Future<Output = PyResult<T>>) -> PyResult<T> {
+        refuse_nested()?;
+        match self.inner.as_deref() {
+            Some(Shared::CurrentThread(runtime)) => Driving::drive(runtime, future),
+            _ => self.handle.block_on(future),
+        }
+    }
+
+    /// [`block_on_task`](Self::block_on_task) for a caller already detached; refused before
+    /// the spawn, so a nested request starts nothing.
+    fn wait_task<F, T>(&self, future: F) -> PyResult<T>
+    where
+        F: Future<Output = PyResult<T>> + Send + 'static,
+        T: Send + 'static,
+    {
+        refuse_nested()?;
+        match self.inner.as_deref() {
+            Some(Shared::CurrentThread(runtime)) => Driving::drive(runtime, future),
+            _ => self
+                .handle
+                .block_on(self.handle.spawn(future))
+                .map_err(join_error)?,
+        }
     }
 }
 
@@ -234,9 +318,16 @@ impl Shared {
 // ===== impl Driving =====
 
 impl Driving {
-    fn enter() -> Self {
+    /// Drive `runtime` on this thread until `future` completes, marked as driving it; an
+    /// interrupt its upload iterator stashed meanwhile replaces the output.
+    fn drive<T>(
+        runtime: &tokio::runtime::Runtime,
+        future: impl Future<Output = PyResult<T>>,
+    ) -> PyResult<T> {
         DRIVING.set(true);
-        Driving
+        let _driving = Driving;
+        let output = runtime.block_on(future);
+        INTERRUPT.take().map_or(output, Err)
     }
 }
 
@@ -257,6 +348,11 @@ pub fn refuse_nested() -> PyResult<()> {
         ));
     }
     Ok(())
+}
+
+/// A task that panicked or was aborted, as a Python error.
+fn join_error(err: JoinError) -> PyErr {
+    PyRuntimeError::new_err(err.to_string())
 }
 
 /// Workers used when none are given: one per available CPU.
@@ -298,19 +394,20 @@ mod tests {
         let caller = std::thread::current().id();
         let mut ids = Vec::new();
         for worker in [&first, &second, &first.clone(), &second.clone()] {
-            let id = crate::client::nogil::block_on(worker, async {
-                let thread = std::thread::current().id();
-                for _ in 0..8 {
-                    tokio::task::yield_now().await;
-                    assert_eq!(thread, std::thread::current().id());
-                }
-                let child = tokio::spawn(async { std::thread::current().id() })
-                    .await
-                    .unwrap();
-                assert_eq!(thread, child);
-                Ok(thread)
-            })
-            .unwrap();
+            let id = worker
+                .wait_task(async {
+                    let thread = std::thread::current().id();
+                    for _ in 0..8 {
+                        tokio::task::yield_now().await;
+                        assert_eq!(thread, std::thread::current().id());
+                    }
+                    let child = tokio::spawn(async { std::thread::current().id() })
+                        .await
+                        .unwrap();
+                    assert_eq!(thread, child);
+                    Ok(thread)
+                })
+                .unwrap();
             assert_ne!(id, caller);
             ids.push(id);
         }
@@ -328,22 +425,23 @@ mod tests {
         };
         let runtime = current_thread();
         // Spawned tasks and timers run on the blocked caller.
-        let child = crate::client::nogil::block_on(&runtime, async {
-            Ok(tokio::spawn(async {
-                tokio::time::sleep(Duration::from_millis(1)).await;
-                thread::current().id()
+        let child = runtime
+            .wait_task(async {
+                Ok(tokio::spawn(async {
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                    thread::current().id()
+                })
+                .await
+                .unwrap())
             })
-            .await
-            .unwrap())
-        })
-        .unwrap();
+            .unwrap();
         assert_eq!(child, thread::current().id());
         // A blocking call from code the runtime runs fails instead of panicking, and the
         // last owner of another runtime can be released there.
         let other = current_thread();
         let nested = runtime
-            .block_on(async {
-                let nested = other.block_on(async { Ok(()) }).is_err();
+            .wait(async {
+                let nested = other.wait(async { Ok(()) }).is_err();
                 drop(other);
                 Ok(nested)
             })

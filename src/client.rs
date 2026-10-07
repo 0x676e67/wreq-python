@@ -1,5 +1,4 @@
 pub mod body;
-pub mod nogil;
 pub mod req;
 pub mod resp;
 
@@ -279,11 +278,10 @@ impl Client {
         kwds: Option<Py<PyDict>>,
     ) -> PyResult<Response> {
         let kwds = Python::attach(|py| kwds.map(|kwds| kwds.bind(py).extract()).transpose())?;
-        coroutine::run(
-            self.runtime.clone(),
-            execute_request(self, method, url, kwds),
-        )
-        .await
+        self.runtime
+            .clone()
+            .run_task(execute_request(self, method, url, kwds))
+            .await
     }
 
     /// Open a WebSocket on the client's runtime, extracting options on first await.
@@ -293,11 +291,10 @@ impl Client {
         kwds: Option<Py<PyDict>>,
     ) -> PyResult<WebSocket> {
         let kwds = Python::attach(|py| kwds.map(|kwds| kwds.bind(py).extract()).transpose())?;
-        coroutine::run(
-            self.runtime.clone(),
-            execute_websocket_request(self, url, kwds),
-        )
-        .await
+        self.runtime
+            .clone()
+            .run_task(execute_websocket_request(self, url, kwds))
+            .await
     }
 }
 
@@ -834,13 +831,10 @@ impl BlockingClient {
         url: PyBackedStr,
         kwds: Option<Request>,
     ) -> PyResult<BlockingResponse> {
-        py.detach(|| {
-            nogil::block_on(
-                &self.0.runtime,
-                execute_request(self.0.clone(), method, url, kwds),
-            )
+        self.0
+            .runtime
+            .block_on_task(py, execute_request(self.0.clone(), method, url, kwds))
             .map(Into::into)
-        })
     }
 
     /// Make a WebSocket request to the specified URL.
@@ -851,13 +845,10 @@ impl BlockingClient {
         url: PyBackedStr,
         kwds: Option<WebSocketRequest>,
     ) -> PyResult<BlockingWebSocket> {
-        py.detach(|| {
-            nogil::block_on(
-                &self.0.runtime,
-                execute_websocket_request(self.0.clone(), url, kwds),
-            )
+        self.0
+            .runtime
+            .block_on_task(py, execute_websocket_request(self.0.clone(), url, kwds))
             .map(Into::into)
-        })
     }
 }
 

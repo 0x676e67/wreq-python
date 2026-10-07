@@ -11,7 +11,7 @@ use pyo3::{prelude::*, sync::PyOnceLock};
 use wreq::{header::HeaderValue, ws::WebSocketResponse};
 
 use crate::{
-    client::{SocketAddr, nogil},
+    client::SocketAddr,
     cookie::Cookie,
     coroutine::{self, Coroutine, EntersSelf},
     extractor::Text,
@@ -242,33 +242,33 @@ impl BlockingWebSocket {
     /// Receive a message from the WebSocket.
     #[pyo3(signature = (timeout=None))]
     pub fn recv(&self, py: Python, timeout: Option<Duration>) -> PyResult<Option<Message>> {
-        nogil::run(py, &self.0.runtime, cmd::recv(self.0.cmd.clone(), timeout))
+        self.0
+            .runtime
+            .block_on_eager(py, cmd::recv(self.0.cmd.clone(), timeout))
     }
 
     /// Send a message to the WebSocket.
     #[pyo3(signature = (message))]
     pub fn send(&self, py: Python, message: Message) -> PyResult<()> {
-        nogil::run(py, &self.0.runtime, cmd::send(self.0.cmd.clone(), message))
+        self.0
+            .runtime
+            .block_on_eager(py, cmd::send(self.0.cmd.clone(), message))
     }
 
     /// Send multiple messages to the WebSocket.
     #[pyo3(signature = (messages))]
     pub fn send_all(&self, py: Python, messages: Vec<Message>) -> PyResult<()> {
-        nogil::run(
-            py,
-            &self.0.runtime,
-            cmd::send_all(self.0.cmd.clone(), messages),
-        )
+        self.0
+            .runtime
+            .block_on_eager(py, cmd::send_all(self.0.cmd.clone(), messages))
     }
 
     /// Close the WebSocket connection.
     #[pyo3(signature = (code=None, reason=None))]
     pub fn close(&self, py: Python, code: Option<u16>, reason: Option<Text>) -> PyResult<()> {
-        nogil::run(
-            py,
-            &self.0.runtime,
-            cmd::close(self.0.cmd.clone(), code, reason),
-        )
+        self.0
+            .runtime
+            .block_on_eager(py, cmd::close(self.0.cmd.clone(), code, reason))
     }
 }
 
@@ -286,7 +286,9 @@ impl BlockingWebSocket {
         _exc_value: &Bound<'py, PyAny>,
         _traceback: &Bound<'py, PyAny>,
     ) -> PyResult<()> {
-        nogil::run(py, &self.0.runtime, cmd::close_on_exit(self.0.cmd.clone()))
+        self.0
+            .runtime
+            .block_on_eager(py, cmd::close_on_exit(self.0.cmd.clone()))
     }
 }
 
