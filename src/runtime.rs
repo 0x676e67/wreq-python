@@ -181,7 +181,14 @@ impl Runtime {
     {
         Self::refuse_nested()?;
         match self.inner.as_deref() {
-            Some(Inner::CurrentThread(runtime)) => Driving::drive(runtime, future),
+            Some(Inner::CurrentThread(runtime)) => Driving::drive(runtime, async {
+                // Nothing ran since the last call. The first yield lets the driver collect IO
+                // that arrived meanwhile, such as a server closing an idle connection, and the
+                // second lets its task act on it before the request checks out a connection.
+                task::yield_now().await;
+                task::yield_now().await;
+                future.await
+            }),
             _ => self
                 .handle
                 .block_on(self.handle.spawn(future))

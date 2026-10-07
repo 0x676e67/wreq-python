@@ -2,6 +2,7 @@ import asyncio
 import base64
 import hashlib
 import threading
+import time
 from contextlib import asynccontextmanager
 from datetime import timedelta
 
@@ -352,6 +353,39 @@ async def test_current_thread_runtime():
                 await held
     finally:
         client.close()
+
+
+@pytest.mark.asyncio
+async def test_current_thread_skips_connections_closed_while_idle():
+    # Nothing drives a current-thread runtime between calls, so a request must first see
+    # that the server closed the pooled connection meanwhile instead of sending on it.
+    async def accept(reader, writer):
+        try:
+            await reader.readuntil(b"\r\n\r\n")
+            writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
+            await writer.drain()
+            # A short keep-alive closes the idle connection.
+            await asyncio.sleep(0.02)
+        finally:
+            writer.close()
+
+    def fetch_after_idle():
+        for _ in range(3):
+            with client.get(url) as response:
+                assert response.text() == "ok"
+            time.sleep(0.2)
+
+    server = await asyncio.start_server(accept, "127.0.0.1", 0)
+    url = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}/"
+    client = wreq.blocking.Client(
+        runtime=Runtime(scheduler=Scheduler.CURRENT_THREAD), proxies=[]
+    )
+    try:
+        await run_blocking(fetch_after_idle)
+    finally:
+        client.close()
+        server.close()
+        await server.wait_closed()
 
 
 @pytest.mark.asyncio
