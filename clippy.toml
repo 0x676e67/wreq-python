@@ -4,7 +4,7 @@ disallowed-methods = [
     { path = "tokio::task::spawn", reason = "use Runtime::spawn" },
     { path = "tokio::task::spawn_blocking", reason = "use Runtime::spawn_blocking" },
     { path = "tokio::task::yield_now", reason = "use Runtime::defer_wake" },
-    { path = "tokio::task::block_in_place", reason = "use Runtime::block_on_in_pool" },
+    { path = "tokio::task::block_in_place", reason = "use Runtime::spawn_blocking, and Runtime::block_on_in_pool inside it" },
     { path = "tokio::runtime::Handle::current", reason = "use Runtime" },
     { path = "tokio::runtime::Handle::try_current", reason = "use Runtime" },
 ]
