@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -110,3 +111,8 @@ async def test_file_parts_open_when_the_request_is_built(tmp_path):
         blocking.post(url, multipart=form)
     with pytest.raises(RuntimeError, match="IO error"):
         await client.post(url, multipart=form)
+
+    # A closed client rejects the request before building the form, so it never opens.
+    blocking.close()
+    with pytest.raises(asyncio.CancelledError):
+        blocking.post(url, multipart=form)
