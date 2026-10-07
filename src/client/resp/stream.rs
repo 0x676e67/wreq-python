@@ -261,8 +261,11 @@ impl Streamer {
         Ok(())
     }
 
-    /// Wait for the next frame.
+    /// Return a frame the body already holds, else wait for the next one.
     async fn next(&self, iteration: Iteration) -> PyResult<Frame> {
+        if let Some(frame) = self.ready_frame(iteration) {
+            return frame;
+        }
         loop {
             // Readers are woken by `notify_waiters`, which reaches a `Notified` from its
             // creation, so it needs no `enable` and a frame sent after `try_next` still wakes it.
@@ -283,12 +286,8 @@ impl Streamer {
     }
 
     fn __next__(&self, py: Python) -> PyResult<Frame> {
-        // Refused before any frame, so a nested read never leaves a stream half consumed.
-        Runtime::refuse_nested()?;
-        // Frames already received are returned without releasing the GIL.
-        if let Some(frame) = self.ready_frame(Iteration::Sync) {
-            return frame;
-        }
+        // Refused before the first poll, which returns frames already received without
+        // releasing the GIL, so a nested read never leaves the stream half consumed.
         self.runtime.block_on_eager(py, self.next(Iteration::Sync))
     }
 
@@ -321,10 +320,6 @@ impl Streamer {
         let slf = slf.unbind();
         coroutine::local(py, "Streamer.__anext__", async move {
             let this = slf.get();
-            // A body already buffered is read without starting the read-ahead task.
-            if let Some(frame) = this.ready_frame(Iteration::Async) {
-                return frame;
-            }
             // Buffered frames complete without suspending; yield to the event loop
             // periodically so timeouts, cancellation and other tasks run.
             if this.reader.since_yield.fetch_add(1, Ordering::Relaxed) >= Self::YIELD_EVERY {

@@ -2,8 +2,9 @@
 //!
 //! Requests, and async reads that must wait, run as tasks on the client's selected worker
 //! ([`Runtime::block_on_task`], [`Runtime::run_task`]); blocking reads are polled by the
-//! caller ([`Runtime::block_on`], [`Runtime::block_on_eager`]). The `block_on*` calls release
-//! the GIL while they wait, and drive a current-thread runtime meanwhile.
+//! caller ([`Runtime::block_on`], [`Runtime::block_on_eager`]). These blocking calls release
+//! the GIL while they wait; on a current-thread runtime they drive it and run the request
+//! themselves instead of spawning it.
 //!
 //! Every other runtime operation goes through [`Runtime`] too; `clippy.toml` rejects direct
 //! Tokio handles, spawns and yields elsewhere.
@@ -51,13 +52,13 @@ pub enum Scheduler {
 #[pyclass(frozen, skip_from_py_object)]
 pub struct Runtime {
     /// Shared owner; `None` only once `Drop` has taken it to shut the runtime down.
-    inner: Option<Arc<Shared>>,
+    inner: Option<Arc<Inner>>,
     /// The worker this copy runs on; per-worker clients keep their tasks there.
     handle: Handle,
 }
 
 /// The runtime behind [`Runtime`].
-enum Shared {
+enum Inner {
     Workers(PingoraRuntime),
     /// Driven only by threads in a blocking call, through [`Driving::drive`].
     CurrentThread(tokio::runtime::Runtime),
@@ -68,9 +69,8 @@ struct Driving;
 
 thread_local! {
     static DRIVING: Cell<bool> = const { Cell::new(false) };
-    /// A KeyboardInterrupt or other non-`Exception` error that this thread's upload
-    /// iterator raised while it drove the runtime, re-raised by its call instead of the
-    /// wrapped request error.
+    /// An error an upload iterator run on this thread chose to re-raise from the blocking
+    /// call this thread is driving, in place of that call's output.
     static INTERRUPT: RefCell<Option<PyErr>> = const { RefCell::new(None) };
 }
 
@@ -79,7 +79,7 @@ thread_local! {
 impl Runtime {
     /// Whether blocking calls drive this runtime on their own thread.
     pub fn is_current_thread(&self) -> bool {
-        matches!(self.inner.as_deref(), Some(Shared::CurrentThread(_)))
+        matches!(self.inner.as_deref(), Some(Inner::CurrentThread(_)))
     }
 
     /// Share the runtime and select a worker for a new client.
@@ -167,7 +167,7 @@ impl Runtime {
     fn wait<T>(&self, future: impl Future<Output = PyResult<T>>) -> PyResult<T> {
         Self::refuse_nested()?;
         match self.inner.as_deref() {
-            Some(Shared::CurrentThread(runtime)) => Driving::drive(runtime, future),
+            Some(Inner::CurrentThread(runtime)) => Driving::drive(runtime, future),
             _ => self.handle.block_on(future),
         }
     }
@@ -181,7 +181,7 @@ impl Runtime {
     {
         Self::refuse_nested()?;
         match self.inner.as_deref() {
-            Some(Shared::CurrentThread(runtime)) => Driving::drive(runtime, future),
+            Some(Inner::CurrentThread(runtime)) => Driving::drive(runtime, future),
             _ => self
                 .handle
                 .block_on(self.handle.spawn(future))
@@ -221,9 +221,10 @@ impl Runtime {
         current().spawn_blocking(f)
     }
 
-    /// Wait for `future` detached from Python on a blocking-pool thread, driven by the
-    /// runtime that owns the pool. Unlike [`block_on`](Self::block_on), it neither refuses
-    /// nested calls nor needs a `PyResult`; create timers inside `future`.
+    /// Wait for `future` detached from Python on a blocking-pool thread of a runtime whose
+    /// workers drive its IO and timers; a current-thread runtime's pool has none. Unlike
+    /// [`block_on`](Self::block_on), it neither refuses nested calls nor needs a `PyResult`;
+    /// create timers inside `future`.
     pub fn block_on_in_pool<F>(py: Python<'_>, future: F) -> F::Output
     where
         F: Future + Send,
@@ -262,8 +263,8 @@ impl Runtime {
     }
 }
 
-impl From<Shared> for Runtime {
-    fn from(runtime: Shared) -> Self {
+impl From<Inner> for Runtime {
+    fn from(runtime: Inner) -> Self {
         let handle = runtime.handle();
         Self {
             inner: Some(Arc::new(runtime)),
@@ -274,7 +275,7 @@ impl From<Shared> for Runtime {
 
 impl From<PingoraRuntime> for Runtime {
     fn from(runtime: PingoraRuntime) -> Self {
-        Shared::Workers(runtime).into()
+        Inner::Workers(runtime).into()
     }
 }
 
@@ -288,8 +289,8 @@ impl FromPyObject<'_, '_> for Runtime {
 
 #[pymethods]
 impl Runtime {
-    /// Create the runtime and start its workers.
-    /// Workers default to CPU parallelism and do not apply to CURRENT_THREAD.
+    /// Create the runtime and start its workers, if any.
+    /// Workers default to CPU parallelism and must be None with CURRENT_THREAD.
     /// Thread names default to the package name.
     /// Thread counts must be positive; thread_keep_alive is a nonnegative timedelta.
     #[new]
@@ -335,7 +336,7 @@ impl Runtime {
                 let runtime = builder
                     .build()
                     .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
-                Shared::CurrentThread(runtime).into()
+                Inner::CurrentThread(runtime).into()
             }
             _ => {
                 let workers = workers.unwrap_or_else(parallelism);
@@ -366,22 +367,22 @@ impl Drop for Runtime {
         // The final owner may be released on a worker or while holding the GIL.
         if let Some(runtime) = self.inner.take().and_then(Arc::into_inner) {
             match runtime {
-                Shared::Workers(PingoraRuntime::Steal { runtime, .. })
-                | Shared::CurrentThread(runtime) => runtime.shutdown_background(),
-                Shared::Workers(PingoraRuntime::NoSteal(runtime)) => drop(runtime),
+                Inner::Workers(PingoraRuntime::Steal { runtime, .. })
+                | Inner::CurrentThread(runtime) => runtime.shutdown_background(),
+                Inner::Workers(PingoraRuntime::NoSteal(runtime)) => drop(runtime),
             }
         }
     }
 }
 
-// ===== impl Shared =====
+// ===== impl Inner =====
 
-impl Shared {
+impl Inner {
     fn handle(&self) -> Handle {
         match self {
             // No-steal workers are lazy upstream; this starts them.
-            Shared::Workers(runtime) => runtime.get_handle().clone(),
-            Shared::CurrentThread(runtime) => runtime.handle().clone(),
+            Inner::Workers(runtime) => runtime.get_handle().clone(),
+            Inner::CurrentThread(runtime) => runtime.handle().clone(),
         }
     }
 }
@@ -390,7 +391,7 @@ impl Shared {
 
 impl Driving {
     /// Drive `runtime` on this thread until `future` completes, marked as driving it; an
-    /// interrupt its upload iterator stashed meanwhile replaces the output.
+    /// interrupt an upload iterator stashed meanwhile replaces the output.
     fn drive<T>(
         runtime: &tokio::runtime::Runtime,
         future: impl Future<Output = PyResult<T>>,
@@ -466,7 +467,7 @@ mod tests {
     #[test]
     fn current_thread_runs_on_its_callers() {
         let current_thread = || {
-            Runtime::from(Shared::CurrentThread(
+            Runtime::from(Inner::CurrentThread(
                 Builder::new_current_thread().enable_all().build().unwrap(),
             ))
         };
