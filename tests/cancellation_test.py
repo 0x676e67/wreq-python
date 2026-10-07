@@ -150,6 +150,16 @@ async def local_server():
         await server.wait_closed()
 
 
+def throw_cancellation(coroutine):
+    """Throw a cancellation into `coroutine` and return a weak reference to it, so no
+    caller frame still holds the exception."""
+    error = Cancellation("cancelled after Rust completion")
+    with pytest.raises(asyncio.CancelledError) as caught:
+        coroutine.throw(error)
+    assert caught.value is error
+    return weakref.ref(error)
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("operation", ["request", "request_error", "stream"])
 async def test_cancellation_after_rust_completion(operation):
@@ -181,15 +191,12 @@ async def test_cancellation_after_rust_completion(operation):
             done, _ = await asyncio.wait({waiter}, timeout=5)
             assert waiter in done, "Rust operation did not finish"
 
-            error = Cancellation("cancelled after Rust completion")
-            error_ref = weakref.ref(error)
-            with pytest.raises(asyncio.CancelledError) as caught:
-                coroutine.throw(error)
-            assert caught.value is error
+            error_ref = throw_cancellation(coroutine)
             # Keeping the finished coroutine alive must not retain its exception.
-            del caught, error
             # PyPy may need several passes to release it.
-            for _ in range(3):
+            for _ in range(10):
+                if error_ref() is None:
+                    break
                 gc.collect()
             assert error_ref() is None
         finally:
