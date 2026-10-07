@@ -4,9 +4,8 @@ use std::{
 };
 
 use pyo3::prelude::*;
-use tokio::task::spawn_blocking;
 
-use crate::{header::HeaderMap, http::StatusCode};
+use crate::{header::HeaderMap, http::StatusCode, runtime::Runtime};
 
 /// Represents the redirect policy for HTTP requests.
 #[derive(Clone)]
@@ -106,7 +105,7 @@ impl Policy {
             let callback = callback.clone();
             attempt.pending(|attempt| async move {
                 let args = Attempt::from(&attempt);
-                let kind = spawn_blocking(move || {
+                let kind = Runtime::spawn_blocking(move || {
                     Python::try_attach(|py| {
                         callback
                             .call1(py, (args,))

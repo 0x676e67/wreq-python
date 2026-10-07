@@ -29,6 +29,12 @@ pub enum JsonString {
     RustString(String),
 }
 
+/// Builds a [`Json`] in one pass; an untagged derive would buffer every value and then try
+/// each variant in turn.
+struct JsonVisitor;
+
+// ===== impl JsonString =====
+
 impl FromPyObject<'_, '_> for JsonString {
     type Error = PyErr;
 
@@ -61,6 +67,8 @@ impl<'de> Deserialize<'de> for JsonString {
     }
 }
 
+// ===== impl Json =====
+
 impl<'de> Deserialize<'de> for Json {
     #[inline]
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -71,9 +79,7 @@ impl<'de> Deserialize<'de> for Json {
     }
 }
 
-/// Builds a [`Json`] in one pass; an untagged derive would buffer every value and then try
-/// each variant in turn.
-struct JsonVisitor;
+// ===== impl JsonVisitor =====
 
 impl<'de> Visitor<'de> for JsonVisitor {
     type Value = Json;

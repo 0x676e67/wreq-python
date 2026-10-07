@@ -112,9 +112,13 @@ def network_runtime(client):
         return None
     from wreq.runtime import Runtime
 
-    return Runtime(
-        workers=spec.runtime["workers"], work_steal=spec.runtime["work_steal"]
-    )
+    workers, scheduler = spec.runtime["workers"], spec.runtime["scheduler"]
+    try:
+        from wreq.runtime import Scheduler
+    except ImportError:
+        # Releases before Scheduler choose it with `work_steal`.
+        return Runtime(workers=workers, work_steal=scheduler == "WORK_STEALING")
+    return Runtime(scheduler=getattr(Scheduler, scheduler), workers=workers)
 
 
 @asynccontextmanager

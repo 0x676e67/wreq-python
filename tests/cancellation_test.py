@@ -1,6 +1,5 @@
 import asyncio
 import gc
-import sys
 import weakref
 from contextlib import asynccontextmanager
 
@@ -13,12 +12,7 @@ class Cancellation(asyncio.CancelledError):
     pass
 
 
-@pytest.mark.skipif(
-    sys.implementation.name != "pypy", reason="PyPy legacy throw protocol"
-)
 def test_legacy_coroutine_throw():
-    from wreq._compat import _install
-
     try:
         raise RuntimeError("traceback origin")
     except RuntimeError as error:
@@ -101,13 +95,49 @@ def test_legacy_coroutine_throw():
     assert type(caught) is HiddenTraceback
     assert caught.args == ("constructor failure",)
     assert not contains(BaseException.__traceback__.__get__(caught))
-    assert type(invoke(NotAnException)) is TypeError
+    # A failure without a traceback of its own takes the given one.
+    for args in ((NotAnException, None), (UnicodeDecodeError, ("a",))):
+        caught = invoke(*args, origin)
+        assert type(caught) is TypeError
+        assert contains(caught.__traceback__)
+
+    unrelated = KeyError("unrelated")
+    caught = invoke(ValueError, unrelated, origin)
+    assert type(caught) is ValueError
+    assert caught.args == (unrelated,)
+    assert contains(caught.__traceback__)
+    assert invoke(ValueError, value=("keyword",), traceback=origin).args == ("keyword",)
+
+    class RefusingMeta(type):
+        def __subclasscheck__(cls, subclass):
+            raise ZeroDivisionError
+
+    class Refusing(Exception, metaclass=RefusingMeta):
+        pass
+
+    assert type(invoke(Refusing, ValueError())) is ZeroDivisionError
+
+    constructed = []
+
+    class NotRaisable:
+        def __init__(self):
+            constructed.append(self)
+
+    assert type(invoke(NotRaisable)) is TypeError
+    assert not constructed
 
     coroutine = wreq.get("")
+
+    class ChecksCoroutine(type):
+        def __subclasscheck__(cls, subclass):
+            assert coroutine.__qualname__
+            return super().__subclasscheck__(subclass)
+
+    class UsesCoroutine(Exception, metaclass=ChecksCoroutine):
+        def __init__(self):
+            super().__init__(coroutine.__qualname__)
+
     try:
-        installed = vars(type(coroutine))["throw"]
-        _install(type(coroutine))
-        assert vars(type(coroutine))["throw"] is installed
         for args in (
             (object(),),
             (ValueError, None, object()),
@@ -116,6 +146,17 @@ def test_legacy_coroutine_throw():
         ):
             with pytest.raises(TypeError):
                 coroutine.throw(*args)
+        # A rejected throw leaves the coroutine running, as a generator's does.
+        with pytest.raises(Exception) as caught:
+            coroutine.send(None)
+        assert "cannot reuse" not in str(caught.value)
+        # The exception is built before the throw borrows the coroutine.
+        with pytest.raises(UsesCoroutine):
+            coroutine.throw(UsesCoroutine)
+        uses = UsesCoroutine()
+        with pytest.raises(UsesCoroutine) as caught:
+            coroutine.throw(UsesCoroutine, uses)
+        assert caught.value is uses
         with pytest.raises(ValueError) as caught:
             coroutine.throw(error)
         assert caught.value is error
@@ -150,6 +191,16 @@ async def local_server():
         await server.wait_closed()
 
 
+def throw_cancellation(coroutine):
+    """Throw a cancellation into `coroutine` and return a weak reference to it, so no
+    caller frame still holds the exception."""
+    error = Cancellation("cancelled after Rust completion")
+    with pytest.raises(asyncio.CancelledError) as caught:
+        coroutine.throw(error)
+    assert caught.value is error
+    return weakref.ref(error)
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("operation", ["request", "request_error", "stream"])
 async def test_cancellation_after_rust_completion(operation):
@@ -181,15 +232,12 @@ async def test_cancellation_after_rust_completion(operation):
             done, _ = await asyncio.wait({waiter}, timeout=5)
             assert waiter in done, "Rust operation did not finish"
 
-            error = Cancellation("cancelled after Rust completion")
-            error_ref = weakref.ref(error)
-            with pytest.raises(asyncio.CancelledError) as caught:
-                coroutine.throw(error)
-            assert caught.value is error
+            error_ref = throw_cancellation(coroutine)
             # Keeping the finished coroutine alive must not retain its exception.
-            del caught, error
             # PyPy may need several passes to release it.
-            for _ in range(3):
+            for _ in range(10):
+                if error_ref() is None:
+                    break
                 gc.collect()
             assert error_ref() is None
         finally:

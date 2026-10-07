@@ -45,7 +45,7 @@ def candidate(tmp_path, full=False, blocking=False):
 
 
 def test_separate_publication_gates_reject_subsets_and_weak_batches():
-    assert len(BLOCKING_CLIENTS) == 8 and len(CLIENTS) == 17
+    assert len(BLOCKING_CLIENTS) == 9 and len(CLIENTS) == 18
     for blocking in (False, True):
         config = publication_config(blocking)
         require_publish(config, blocking=blocking)
@@ -77,8 +77,8 @@ def test_separate_publication_gates_reject_subsets_and_weak_batches():
 
 def test_default_suite_includes_wreq_mt_st_and_reads_legacy_snapshots():
     args = benchmark.parse_args(["--server", "server"])
-    assert {"wreq", "wreq_st", "wreq_blocking", "wreq_blocking_st"} <= set(args.clients)
-    assert len(args.clients) == 17
+    assert {"wreq", "wreq_st", "wreq_blocking", "wreq_blocking_st", "wreq_blocking_ct"} <= set(args.clients)
+    assert len(args.clients) == 18
     assert args.requests == 300 and args.warmup_requests == 200
     assert args.concurrency == [2, 10, 50, 100]
     for blocking in (False, True):
@@ -87,10 +87,11 @@ def test_default_suite_includes_wreq_mt_st_and_reads_legacy_snapshots():
         with pytest.raises(ValueError):
             require_publish(previous, blocking=blocking)
         legacy = publication_config(blocking)
-        legacy["clients"].remove("wreq_blocking_st")
-        require_publish(legacy, blocking=blocking, allow_legacy_snapshot=True)
-        with pytest.raises(ValueError):
-            require_publish(legacy, blocking=blocking)
+        for client in ("wreq_blocking_ct", "wreq_blocking_st"):
+            legacy["clients"].remove(client)
+            require_publish(legacy, blocking=blocking, allow_legacy_snapshot=True)
+            with pytest.raises(ValueError):
+                require_publish(legacy, blocking=blocking)
         historical = {
             **publication_config(blocking),
             "concurrency": [150, 10, 100, 50],
@@ -237,7 +238,8 @@ def test_full_publish_freezes_existing_blocking_selection(
     latest.write_bytes(b"previous full selection")
     latest_blocking = tmp_path / "latest-blocking.json"
     legacy_configuration = publication_config(True)
-    legacy_configuration["clients"].remove("wreq_blocking_st")
+    for client in ("wreq_blocking_st", "wreq_blocking_ct"):
+        legacy_configuration["clients"].remove(client)
     blocking_raw = json.dumps(make_document(legacy_configuration), indent=3).encode()
     latest_blocking.write_bytes(blocking_raw)
     monkeypatch.setattr(run, "LATEST", latest)

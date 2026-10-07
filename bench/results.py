@@ -54,11 +54,14 @@ def require_publish(config, *, blocking=False, allow_legacy_snapshot=False):
     """Require the complete default suite or its independent blocking matrix."""
     expected_clients = BLOCKING_CLIENTS if blocking else CLIENTS
     if allow_legacy_snapshot:
-        legacy_clients = tuple(
-            client for client in expected_clients if client != "wreq_blocking_st"
-        )
-        if set(config.get("clients", ())) == set(legacy_clients):
-            expected_clients = legacy_clients
+        # Snapshots from before blocking CT, and from before blocking ST as well.
+        for missing in ({"wreq_blocking_ct"}, {"wreq_blocking_st", "wreq_blocking_ct"}):
+            legacy_clients = tuple(
+                client for client in expected_clients if client not in missing
+            )
+            if set(config.get("clients", ())) == set(legacy_clients):
+                expected_clients = legacy_clients
+                break
     axes = {
         "clients": expected_clients,
         "protocols": ("h1", "h2"),

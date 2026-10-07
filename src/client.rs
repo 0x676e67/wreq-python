@@ -1,5 +1,4 @@
 pub mod body;
-pub mod nogil;
 pub mod req;
 pub mod resp;
 
@@ -11,7 +10,9 @@ use std::{
     time::Duration,
 };
 
-use pyo3::{IntoPyObjectExt, prelude::*, pybacked::PyBackedStr, types::PyDict};
+use pyo3::{
+    IntoPyObjectExt, exceptions::PyValueError, prelude::*, pybacked::PyBackedStr, types::PyDict,
+};
 use req::{Request, WebSocketRequest};
 use tokio_util::sync::CancellationToken;
 use wreq::tls::trust::CertStore;
@@ -277,11 +278,10 @@ impl Client {
         kwds: Option<Py<PyDict>>,
     ) -> PyResult<Response> {
         let kwds = Python::attach(|py| kwds.map(|kwds| kwds.bind(py).extract()).transpose())?;
-        coroutine::run(
-            self.runtime.clone(),
-            execute_request(self, method, url, kwds),
-        )
-        .await
+        self.runtime
+            .clone()
+            .run_task(execute_request(self, method, url, kwds))
+            .await
     }
 
     /// Open a WebSocket on the client's runtime, extracting options on first await.
@@ -291,17 +291,16 @@ impl Client {
         kwds: Option<Py<PyDict>>,
     ) -> PyResult<WebSocket> {
         let kwds = Python::attach(|py| kwds.map(|kwds| kwds.bind(py).extract()).transpose())?;
-        coroutine::run(
-            self.runtime.clone(),
-            execute_websocket_request(self, url, kwds),
-        )
-        .await
+        self.runtime
+            .clone()
+            .run_task(execute_websocket_request(self, url, kwds))
+            .await
     }
 }
 
 impl Default for Client {
     fn default() -> Self {
-        let runtime = runtime::get();
+        let runtime = runtime::Runtime::shared();
         Self {
             inner: wreq::Client::default(),
             runtime: runtime.clone(),
@@ -312,16 +311,13 @@ impl Default for Client {
     }
 }
 
-#[pymethods]
 impl Client {
-    /// Creates a new Client instance.
-    #[new]
-    #[pyo3(signature = (**kwds))]
-    fn new(py: Python, kwds: Option<Builder>) -> PyResult<Client> {
+    /// Build a client for either API from its options.
+    fn build(py: Python, kwds: Option<Builder>) -> PyResult<Client> {
         py.detach(|| {
             let runtime = match kwds.as_ref().and_then(|config| config.runtime.as_ref()) {
                 Some(runtime) => runtime.select()?,
-                None => runtime::get().clone(),
+                None => runtime::Runtime::shared().clone(),
             };
             // Create the client builder.
             let mut builder = wreq::Client::builder();
@@ -541,6 +537,26 @@ impl Client {
                 .map_err(Into::into)
         })
     }
+}
+
+#[pymethods]
+impl Client {
+    /// Creates a new Client instance.
+    #[new]
+    #[pyo3(signature = (**kwds))]
+    fn new(py: Python, kwds: Option<Builder>) -> PyResult<Client> {
+        // Nothing would drive its work while a coroutine waits.
+        if kwds
+            .as_ref()
+            .and_then(|config| config.runtime.as_ref())
+            .is_some_and(runtime::Runtime::is_current_thread)
+        {
+            return Err(PyValueError::new_err(
+                "CURRENT_THREAD runtimes only serve blocking clients",
+            ));
+        }
+        Client::build(py, kwds)
+    }
 
     /// Cancel pending requests and reject new ones with asyncio.CancelledError.
     /// Existing responses, WebSockets and the shared runtime remain usable.
@@ -703,7 +719,7 @@ impl BlockingClient {
     #[new]
     #[pyo3(signature = (**kwds))]
     fn new(py: Python, kwds: Option<Builder>) -> PyResult<BlockingClient> {
-        Client::new(py, kwds).map(BlockingClient)
+        Client::build(py, kwds).map(BlockingClient)
     }
 
     /// Get the cookie jar of the client.
@@ -815,13 +831,10 @@ impl BlockingClient {
         url: PyBackedStr,
         kwds: Option<Request>,
     ) -> PyResult<BlockingResponse> {
-        py.detach(|| {
-            nogil::block_on(
-                &self.0.runtime,
-                execute_request(self.0.clone(), method, url, kwds),
-            )
+        self.0
+            .runtime
+            .block_on_task(py, execute_request(self.0.clone(), method, url, kwds))
             .map(Into::into)
-        })
     }
 
     /// Make a WebSocket request to the specified URL.
@@ -832,13 +845,10 @@ impl BlockingClient {
         url: PyBackedStr,
         kwds: Option<WebSocketRequest>,
     ) -> PyResult<BlockingWebSocket> {
-        py.detach(|| {
-            nogil::block_on(
-                &self.0.runtime,
-                execute_websocket_request(self.0.clone(), url, kwds),
-            )
+        self.0
+            .runtime
+            .block_on_task(py, execute_websocket_request(self.0.clone(), url, kwds))
             .map(Into::into)
-        })
     }
 }
 

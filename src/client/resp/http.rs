@@ -6,7 +6,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use futures_util::{FutureExt, TryFutureExt, future::Either};
+use futures_util::{TryFutureExt, future::Either};
 use http::response::{Parts, Response as HttpResponse};
 use http_body::Body as _;
 use http_body_util::{BodyExt, Collected, combinators::Collect};
@@ -16,7 +16,7 @@ use wreq::Uri;
 use super::{READ_ATTACHED, ext::ResponseExt, loop_limit, stream::Streamer};
 use crate::{
     buffer::PyBuffer,
-    client::{SocketAddr, body::Json, nogil},
+    client::{SocketAddr, body::Json},
     cookie::Cookie,
     coroutine::{self, Coroutine, EntersSelf},
     error::Error,
@@ -64,7 +64,8 @@ enum Body {
 enum BodyRead {
     /// Read in full now.
     Ready(Bytes),
-    /// Not fully buffered yet; collected on the runtime by [`Response::collect_later`].
+    /// Not read now: still arriving, over the read's limit or of unknown length; collected
+    /// on the runtime by [`Response::collect_later`].
     Pending(Collect<wreq::Body>),
 }
 
@@ -111,9 +112,10 @@ impl Response {
     }
 
     /// Take the body for reading. Cached bytes are shared at once, and a body of known
-    /// length up to `limit` that is already buffered is read now on the calling thread;
-    /// overlapping reads and `stream()` fail with [`Error::Memory`] while a read runs.
-    fn take_bytes(&self, limit: u64) -> Result<BodyRead, Error> {
+    /// length up to `limit` that is already buffered is read now on the calling thread, none
+    /// without a `limit`; overlapping reads and `stream()` fail with [`Error::Memory`] while
+    /// a read runs.
+    fn take_bytes(&self, limit: Option<u64>) -> Result<BodyRead, Error> {
         let mut slot = self.slot();
         let body = match mem::replace(&mut *slot, Body::Taken) {
             Body::Unread(body) => body,
@@ -127,12 +129,14 @@ impl Response {
             }
         };
         drop(slot);
-        let attached = body.size_hint().exact().is_some_and(|len| len <= limit);
+        let attached = body
+            .size_hint()
+            .exact()
+            .zip(limit)
+            .is_some_and(|(len, limit)| len <= limit);
         let mut collect = body.collect();
         let ready = if attached {
-            // A read timeout starts a timer on its first poll, which needs the runtime.
-            let _runtime = self.runtime.handle().enter();
-            (&mut collect).now_or_never()
+            self.runtime.poll_now(&mut collect)
         } else {
             None
         };
@@ -175,7 +179,7 @@ impl Response {
     /// the body is still arriving or too large to decode on the caller.
     fn read_body<F, Fut, T>(
         &self,
-        limit: u64,
+        limit: Option<u64>,
         read: F,
     ) -> Result<(impl Future<Output = PyResult<T>> + Send + 'static, bool), Error>
     where
@@ -184,7 +188,7 @@ impl Response {
     {
         let (decode, inline) = match self.take_bytes(limit)? {
             BodyRead::Ready(bytes) => {
-                let inline = bytes.len() as u64 <= limit;
+                let inline = limit.is_some_and(|limit| bytes.len() as u64 <= limit);
                 (Either::Left(read(self.build_response(bytes))), inline)
             }
             BodyRead::Pending(collect) => (
@@ -218,7 +222,7 @@ impl Response {
             if inline {
                 read.await
             } else {
-                coroutine::run(this.runtime.clone(), read).await
+                this.runtime.clone().run_task(read).await
             }
         })
     }
@@ -372,9 +376,9 @@ impl Response {
         })
     }
 
-    /// Get the JSON content of the response. Buffered JSON up to 8 KiB is parsed on the event
-    /// loop, larger bodies on the runtime.
+    /// Get the JSON content of the response.
     pub fn json(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
+        // Buffered HTTP/1 JSON up to 8 KiB is parsed on the event loop; see `loop_limit`.
         Self::read(slf, "Response.json", 8 * 1024, ResponseExt::json::<Json>)
     }
 
@@ -391,7 +395,7 @@ impl Response {
                         .collect_later(collect)
                         .map_ok(|(_, bytes)| PyBuffer::from(bytes))
                         .map_err(Into::into);
-                    coroutine::run(this.runtime.clone(), read).await
+                    this.runtime.clone().run_task(read).await
                 }
             }
         })
@@ -482,12 +486,14 @@ impl BlockingResponse {
         Fut: Future<Output = Result<T, Error>> + Send + 'static,
         T: Send,
     {
+        // Refused before the body is taken, so it can still be read afterwards.
+        Runtime::refuse_nested()?;
         let runtime = &self.0.runtime;
-        let (read, inline) = self.0.read_body(READ_ATTACHED, read)?;
+        let (read, inline) = self.0.read_body(Some(READ_ATTACHED), read)?;
         if inline {
-            nogil::run(py, runtime, read)
+            runtime.block_on_eager(py, read)
         } else {
-            py.detach(|| runtime.handle().block_on(read))
+            runtime.block_on(py, read)
         }
     }
 }
@@ -577,15 +583,16 @@ impl BlockingResponse {
 
     /// Read the body as a read-only memoryview, retaining its data after the response closes.
     pub fn bytes(&self, py: Python) -> PyResult<PyBuffer> {
+        Runtime::refuse_nested()?;
         let response = &self.0;
-        match response.take_bytes(READ_ATTACHED)? {
+        match response.take_bytes(Some(READ_ATTACHED))? {
             BodyRead::Ready(bytes) => Ok(PyBuffer::from(bytes)),
             BodyRead::Pending(collect) => {
                 let read = response
                     .collect_later(collect)
                     .map_ok(|(_, bytes)| PyBuffer::from(bytes))
                     .map_err(Into::into);
-                py.detach(|| response.runtime.handle().block_on(read))
+                response.runtime.block_on(py, read)
             }
         }
     }
