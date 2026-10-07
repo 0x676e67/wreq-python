@@ -240,12 +240,12 @@ async def test_current_thread_runtime():
         with client.get(url + path) as response:
             return response.text()
 
-    def interrupted():
+    def interrupted(error):
         yield b"x"
-        raise Interrupt
+        raise error
 
-    def upload_interrupted():
-        client.post(url + "/interrupted", body=interrupted())
+    def upload_interrupted(error=Interrupt):
+        client.post(url + "/interrupted", body=interrupted(error))
 
     def run():
         caller, readers = threading.get_ident(), []
@@ -300,6 +300,44 @@ async def test_current_thread_runtime():
             # result; the uploading call gets the wrapped error.
             with pytest.raises(wreq.exceptions.RequestError, match="Interrupt"):
                 await run_blocking(upload_interrupted)
+            assert not held.done()
+            release.set()
+            assert await held == "/hold"
+
+            # Ctrl+C lands on whichever thread runs Python, so it ends the driving thread's
+            # own call, while the uploading call gets the wrapped error.
+            def fetch_interrupted():
+                # Caught here: a KeyboardInterrupt reaching an asyncio task stops the loop.
+                with pytest.raises(KeyboardInterrupt):
+                    fetch("/hold")
+
+            release.clear()
+            held = asyncio.create_task(run_blocking(fetch_interrupted))
+            while await asyncio.wait_for(arrived.get(), 5) != "/hold":
+                pass
+            with pytest.raises(wreq.exceptions.RequestError, match="KeyboardInterrupt"):
+                await run_blocking(upload_interrupted, KeyboardInterrupt)
+            assert not held.done()
+            release.set()
+            await held
+
+            # A multipart iterator belongs to the thread sending it, not the one that built
+            # its part, so the held thread that built it keeps its own result.
+            built = []
+
+            def build_and_fetch():
+                built.append(wreq.Part(name="file", value=interrupted(Interrupt)))
+                return fetch("/hold")
+
+            def upload_part():
+                client.post(url + "/interrupted", multipart=wreq.Multipart(built[0]))
+
+            release.clear()
+            held = asyncio.create_task(run_blocking(build_and_fetch))
+            while await asyncio.wait_for(arrived.get(), 5) != "/hold":
+                pass
+            with pytest.raises(wreq.exceptions.RequestError, match="Interrupt"):
+                await run_blocking(upload_part)
             assert not held.done()
             release.set()
             assert await held == "/hold"
