@@ -13,9 +13,14 @@ Their exceptions fail the request. When an upload ends, the generator is closed;
 cancelling or dropping the upload schedules producer cancellation and cleanup on that loop.
 Keep the loop running until generator cleanup has finished. This also applies to async multipart parts.
 Construct async-generator `Part` objects inside a running event loop; their producers
-start at construction, with bounded buffering before the request consumes them.
-Use synchronous iterators for blocking uploads. A blocking call on the producer's
-event-loop thread prevents async generators from progressing.
+start at construction. A producer reads ahead until its queued chunks fill a 256 KiB
+budget. Each chunk counts as at least 4 KiB, so at most 64 small chunks queue, and a chunk
+above 256 KiB queues alone at its full size. One more chunk can wait for room outside the
+budget, so memory held ahead of the upload also grows with the chunk size.
+Use synchronous iterators for blocking uploads. They run on the runtime's blocking pool
+with the same budget, except on a current-thread runtime, which reads each chunk only when
+the upload needs it. A blocking call on the producer's event-loop thread prevents async
+generators from progressing.
 
 ```python
 import asyncio
@@ -98,18 +103,18 @@ if __name__ == "__main__":
 ### Custom runtimes
 
 Clients share a global multi-thread runtime when `runtime` is omitted or `None`.
-It starts on first use. Construct a `Runtime` to
-start a separate worker pool for an async or blocking client:
+It starts on first use. Construct a `Runtime` to give an async or blocking
+client its own runtime:
 
 ```python
 from datetime import timedelta
 
 from wreq import Client
-from wreq.runtime import Runtime
+from wreq.runtime import Runtime, Scheduler
 
 runtime = Runtime(
+    scheduler=Scheduler.PER_WORKER,
     workers=1,
-    work_steal=False,
     thread_name="http-client",
     max_blocking_threads=8,
     thread_keep_alive=timedelta(seconds=10),
@@ -117,28 +122,44 @@ runtime = Runtime(
 client = Client(runtime=runtime)
 ```
 
-With `work_steal=False`, workers use independent single-thread Tokio runtimes.
-Each client is assigned one worker for its lifetime; requests, response reads,
-streams and WebSocket operations use that worker. Async reads of small HTTP/1
-bodies that have already arrived finish on the event loop thread instead. With
-multiple workers, newly created clients select a worker randomly and keep that
-selection. This is not CPU pinning. Sharing the same `Runtime` between clients
-is supported, and `client.runtime` returns the shared runtime object.
+`scheduler` selects how the runtime runs client work. It replaces `work_steal`:
+`work_steal=False` is `Scheduler.PER_WORKER`, and the old default is
+`Scheduler.WORK_STEALING`.
 
-`workers=None` uses the available CPU parallelism, or 1 if it cannot be determined.
-Custom runtimes start their threads during construction, before any client is
-bound or request is sent.
+- `Scheduler.WORK_STEALING` (the default) uses one multi-thread pool whose
+  workers steal work from each other.
+- `Scheduler.PER_WORKER` gives each worker its own single-thread Tokio runtime.
+- `Scheduler.CURRENT_THREAD` has no workers: blocking calls drive its IO, which
+  is fastest with a client and runtime per thread. It serves only blocking
+  clients; see the [blocking guide](blocking.md#current-thread-runtime).
+
+With `Scheduler.PER_WORKER`, each client is assigned one worker for its
+lifetime; requests, response reads, streams and WebSocket operations use that
+worker. With multiple workers, newly created clients select a worker randomly and
+keep that selection. This is not CPU pinning. Sharing the same `Runtime` between
+clients is supported, and `client.runtime` returns the shared runtime object.
+
+With either worker scheduler, async reads of an HTTP/1 body of known length that
+the client does not decompress finish on the event loop thread once the data has
+arrived: `bytes()` and `text()` up to 64 KiB, `json()` up to 8 KiB, and a stream's
+first frame of any size, plus the next one if it is already buffered. Other reads
+and later stream frames run on the runtime.
+
+`workers=None` uses the available CPU parallelism, or 1 if it cannot be determined;
+`Scheduler.CURRENT_THREAD` requires it.
+Worker schedulers start their threads during construction, before any client is
+bound or request is sent; `Scheduler.CURRENT_THREAD` starts none.
 
 `thread_name=None` uses the package name, `wreq-python`, as the thread name.
 
 `thread_keep_alive` accepts a nonnegative `datetime.timedelta`.
 `max_blocking_threads` and `thread_keep_alive` default to Tokio's settings
-(512 and 10 seconds). In
-no-steal mode these limits apply to **each worker's** blocking pool, not the pool
-as a whole. Python async upload generators still run on the caller's event loop.
-Standalone multipart file preparation and upload-task cleanup can use the
-shared runtime; a dedicated client runtime does not isolate Python's GIL or
-every process resource. DNS resolvers are owned by individual clients so their
+(512 and 10 seconds). With
+`Scheduler.PER_WORKER` these limits apply to **each worker's** blocking pool, not
+the pool as a whole. Python async upload generators still run on the caller's event loop.
+Multipart files open on the client's runtime when the request is built; only
+upload cleanup that runs outside any runtime uses the shared runtime. A dedicated
+client runtime does not isolate Python's GIL or every process resource. DNS resolvers are owned by individual clients so their
 connections are not shared across runtimes.
 
 Closing a client cancels pending requests and rejects new requests with

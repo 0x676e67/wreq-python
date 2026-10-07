@@ -9,7 +9,6 @@ use futures_util::FutureExt;
 use hickory_resolver::{
     TokioResolver,
     config::{CLOUDFLARE, ResolverConfig},
-    lookup_ip::LookupIpIntoIter,
     net::runtime::TokioRuntimeProvider,
 };
 use pyo3::{prelude::*, pybacked::PyBackedStr};
@@ -101,29 +100,14 @@ impl HickoryResolver {
     }
 }
 
-struct SocketAddrs {
-    iter: LookupIpIntoIter,
-}
-
 impl Resolve for HickoryResolver {
     fn resolve(&self, name: Name) -> Resolving {
         let resolver = self.clone();
         async move {
             let lookup = resolver.resolver.lookup_ip(name.as_str()).await?;
-            let addrs: Addrs = Box::new(SocketAddrs {
-                iter: lookup.into_iter(),
-            });
+            let addrs: Addrs = Box::new(lookup.into_iter().map(|ip| SocketAddr::new(ip, 0)));
             Ok(addrs)
         }
         .boxed()
-    }
-}
-
-impl Iterator for SocketAddrs {
-    type Item = SocketAddr;
-
-    #[inline(always)]
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(|ip_addr| SocketAddr::new(ip_addr, 0))
     }
 }

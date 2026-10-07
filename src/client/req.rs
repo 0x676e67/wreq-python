@@ -1,11 +1,14 @@
 use std::{
+    future::Future,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    pin::{Pin, pin},
     time::Duration,
 };
 
 use futures_util::TryFutureExt;
 use http::header::COOKIE;
 use pyo3::{PyResult, exceptions::asyncio::CancelledError, prelude::*, pybacked::PyBackedStr};
+use tokio_util::sync::CancellationToken;
 
 use crate::{
     client::{
@@ -268,7 +271,7 @@ pub async fn execute_request<U>(
 where
     U: AsRef<str>,
 {
-    let future = async {
+    let future = pin!(async {
         // Create the request builder.
         let mut builder = client.inner.request(method.into_ffi(), url.as_ref());
 
@@ -369,12 +372,9 @@ where
             // Body options.
             apply_option!(set_if_some_ref, builder, request.form, form);
             apply_option!(set_if_some_ref, builder, request.json, json);
-            apply_option!(
-                set_if_some,
-                builder,
-                request.multipart.and_then(|form| form.form),
-                multipart
-            );
+            if let Some(multipart) = request.multipart {
+                builder = builder.multipart(multipart.into_form().await?);
+            }
             apply_option!(
                 set_if_some_map_try,
                 builder,
@@ -398,13 +398,9 @@ where
             .map(|response| Response::new(response, client.runtime.clone()))
             .map_err(Error::Library)
             .map_err(Into::into)
-    };
+    });
 
-    tokio::select! {
-        biased;
-        _ = client.cancel.cancelled() => Err(CancelledError::new_err("Operation was cancelled: client has been closed")),
-        result = future => result,
-    }
+    until_closed(&client.cancel, future).await
 }
 
 /// Like [`execute_request`], opening a WebSocket.
@@ -416,7 +412,7 @@ pub async fn execute_websocket_request<U>(
 where
     U: AsRef<str>,
 {
-    let future = async {
+    let future = pin!(async {
         // Create the WebSocket builder.
         let mut builder = client.inner.websocket(url.as_ref());
 
@@ -536,11 +532,20 @@ where
             .await
             .map_err(Error::Library)
             .map_err(Into::into)
-    };
+    });
 
+    until_closed(&client.cancel, future).await
+}
+
+/// Run `future` unless the client is closed first; a closed client never polls it. Taking
+/// it pinned keeps the request future stored once, in the caller.
+async fn until_closed<T>(
+    cancel: &CancellationToken,
+    future: Pin<&mut impl Future<Output = PyResult<T>>>,
+) -> PyResult<T> {
     tokio::select! {
         biased;
-        _ = client.cancel.cancelled() => Err(CancelledError::new_err("Operation was cancelled: client has been closed")),
+        _ = cancel.cancelled() => Err(CancelledError::new_err("Operation was cancelled: client has been closed")),
         result = future => result,
     }
 }

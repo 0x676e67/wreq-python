@@ -290,6 +290,8 @@ class Streamer:
     When streaming a response, each iteration yields either a memoryview (for body data) or a HeaderMap (for HTTP trailers, if the server sends them).
     This allows you to access HTTP/1.1 or HTTP/2 trailers in addition to the main body.
     Data views retain their backing data after the stream is closed.
+    A stream on a `CURRENT_THREAD` runtime supports only blocking iteration;
+    its async entry points raise `RuntimeError`.
 
     # Examples
 
@@ -538,7 +540,8 @@ class WebSocket:
 
 class ClientConfig(TypedDict):
     runtime: NotRequired[Runtime | None]
-    """Runtime for this client and its responses; None uses the shared default."""
+    """Runtime for this client and its responses; None uses the shared default.
+    Async clients reject a `CURRENT_THREAD` runtime with `ValueError`."""
 
     emulation: NotRequired[emulation.Emulation | emulation.Profile]
     """Emulation config."""

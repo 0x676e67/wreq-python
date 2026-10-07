@@ -8,13 +8,12 @@ use crate::{
     error::Error,
     extractor::{Binary, Text},
     header::HeaderMap,
-    runtime,
 };
 
-/// A multipart form for a request.
+/// A multipart form for a request. Its files open when the request is built, on the
+/// client's runtime.
 #[pyclass(subclass)]
 pub struct Multipart {
-    pub form: Option<multipart::Form>,
     pub parts: Vec<Part>,
 }
 
@@ -49,22 +48,20 @@ impl Multipart {
         let mut new_parts = Vec::with_capacity(parts.len());
         for part in parts {
             let part = part.cast::<Part>()?;
-            let mut part = part.borrow_mut();
+            let mut part = part.try_borrow_mut()?;
             new_parts.push(part.try_clone()?);
         }
 
-        Ok(Self {
-            form: None,
-            parts: new_parts,
-        })
+        Ok(Self { parts: new_parts })
     }
 }
 
 impl Multipart {
-    fn build_form(&mut self, py: Python) -> PyResult<multipart::Form> {
+    /// Build the form to send, opening its files.
+    pub async fn into_form(self) -> PyResult<multipart::Form> {
         let mut form = multipart::Form::new();
-        for part in &mut self.parts {
-            let (name, inner) = part.build_part(py)?;
+        for part in self.parts {
+            let (name, inner) = part.into_part().await?;
             form = form.part(name, inner);
         }
         Ok(form)
@@ -76,13 +73,21 @@ impl FromPyObject<'_, '_> for Multipart {
 
     fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
         let multipart = ob.cast::<Multipart>()?;
-        let mut multipart = multipart.borrow_mut();
-        let form = multipart.build_form(ob.py())?;
-
-        Ok(Multipart {
-            form: Some(form),
-            parts: Vec::new(),
-        })
+        let mut multipart = multipart.try_borrow_mut()?;
+        // Copied for one request: reusable values stay, a stream moves into it and belongs
+        // to the thread sending it.
+        let parts = multipart
+            .parts
+            .iter_mut()
+            .map(|part| {
+                let mut part = part.try_clone()?;
+                if let Some(Value::Stream(stream)) = &mut part.value {
+                    stream.claim();
+                }
+                Ok(part)
+            })
+            .collect::<PyResult<_>>()?;
+        Ok(Multipart { parts })
     }
 }
 
@@ -123,25 +128,13 @@ impl Part {
         }
     }
 
-    fn build_part(&mut self, py: Python) -> PyResult<(String, multipart::Part)> {
-        let value = self
-            .value
-            .as_ref()
-            .and_then(Value::try_clone)
-            .or_else(|| self.value.take())
-            .ok_or_else(|| Error::Memory)?;
-
+    /// Build the part to send, opening its file.
+    async fn into_part(self) -> PyResult<(String, multipart::Part)> {
+        let value = self.value.ok_or_else(|| Error::Memory)?;
         let mut inner = match value {
             Value::Text(text) => multipart::Part::stream(text.0),
             Value::Bytes(bytes) => multipart::Part::stream(bytes.0),
-            // Opening the file blocks, so only that waits detached.
-            Value::File(path) => py
-                .detach(|| {
-                    runtime::get()
-                        .handle()
-                        .block_on(multipart::Part::file(path))
-                })
-                .map_err(Error::from)?,
+            Value::File(path) => multipart::Part::file(path).await.map_err(Error::from)?,
             Value::Stream(stream) => {
                 let stream = Body::wrap_stream(stream);
                 match self.length {
@@ -151,7 +144,7 @@ impl Part {
             }
         };
 
-        if let Some(filename) = self.filename.clone() {
+        if let Some(filename) = self.filename {
             inner = inner.file_name(filename);
         }
 
@@ -159,11 +152,11 @@ impl Part {
             inner = inner.mime_str(mime).map_err(Error::Library)?;
         }
 
-        if let Some(headers) = self.headers.clone() {
+        if let Some(headers) = self.headers {
             inner = inner.headers(headers.0);
         }
 
-        Ok((self.name.clone(), inner))
+        Ok((self.name, inner))
     }
 
     /// Copy the part, moving a stream value out since it can be sent only once.

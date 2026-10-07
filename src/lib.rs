@@ -42,7 +42,7 @@ use http2::{
 use mimalloc as _;
 use proxy::Proxy;
 use pyo3::{intern, prelude::*, types::PyDict, wrap_pymodule};
-use runtime::Runtime;
+use runtime::{Runtime, Scheduler};
 #[cfg(feature = "jemalloc")]
 use tikv_jemallocator as _;
 use tls::{
@@ -398,6 +398,7 @@ fn proxy_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
 #[pymodule(gil_used = false, name = "runtime")]
 fn runtime_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Runtime>()?;
+    m.add_class::<Scheduler>()?;
     Ok(())
 }
 

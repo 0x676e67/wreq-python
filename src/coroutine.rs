@@ -21,10 +21,7 @@ use std::{
     task::Poll,
 };
 
-use pyo3::{
-    IntoPyObjectExt, PyTypeInfo, exceptions::PyRuntimeError, intern, prelude::*, sync::PyOnceLock,
-};
-use tokio_util::task::AbortOnDropHandle;
+use pyo3::{IntoPyObjectExt, PyTypeInfo, intern, prelude::*, sync::PyOnceLock};
 
 pub(crate) use self::asyncio::running_loop;
 pub use self::awaitable::Coroutine;
@@ -43,7 +40,7 @@ where
     F: Future<Output = PyResult<T>> + Send + 'static,
     T: for<'a> IntoPyObject<'a> + Send + 'static,
 {
-    local(py, qualname, run(runtime.clone(), fut))
+    local(py, qualname, runtime.clone().run_task(fut))
 }
 
 /// Poll `fut` on the event loop thread, attached to Python, when awaited.
@@ -141,21 +138,4 @@ where
             value.into_py_any(py)
         })
     })
-}
-
-/// Spawn `fut` on the runtime and wait for it; dropping the wait aborts the task.
-/// The task keeps the runtime alive until it ends.
-#[inline]
-pub async fn run<F, T>(runtime: Runtime, fut: F) -> PyResult<T>
-where
-    F: Future<Output = PyResult<T>> + Send + 'static,
-    T: Send + 'static,
-{
-    let task = runtime.handle().clone().spawn(async move {
-        let _owner = runtime;
-        fut.await
-    });
-    AbortOnDropHandle::new(task)
-        .await
-        .map_err(|err| PyRuntimeError::new_err(err.to_string()))?
 }

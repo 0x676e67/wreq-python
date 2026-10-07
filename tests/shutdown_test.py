@@ -5,7 +5,7 @@ import sys
 import pytest
 
 # Keep a pending request alive into CPython module teardown, then fail its I/O.
-# Upload mode also wakes the Python producer waiting for channel capacity.
+# Upload mode also wakes the Python producer waiting for upload budget.
 SCRIPT = """
 import asyncio
 import os
@@ -62,9 +62,10 @@ loop.run_until_complete(asyncio.sleep(0.1))
 assert not task.done(), "request must remain pending"
 if upload:
     assert any(
-        getattr(getattr(t.get_coro(), "cr_await", None), "__name__", None) == "send"
+        getattr(getattr(t.get_coro(), "cr_await", None), "__name__", None)
+        == "try_send"
         for t in asyncio.all_tasks(loop)
-    ), "upload producer must be waiting for channel capacity"
+    ), "upload producer must be waiting for upload budget"
 hold = HoldTeardown(peer, task)
 del peer, task
 raise RuntimeError("uncaught error while a request is in flight")
@@ -97,7 +98,7 @@ import asyncio
 import gc
 import wreq
 
-async def main(retain):
+async def main(retain, first, second, expected):
     produced = []
     full = asyncio.Event()
     closed = asyncio.Event()
@@ -106,9 +107,10 @@ async def main(retain):
         try:
             for index in range(100):
                 produced.append(index)
-                if index == 1:
+                # The last expected chunk is the first that waits for room.
+                if index == len(expected) - 1:
                     full.set()
-                yield b"chunk"
+                yield first if index == 0 else second if index == 1 else b"chunk"
         finally:
             closed.set()
             print("generator closed", flush=True)
@@ -118,7 +120,7 @@ async def main(retain):
     try:
         await asyncio.wait_for(full.wait(), 5)
         await asyncio.sleep(0.05)
-        assert produced == [0, 1]
+        assert produced == expected, produced
         if retain:
             return part
     finally:
@@ -129,9 +131,19 @@ async def main(retain):
                 gc.collect()
             await asyncio.wait_for(closed.wait(), 5)
 
-for retain in (False, True):
-    part = asyncio.run(main(retain))
-    print("runner closed", flush=True)
+big = b"x" * (1 << 20)
+cases = [
+    # 64 small chunks fill the budget at its minimum charge, and the next waits.
+    (b"chunk", b"chunk", list(range(65))),
+    # A chunk above the budget queues alone, and the next waits.
+    (big, b"chunk", [0, 1]),
+    # A chunk above the budget waits for the whole budget.
+    (b"chunk", big, [0, 1]),
+]
+for first, second, expected in cases:
+    for retain in (False, True):
+        part = asyncio.run(main(retain, first, second, expected))
+        print("runner closed", flush=True)
 """
     proc = subprocess.run(
         [sys.executable, "-c", script],
@@ -140,4 +152,4 @@ for retain in (False, True):
         timeout=15,
     )
     assert proc.returncode == 0, proc.stderr
-    assert proc.stdout.splitlines() == ["generator closed", "runner closed"] * 2
+    assert proc.stdout.splitlines() == ["generator closed", "runner closed"] * 6

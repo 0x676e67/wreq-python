@@ -1,36 +1,31 @@
 //! Request bodies streamed from Python iterators and async generators.
+//!
+//! `iter` reads a Python iterator, inline on a current-thread runtime or ahead of the upload
+//! through `pump`, and `async_gen` forwards an async generator from its event loop. The pump
+//! and the forwarder queue chunks through `queue`, which bounds how far they read ahead.
+
+mod async_gen;
+mod iter;
+mod pump;
+mod queue;
 
 use std::{
     pin::Pin,
-    sync::{
-        Arc, Mutex, MutexGuard, PoisonError,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::{Mutex, MutexGuard, PoisonError},
     task::{Context, Poll},
-    time::Duration,
 };
 
 use bytes::Bytes;
-use futures_util::Stream;
+use futures_util::{Stream, StreamExt, future::Either};
 use pyo3::{
-    exceptions::{PyRuntimeError, PyStopIteration},
+    exceptions::PyStopIteration,
     intern,
     prelude::*,
-    sync::PyOnceLock,
     types::{PyIterator, PyString},
 };
-use tokio::{
-    runtime::Handle,
-    sync::mpsc::{self, error::TrySendError},
-    task::spawn_blocking,
-    time,
-};
 
-use crate::{
-    coroutine::{self, Coroutine},
-    extractor::{Binary, Text},
-    runtime,
-};
+use self::{async_gen::AsyncStream, iter::SyncStream};
+use crate::extractor::{Binary, Text};
 
 type Item = PyResult<PyBytesLike>;
 
@@ -42,49 +37,7 @@ pub enum PyBytesLike {
 
 /// A request body read from a Python iterator or async generator, for `body=` and
 /// multipart parts.
-pub struct PyStream(Source);
-
-/// The source behind a [`PyStream`].
-enum Source {
-    Sync(SyncStream),
-    Async(PyAsyncStream),
-}
-
-/// A request body from a Python iterator, read on Tokio's blocking pool.
-///
-/// Neither a Tokio worker nor a blocked caller runs the iterator, so a slow `__next__`
-/// cannot delay the response, a timeout or cancellation. A pump task reads an item only
-/// once the channel has room, staying at most one item ahead of the upload. When the
-/// upload stalls, it parks the iterator and frees its thread; the next item taken restarts it.
-struct SyncStream {
-    rx: mpsc::Receiver<Item>,
-    /// The iterator and sender while no pump runs: before the first poll, or once a pump
-    /// parked at a full channel.
-    parked: Arc<Mutex<Option<Pump>>>,
-}
-
-/// What a pump task needs to read the iterator into the body.
-struct Pump {
-    iter: Py<PyAny>,
-    tx: mpsc::Sender<Item>,
-}
-
-/// A request body from a Python async generator, forwarded with one chunk of buffering
-/// by a task on the loop that was running at extraction. Dropping it cancels that task.
-struct PyAsyncStream {
-    rx: mpsc::Receiver<Item>,
-    /// Set by [`Sender::finish`], so the channel closing reads as the end of the body.
-    finished: Arc<AtomicBool>,
-    task: Option<(Py<PyAny>, Py<PyAny>)>,
-}
-
-/// The channel end given to the forwarding coroutine; awaiting `send` applies upload
-/// backpressure. Closing it without `finish` fails the body.
-#[pyclass(frozen)]
-struct Sender {
-    tx: Mutex<Option<mpsc::Sender<Item>>>,
-    finished: Arc<AtomicBool>,
-}
+pub struct PyStream(Either<SyncStream, AsyncStream>);
 
 // ===== impl PyBytesLike =====
 
@@ -97,6 +50,16 @@ impl FromPyObject<'_, '_> for PyBytesLike {
             ob.extract().map(PyBytesLike::String)
         } else {
             ob.extract().map(PyBytesLike::Bytes)
+        }
+    }
+}
+
+impl PyBytesLike {
+    /// The chunk's length in bytes.
+    fn len(&self) -> usize {
+        match self {
+            PyBytesLike::Bytes(b) => b.0.len(),
+            PyBytesLike::String(s) => s.0.len(),
         }
     }
 }
@@ -119,11 +82,21 @@ impl FromPyObject<'_, '_> for PyStream {
     fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
         // Iterators are checked first; probing `asend` would raise for each of them.
         let source = if ob.cast::<PyIterator>().is_err() && ob.hasattr(intern!(ob.py(), "asend"))? {
-            Source::Async(PyAsyncStream::new(ob.to_owned())?)
+            Either::Right(AsyncStream::new(ob.to_owned())?)
         } else {
-            Source::Sync(SyncStream::new(ob.to_owned().unbind()))
+            Either::Left(SyncStream::new(ob.to_owned().unbind()))
         };
         Ok(PyStream(source))
+    }
+}
+
+impl PyStream {
+    /// Hand an unread iterator to a request the calling thread sends; an async generator
+    /// keeps forwarding on its own loop.
+    pub fn claim(&mut self) {
+        if let Either::Left(stream) = &mut self.0 {
+            stream.claim();
+        }
     }
 }
 
@@ -131,91 +104,8 @@ impl Stream for PyStream {
     type Item = Item;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        match &mut self.get_mut().0 {
-            Source::Sync(stream) => stream.poll_next(cx),
-            Source::Async(stream) => Pin::new(stream).poll_next(cx),
-        }
+        self.get_mut().0.poll_next_unpin(cx)
     }
-}
-
-// ===== impl SyncStream =====
-
-impl SyncStream {
-    fn new(iter: Py<PyAny>) -> Self {
-        let (tx, rx) = mpsc::channel(1);
-        SyncStream {
-            rx,
-            parked: Arc::new(Mutex::new(Some(Pump { iter, tx }))),
-        }
-    }
-
-    fn poll_next(&mut self, cx: &mut Context<'_>) -> Poll<Option<Item>> {
-        let poll = self.rx.poll_recv(cx);
-        // A parked pump waits for room, which the first poll or a taken item makes. The
-        // check follows the take, so a pump parking concurrently is seen here.
-        let parked = lock(&self.parked).take();
-        if let Some(pump) = parked {
-            let parked = self.parked.clone();
-            spawn_blocking(move || pump.run(&parked));
-        }
-        poll
-    }
-}
-
-// ===== impl Pump =====
-
-impl Pump {
-    /// How long a pump waits for room before parking to free its thread.
-    const PARK_AFTER: Duration = Duration::from_millis(10);
-
-    /// Send items until the iterator ends or raises, the body is dropped, or the channel
-    /// stays full past [`PARK_AFTER`](Self::PARK_AFTER).
-    fn run(self, parked: &Mutex<Option<Pump>>) {
-        let handle = Handle::current();
-        // Once Python is unavailable, stop reading without creating a PyErr that could
-        // require another attachment to format.
-        Python::try_attach(|py| {
-            loop {
-                let permit = match self.tx.clone().try_reserve_owned() {
-                    Ok(permit) => permit,
-                    Err(TrySendError::Closed(_)) => return,
-                    Err(TrySendError::Full(tx)) => {
-                        let wait = time::timeout(Self::PARK_AFTER, tx.reserve_owned());
-                        match py.detach(|| handle.block_on(wait)) {
-                            Ok(Ok(permit)) => permit,
-                            Ok(Err(_)) => return,
-                            Err(_) => {
-                                // Park under the lock the body takes after receiving, so
-                                // either it sees the pump parked or the pump sees room.
-                                let mut slot = lock(parked);
-                                match self.tx.clone().try_reserve_owned() {
-                                    Ok(permit) => permit,
-                                    Err(TrySendError::Closed(_)) => return,
-                                    Err(TrySendError::Full(_)) => {
-                                        *slot = Some(self);
-                                        return;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                };
-                let Some(item) = next_item(py, &self.iter) else {
-                    return;
-                };
-                let failed = item.is_err();
-                permit.send(item);
-                if failed {
-                    return;
-                }
-            }
-        });
-    }
-}
-
-#[inline]
-fn lock(parked: &Mutex<Option<Pump>>) -> MutexGuard<'_, Option<Pump>> {
-    parked.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// Call `__next__`, ending the stream at StopIteration.
@@ -227,158 +117,8 @@ fn next_item(py: Python<'_>, iter: &Py<PyAny>) -> Option<Item> {
     }
 }
 
-// ===== impl PyAsyncStream =====
-
-impl PyAsyncStream {
-    /// Start forwarding on the running loop, so the body must be extracted in a coroutine.
-    fn new(generator: Bound<'_, PyAny>) -> PyResult<Self> {
-        static FORWARD: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
-        let py = generator.py();
-        let event_loop = coroutine::running_loop(py)?;
-        let forward = FORWARD.get_or_try_init(py, || {
-            PyModule::from_code(
-                py,
-                c"import asyncio
-
-async def forward(gen, sender):
-    try:
-        try:
-            async for item in gen:
-                if not await sender.send(item, False):
-                    return
-        finally:
-            close = getattr(gen, 'aclose', None)
-            if close is not None:
-                await close()
-    except asyncio.CancelledError as error:
-        # Task cancellation must not wait for space in a retained body, and must not leave
-        # the body waiting while a traceback keeps this frame and its sender alive.
-        if asyncio.current_task().cancelling():
-            sender.close()
-        else:
-            await sender.send(error, True)
-        raise
-    except BaseException as error:
-        await sender.send(error, True)
-    else:
-        sender.finish()
-",
-                c"wreq/_async_stream.py",
-                c"wreq._async_stream",
-            )?
-            .getattr("forward")
-            .map(Bound::unbind)
-        })?;
-        let (tx, rx) = mpsc::channel(1);
-        let finished = Arc::new(AtomicBool::new(false));
-        let sender = Sender {
-            tx: Mutex::new(Some(tx)),
-            finished: finished.clone(),
-        };
-        let coroutine = forward.bind(py).call1((generator, sender))?;
-        // create_task captures the caller's contextvars on the running loop.
-        let task = event_loop
-            .call_method1(intern!(py, "create_task"), (&coroutine,))
-            .inspect_err(|_| {
-                let _ = coroutine.call_method0(intern!(py, "close"));
-            })?;
-        Ok(Self {
-            rx,
-            finished,
-            task: Some((task.unbind(), event_loop.unbind())),
-        })
-    }
-}
-
-impl Stream for PyAsyncStream {
-    type Item = Item;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let this = self.get_mut();
-        match this.rx.poll_recv(cx) {
-            Poll::Ready(Some(item)) => Poll::Ready(Some(item)),
-            // Every sender is gone: the end after `finish`. Otherwise the forwarding task was
-            // cancelled or destroyed, so the body is incomplete.
-            Poll::Ready(None)
-                if this.task.take().is_some() && !this.finished.load(Ordering::Acquire) =>
-            {
-                Poll::Ready(Some(Err(PyRuntimeError::new_err(
-                    "async body generator stopped before it finished",
-                ))))
-            }
-            Poll::Ready(None) => Poll::Ready(None),
-            Poll::Pending => Poll::Pending,
-        }
-    }
-}
-
-impl Drop for PyAsyncStream {
-    fn drop(&mut self) {
-        self.rx.close();
-        if let Some((task, event_loop)) = self.task.take() {
-            // Body drop can run on Tokio: cancel from a blocking thread, preferring the current
-            // runtime so a drop on a client's own runtime does not start the shared one.
-            let handle = Handle::try_current().unwrap_or_else(|_| runtime::get().handle().clone());
-            handle.spawn_blocking(move || {
-                Python::try_attach(|py| {
-                    if let Ok(cancel) = task.bind(py).getattr(intern!(py, "cancel")) {
-                        let _ = event_loop.call_method1(
-                            py,
-                            intern!(py, "call_soon_threadsafe"),
-                            (cancel,),
-                        );
-                    }
-                });
-            });
-        }
-    }
-}
-
-// ===== impl Sender =====
-
-#[pymethods]
-impl Sender {
-    /// Queue a chunk, or `item` as the error that ends the body. Resolves to `False`
-    /// once the body is dropped or the sender closed, which stops forwarding.
-    fn send<'py>(
-        &self,
-        py: Python<'py>,
-        item: Bound<'py, PyAny>,
-        error: bool,
-    ) -> PyResult<Bound<'py, Coroutine>> {
-        let item = if error {
-            Err(PyErr::from_value(item))
-        } else {
-            Ok(item.extract()?)
-        };
-        let tx = self.lock().clone();
-        // Channel readiness is runtime-independent, so this waits on the Python loop.
-        coroutine::local(py, "Sender.send", async move {
-            Ok(match tx {
-                Some(tx) => tx.send(item).await.is_ok(),
-                None => false,
-            })
-        })
-    }
-
-    /// Mark the normal end of the body. The last chunk may still be queued: it is read
-    /// before the closed channel, so finishing never waits for room.
-    fn finish(&self) {
-        self.finished.store(true, Ordering::Release);
-        // Python may retain the sender after completion, especially on PyPy.
-        self.close();
-    }
-
-    /// Drop the channel end at once, so the body fails instead of waiting for more.
-    fn close(&self) {
-        let tx = self.lock().take();
-        drop(tx);
-    }
-}
-
-impl Sender {
-    #[inline]
-    fn lock(&self) -> MutexGuard<'_, Option<mpsc::Sender<Item>>> {
-        self.tx.lock().unwrap_or_else(PoisonError::into_inner)
-    }
+/// Lock `mutex`, recovering it from a panicked holder.
+#[inline]
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }

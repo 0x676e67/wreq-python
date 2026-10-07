@@ -6,7 +6,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use futures_util::{FutureExt, TryFutureExt, future::Either};
+use futures_util::{TryFutureExt, future::Either};
 use http::response::{Parts, Response as HttpResponse};
 use http_body::Body as _;
 use http_body_util::{BodyExt, Collected, combinators::Collect};
@@ -16,7 +16,7 @@ use wreq::Uri;
 use super::{READ_ATTACHED, ext::ResponseExt, loop_limit, stream::Streamer};
 use crate::{
     buffer::PyBuffer,
-    client::{SocketAddr, body::Json, nogil},
+    client::{SocketAddr, body::Json},
     cookie::Cookie,
     coroutine::{self, Coroutine, EntersSelf},
     error::Error,
@@ -136,9 +136,7 @@ impl Response {
             .is_some_and(|(len, limit)| len <= limit);
         let mut collect = body.collect();
         let ready = if attached {
-            // A read timeout starts a timer on its first poll, which needs the runtime.
-            let _runtime = self.runtime.handle().enter();
-            (&mut collect).now_or_never()
+            self.runtime.poll_now(&mut collect)
         } else {
             None
         };
@@ -224,7 +222,7 @@ impl Response {
             if inline {
                 read.await
             } else {
-                coroutine::run(this.runtime.clone(), read).await
+                this.runtime.clone().run_task(read).await
             }
         })
     }
@@ -397,7 +395,7 @@ impl Response {
                         .collect_later(collect)
                         .map_ok(|(_, bytes)| PyBuffer::from(bytes))
                         .map_err(Into::into);
-                    coroutine::run(this.runtime.clone(), read).await
+                    this.runtime.clone().run_task(read).await
                 }
             }
         })
@@ -488,12 +486,14 @@ impl BlockingResponse {
         Fut: Future<Output = Result<T, Error>> + Send + 'static,
         T: Send,
     {
+        // Refused before the body is taken, so it can still be read afterwards.
+        Runtime::refuse_nested()?;
         let runtime = &self.0.runtime;
         let (read, inline) = self.0.read_body(Some(READ_ATTACHED), read)?;
         if inline {
-            nogil::run(py, runtime, read)
+            runtime.block_on_eager(py, read)
         } else {
-            py.detach(|| runtime.handle().block_on(read))
+            runtime.block_on(py, read)
         }
     }
 }
@@ -583,6 +583,7 @@ impl BlockingResponse {
 
     /// Read the body as a read-only memoryview, retaining its data after the response closes.
     pub fn bytes(&self, py: Python) -> PyResult<PyBuffer> {
+        Runtime::refuse_nested()?;
         let response = &self.0;
         match response.take_bytes(Some(READ_ATTACHED))? {
             BodyRead::Ready(bytes) => Ok(PyBuffer::from(bytes)),
@@ -591,7 +592,7 @@ impl BlockingResponse {
                     .collect_later(collect)
                     .map_ok(|(_, bytes)| PyBuffer::from(bytes))
                     .map_err(Into::into);
-                py.detach(|| response.runtime.handle().block_on(read))
+                response.runtime.block_on(py, read)
             }
         }
     }

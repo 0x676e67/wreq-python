@@ -22,10 +22,9 @@ use tokio::sync::{
 };
 use tokio_util::task::AbortOnDropHandle;
 
-use super::{READ_ATTACHED, loop_limit};
+use super::loop_polls;
 use crate::{
     buffer::PyBuffer,
-    client::nogil,
     coroutine::{self, Coroutine},
     error::Error,
     header::HeaderMap,
@@ -41,7 +40,8 @@ pub enum Frame {
 
 /// A response stream yielding read-only memoryviews and any trailing headers.
 ///
-/// Sync and async iteration share [`Streamer::next`]; only the wait differs.
+/// Sync and async iteration share [`Streamer::next`]; [`Iteration`] picks the ready frames
+/// the caller reads and the error that ends iteration.
 #[pyclass(subclass, frozen, skip_from_py_object)]
 pub struct Streamer {
     reader: Arc<Reader>,
@@ -73,6 +73,16 @@ enum State {
 
 /// Wakes readers however the read-ahead task ends, including when aborted.
 struct NotifyOnDrop(Arc<Notify>);
+
+/// How Python iterates a [`Streamer`], which sets the frames read on the caller and the error
+/// that ends iteration.
+#[derive(Clone, Copy)]
+enum Iteration {
+    /// `__next__` on a blocking caller.
+    Sync,
+    /// `__anext__` on the event loop.
+    Async,
+}
 
 // ===== impl Streamer =====
 
@@ -123,10 +133,8 @@ impl Streamer {
     /// Send frames until the body ends, a frame fails or the reader is gone.
     async fn pump(mut resp: wreq::Response, tx: &mpsc::Sender<PyResult<Frame>>, arrived: &Notify) {
         let mut unannounced = false;
-        while let Some(frame) = burst(resp.frame(), arrived, &mut unannounced).await {
-            let Some(frame) = Self::convert(frame, &mut resp) else {
-                continue;
-            };
+        while let Some(frame) = burst(Self::next_frame(&mut resp), arrived, &mut unannounced).await
+        {
             let failed = frame.is_err();
             if burst(tx.send(frame), arrived, &mut unannounced)
                 .await
@@ -136,6 +144,16 @@ impl Streamer {
                 break;
             }
             unannounced = true;
+        }
+    }
+
+    /// Read the next frame, skipping unknown kinds; `None` at the end of the body.
+    async fn next_frame(resp: &mut wreq::Response) -> Option<PyResult<Frame>> {
+        loop {
+            let frame = resp.frame().await?;
+            if let Some(frame) = Self::convert(frame, resp) {
+                return Some(frame);
+            }
         }
     }
 
@@ -159,27 +177,18 @@ impl Streamer {
     }
 
     /// Read a frame the body already holds, before any read-ahead task starts, so a reader
-    /// of a short body never waits on another thread. With `limit`, only a body of known
-    /// length up to it is read here, so an async reader never reads a large or decompressing
-    /// body on the event loop; `end` builds the error that ends iteration.
-    fn ready_frame(&self, limit: Option<u64>, end: fn() -> Error) -> Option<PyResult<Frame>> {
+    /// of a short body never waits on another thread.
+    fn ready_frame(&self, iteration: Iteration) -> Option<PyResult<Frame>> {
         let mut state = self.reader.lock();
         let State::Idle(resp) = &mut *state else {
             return None;
         };
-        if let Some(limit) = limit
-            && !resp
-                .size_hint()
-                .exact()
-                .zip(loop_limit(resp.version(), limit))
-                .is_some_and(|(len, limit)| len <= limit)
-        {
+        if !iteration.takes_ready(resp) {
             return None;
         }
-        let _runtime = self.runtime.handle().enter();
-        let Some(frame) = Self::poll_ready(resp)? else {
+        let Some(frame) = self.runtime.poll_now(Self::next_frame(resp))? else {
             *state = State::Closed;
-            return Some(Err(end().into()));
+            return Some(Err(iteration.end().into()));
         };
         if frame.is_err() {
             *state = State::Closed;
@@ -188,7 +197,7 @@ impl Streamer {
         // Confirm the end before returning: an unpolled body's read timeout keeps running
         // while the caller works on this frame. Remaining frames go to the read-ahead task,
         // so a stalled caller does not stall the network read.
-        match Self::poll_ready(resp) {
+        match self.runtime.poll_now(Self::next_frame(resp)) {
             Some(None) => *state = State::Closed,
             next => {
                 if let State::Idle(resp) = mem::replace(&mut *state, State::Closed) {
@@ -197,18 +206,6 @@ impl Streamer {
             }
         }
         Some(frame)
-    }
-
-    /// Poll the body once: `None` if it must wait, `Some(None)` at its end.
-    fn poll_ready(resp: &mut wreq::Response) -> Option<Option<PyResult<Frame>>> {
-        loop {
-            let Some(frame) = resp.frame().now_or_never()? else {
-                return Some(None);
-            };
-            if let Some(frame) = Self::convert(frame, resp) {
-                return Some(Some(frame));
-            }
-        }
     }
 
     /// Start the read-ahead task after `first`, a frame already read from `resp`.
@@ -222,19 +219,19 @@ impl Streamer {
                 return State::Reading { rx, _task: None };
             }
         }
-        let task =
-            self.runtime
-                .handle()
-                .spawn(Self::read_ahead(resp, tx, self.reader.arrived.clone()));
+        let task = self
+            .runtime
+            .spawn(Self::read_ahead(resp, tx, self.reader.arrived.clone()));
         State::Reading {
             rx,
             _task: Some(AbortOnDropHandle::new(task)),
         }
     }
 
-    /// Start the read-ahead task if needed, then return a buffered frame, `end()` once the
-    /// body is done or closed, or `None` if the read must wait for `arrived`.
-    fn try_next(&self, end: fn() -> Error) -> Option<PyResult<Frame>> {
+    /// Start the read-ahead task if needed, then return a buffered frame, the end of
+    /// `iteration` once the body is done or closed, or `None` if the read must wait for
+    /// `arrived`.
+    fn try_next(&self, iteration: Iteration) -> Option<PyResult<Frame>> {
         let mut state = self.reader.lock();
         if let State::Idle(_) = *state
             && let State::Idle(resp) = mem::replace(&mut *state, State::Closed)
@@ -242,25 +239,39 @@ impl Streamer {
             *state = self.read_ahead_from(*resp, None);
         }
         let State::Reading { rx, .. } = &mut *state else {
-            return Some(Err(end().into()));
+            return Some(Err(iteration.end().into()));
         };
         match rx.try_recv() {
             Ok(frame) => Some(frame),
             Err(TryRecvError::Empty) => None,
             Err(TryRecvError::Disconnected) => {
                 *state = State::Closed;
-                Some(Err(end().into()))
+                Some(Err(iteration.end().into()))
             }
         }
     }
 
-    /// Wait for the next frame; `end` builds the error that ends iteration.
-    async fn next(&self, end: fn() -> Error) -> PyResult<Frame> {
+    /// Refuse async use on a current-thread runtime: nothing would drive the read while a
+    /// coroutine waits, so iteration would hang once the buffered frames run out.
+    fn refuse_async(&self) -> PyResult<()> {
+        if self.runtime.is_current_thread() {
+            return Err(PyRuntimeError::new_err(
+                "Streams on a CURRENT_THREAD runtime only support blocking iteration",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Return a frame the body already holds, else wait for the next one.
+    async fn next(&self, iteration: Iteration) -> PyResult<Frame> {
+        if let Some(frame) = self.ready_frame(iteration) {
+            return frame;
+        }
         loop {
             // Readers are woken by `notify_waiters`, which reaches a `Notified` from its
             // creation, so it needs no `enable` and a frame sent after `try_next` still wakes it.
             let arrived = pin!(self.reader.arrived.notified());
-            if let Some(frame) = self.try_next(end) {
+            if let Some(frame) = self.try_next(iteration) {
                 return frame;
             }
             self.reader.since_yield.store(0, Ordering::Relaxed);
@@ -276,11 +287,9 @@ impl Streamer {
     }
 
     fn __next__(&self, py: Python) -> PyResult<Frame> {
-        // Frames already received are returned without releasing the GIL.
-        if let Some(frame) = self.ready_frame(None, || Error::StopIteration) {
-            return frame;
-        }
-        nogil::run(py, &self.runtime, self.next(|| Error::StopIteration))
+        // Refused before the first poll, which returns frames already received without
+        // releasing the GIL, so a nested read never leaves the stream half consumed.
+        self.runtime.block_on_eager(py, self.next(Iteration::Sync))
     }
 
     fn __enter__(slf: PyRef<Self>) -> PyRef<Self> {
@@ -300,32 +309,30 @@ impl Streamer {
 
 #[pymethods]
 impl Streamer {
-    fn __aiter__(slf: PyRef<Self>) -> PyRef<Self> {
-        slf
+    fn __aiter__(slf: PyRef<Self>) -> PyResult<PyRef<Self>> {
+        slf.refuse_async()?;
+        Ok(slf)
     }
 
     /// Read the next frame when awaited.
     fn __anext__(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
+        slf.get().refuse_async()?;
         let py = slf.py();
         let slf = slf.unbind();
         coroutine::local(py, "Streamer.__anext__", async move {
             let this = slf.get();
-            // A short body already buffered is read without starting the read-ahead task.
-            if let Some(frame) = this.ready_frame(Some(READ_ATTACHED), || Error::StopAsyncIteration)
-            {
-                return frame;
-            }
             // Buffered frames complete without suspending; yield to the event loop
             // periodically so timeouts, cancellation and other tasks run.
             if this.reader.since_yield.fetch_add(1, Ordering::Relaxed) >= Self::YIELD_EVERY {
                 this.reader.since_yield.store(0, Ordering::Relaxed);
                 coroutine::yield_now().await;
             }
-            this.next(|| Error::StopAsyncIteration).await
+            this.next(Iteration::Async).await
         })
     }
 
     fn __aenter__(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
+        slf.get().refuse_async()?;
         coroutine::ready("Streamer.__aenter__", slf)
     }
 
@@ -381,5 +388,27 @@ impl Reader {
 impl Drop for NotifyOnDrop {
     fn drop(&mut self) {
         self.0.notify_waiters();
+    }
+}
+
+// ===== impl Iteration =====
+
+impl Iteration {
+    /// Whether the caller takes a frame `resp` already holds. On the event loop only an HTTP/1
+    /// body of known length is read, whatever its size: taking a frame it holds is cheap,
+    /// while a decompressing body is not.
+    fn takes_ready(self, resp: &wreq::Response) -> bool {
+        match self {
+            Iteration::Sync => true,
+            Iteration::Async => loop_polls(resp.version()) && resp.size_hint().exact().is_some(),
+        }
+    }
+
+    /// The error that ends iteration.
+    fn end(self) -> Error {
+        match self {
+            Iteration::Sync => Error::StopIteration,
+            Iteration::Async => Error::StopAsyncIteration,
+        }
     }
 }

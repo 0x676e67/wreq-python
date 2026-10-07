@@ -349,6 +349,28 @@ async def test_only_http1_bodies_are_read_on_the_event_loop(http2, body, read):
 
 
 @pytest.mark.asyncio
+async def test_streams_read_large_http1_bodies_on_the_event_loop():
+    # A stream takes frames that an HTTP/1 body of known length already holds on the loop,
+    # whatever its size; bytes() collects bodies over 64 KiB on the runtime.
+    body = b"x" * (128 << 10)
+    async with body_server(False, body) as url:
+        async with wreq.Client(proxies=[]) as client:
+            response = await asyncio.wait_for(client.get(url), 5)
+            await asyncio.sleep(0.05)
+            result, suspended = await steps(response.stream().__anext__())
+            assert body.startswith(bytes(result)) and suspended == 0
+            # The runtime may finish one collect before the first poll on a loaded host.
+            suspensions = []
+            for _ in range(3):
+                response = await asyncio.wait_for(client.get(url), 5)
+                await asyncio.sleep(0.05)
+                result, suspended = await steps(response.bytes())
+                assert bytes(result) == body
+                suspensions.append(suspended)
+            assert any(suspensions)
+
+
+@pytest.mark.asyncio
 async def test_stream_read_ahead_yields_and_closes_waiting_readers():
     stalled = threading.Event()
 

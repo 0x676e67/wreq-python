@@ -5,7 +5,7 @@ use std::mem;
 
 use pyo3::{
     PyTraverseError, PyVisit,
-    exceptions::{PyRuntimeError, PyStopIteration, PyTypeError},
+    exceptions::{PyBaseException, PyRuntimeError, PyStopIteration, PyTypeError},
     intern,
     prelude::*,
 };
@@ -171,13 +171,17 @@ impl Coroutine {
 
     /// Raise `exc` at the await point: inside the `__aenter__` awaitable being driven, if
     /// any, otherwise ending the coroutine.
-    pub(super) fn throw_step(&mut self, py: Python<'_>, exc: Bound<'_, PyAny>) -> PyResult<Step> {
+    pub(super) fn throw_step(
+        &mut self,
+        py: Python<'_>,
+        exc: Bound<'_, PyBaseException>,
+    ) -> PyResult<Step> {
         if let Scope::Opening { delegate, .. } = &self.scope {
             let step = delegate.clone_ref(py).throw(py, exc);
             return self.resume(py, step);
         }
         self.abandon();
-        Err(PyErr::from_value(exc))
+        Err(PyErr::from_value(exc.into_any()))
     }
 
     /// Finish without entering, dropping any context manager being entered.
@@ -305,12 +309,12 @@ impl Delegate {
         }
     }
 
-    fn throw(&self, py: Python<'_>, exc: Bound<'_, PyAny>) -> PyResult<Step> {
+    fn throw(&self, py: Python<'_>, exc: Bound<'_, PyBaseException>) -> PyResult<Step> {
         match self {
             Delegate::Native(coroutine) => coroutine.bind(py).try_borrow_mut()?.throw_step(py, exc),
             Delegate::Foreign(iter) => match iter.bind(py).getattr(intern!(py, "throw")) {
                 Ok(throw) => iter_step(py, throw.call1((exc,))),
-                Err(_) => Err(PyErr::from_value(exc)),
+                Err(_) => Err(PyErr::from_value(exc.into_any())),
             },
         }
     }
