@@ -4,12 +4,17 @@
 //! ([`Runtime::block_on_task`], [`Runtime::run_task`]); blocking reads are polled by the
 //! caller ([`Runtime::block_on`], [`Runtime::block_on_eager`]). The `block_on*` calls release
 //! the GIL while they wait, and drive a current-thread runtime meanwhile.
+//!
+//! Every other runtime operation goes through [`Runtime`] too; `clippy.toml` rejects direct
+//! Tokio handles, spawns and yields elsewhere.
+#![allow(clippy::disallowed_methods, clippy::disallowed_types)]
 
 use std::{
     cell::{Cell, RefCell},
     future::Future,
     pin::pin,
     sync::{Arc, OnceLock},
+    task::Context,
     thread,
     time::Duration,
 };
@@ -22,7 +27,7 @@ use pyo3::{
 };
 use tokio::{
     runtime::{Builder, Handle},
-    task::JoinError,
+    task::{self, JoinError, JoinHandle},
 };
 use tokio_util::task::AbortOnDropHandle;
 
@@ -69,25 +74,9 @@ thread_local! {
     static INTERRUPT: RefCell<Option<PyErr>> = const { RefCell::new(None) };
 }
 
-/// Whether this thread drives a current-thread runtime, which then runs the Python code
-/// its tasks call, such as upload iterators.
-pub fn driving() -> bool {
-    DRIVING.get()
-}
-
-/// Re-raise `err` from the blocking call this thread is driving, once it returns.
-pub fn interrupt(err: PyErr) {
-    INTERRUPT.set(Some(err));
-}
-
 // ===== impl Runtime =====
 
 impl Runtime {
-    /// Borrow the selected worker's handle without changing the selection.
-    pub fn handle(&self) -> &Handle {
-        &self.handle
-    }
-
     /// Whether blocking calls drive this runtime on their own thread.
     pub fn is_current_thread(&self) -> bool {
         matches!(self.inner.as_deref(), Some(Shared::CurrentThread(_)))
@@ -106,8 +95,8 @@ impl Runtime {
     }
 
     /// Poll `future` once inside the runtime, where a read timeout can start its timer;
-    /// `None` if it must wait.
-    pub fn poll_now<F: Future + Unpin>(&self, future: &mut F) -> Option<F::Output> {
+    /// `None` if it must wait. A pending future is dropped, so pass `&mut` to keep it.
+    pub fn poll_now<F: Future>(&self, future: F) -> Option<F::Output> {
         let _runtime = self.handle.enter();
         future.now_or_never()
     }
@@ -130,9 +119,9 @@ impl Runtime {
         T: Send,
     {
         // Refused before the first poll, which a later refusal would leave half done.
-        refuse_nested()?;
+        Self::refuse_nested()?;
         let mut future = pin!(future);
-        match self.poll_now(&mut future) {
+        match self.poll_now(future.as_mut()) {
             Some(output) => output,
             None => self.block_on(py, future),
         }
@@ -163,10 +152,20 @@ impl Runtime {
         AbortOnDropHandle::new(task).await.map_err(join_error)?
     }
 
+    /// Spawn `future` on the selected worker. Dropping the handle detaches the task, which
+    /// does not keep the runtime alive.
+    pub fn spawn<F>(&self, future: F) -> JoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        self.handle.spawn(future)
+    }
+
     /// [`block_on`](Self::block_on) for a caller already detached. It refuses a nested call
     /// itself, where Tokio would panic.
     fn wait<T>(&self, future: impl Future<Output = PyResult<T>>) -> PyResult<T> {
-        refuse_nested()?;
+        Self::refuse_nested()?;
         match self.inner.as_deref() {
             Some(Shared::CurrentThread(runtime)) => Driving::drive(runtime, future),
             _ => self.handle.block_on(future),
@@ -180,7 +179,7 @@ impl Runtime {
         F: Future<Output = PyResult<T>> + Send + 'static,
         T: Send + 'static,
     {
-        refuse_nested()?;
+        Self::refuse_nested()?;
         match self.inner.as_deref() {
             Some(Shared::CurrentThread(runtime)) => Driving::drive(runtime, future),
             _ => self
@@ -188,6 +187,78 @@ impl Runtime {
                 .block_on(self.handle.spawn(future))
                 .map_err(join_error)?,
         }
+    }
+}
+
+/// Operations on the calling thread: the shared runtime, the runtime the thread is in, and
+/// the state of a current-thread runtime it drives.
+impl Runtime {
+    /// The shared runtime, created on first use and retained for the process lifetime.
+    pub fn shared() -> &'static Runtime {
+        static RUNTIME: OnceLock<Runtime> = OnceLock::new();
+
+        fn create() -> Runtime {
+            let runtime = RuntimeBuilder::new(parallelism(), env!("CARGO_PKG_NAME")).build();
+            runtime.into()
+        }
+
+        if let Some(runtime) = RUNTIME.get() {
+            return runtime;
+        }
+
+        // Never wait for another initializer while holding the interpreter.
+        Python::try_attach(|py| py.detach(|| RUNTIME.get_or_init(create)))
+            .unwrap_or_else(|| RUNTIME.get_or_init(create))
+    }
+
+    /// Run `f` on the blocking pool of the runtime this thread is in, or the shared runtime's
+    /// outside one, so a drop on a client's runtime does not start the shared one.
+    pub fn spawn_blocking<F, R>(f: F) -> JoinHandle<R>
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        current().spawn_blocking(f)
+    }
+
+    /// Wait for `future` detached from Python on a blocking-pool thread, driven by the
+    /// runtime that owns the pool. Unlike [`block_on`](Self::block_on), it neither refuses
+    /// nested calls nor needs a `PyResult`; create timers inside `future`.
+    pub fn block_on_in_pool<F>(py: Python<'_>, future: F) -> F::Output
+    where
+        F: Future + Send,
+        F::Output: Send,
+    {
+        let handle = current();
+        py.detach(|| handle.block_on(future))
+    }
+
+    /// Wake the task after the runtime polls its IO and other tasks, or at once outside a
+    /// runtime.
+    pub fn defer_wake(cx: &mut Context<'_>) {
+        let _ = pin!(task::yield_now()).poll(cx);
+    }
+
+    /// Whether this thread drives a current-thread runtime, which then runs the Python code
+    /// its tasks call, such as upload iterators.
+    pub fn driving() -> bool {
+        DRIVING.get()
+    }
+
+    /// Re-raise `err` from the blocking call this thread is driving, once it returns.
+    pub fn interrupt(err: PyErr) {
+        INTERRUPT.set(Some(err));
+    }
+
+    /// Fail a blocking wait on a thread driving a current-thread runtime, where Tokio would
+    /// panic, as when an upload iterator it reads sends a blocking request.
+    pub fn refuse_nested() -> PyResult<()> {
+        if Self::driving() {
+            return Err(PyRuntimeError::new_err(
+                "Cannot make a blocking call from code a CURRENT_THREAD runtime is running",
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -339,17 +410,6 @@ impl Drop for Driving {
     }
 }
 
-/// Fail a blocking wait on a thread driving a current-thread runtime, where Tokio would
-/// panic, as when an upload iterator it reads sends a blocking request.
-pub fn refuse_nested() -> PyResult<()> {
-    if driving() {
-        return Err(PyRuntimeError::new_err(
-            "Cannot make a blocking call from code a CURRENT_THREAD runtime is running",
-        ));
-    }
-    Ok(())
-}
-
 /// A task that panicked or was aborted, as a Python error.
 fn join_error(err: JoinError) -> PyErr {
     PyRuntimeError::new_err(err.to_string())
@@ -360,22 +420,9 @@ fn parallelism() -> usize {
     thread::available_parallelism().map_or(1, usize::from)
 }
 
-/// Create the shared runtime on first use and retain it for the process lifetime.
-pub fn get() -> &'static Runtime {
-    static RUNTIME: OnceLock<Runtime> = OnceLock::new();
-
-    fn create() -> Runtime {
-        let runtime = RuntimeBuilder::new(parallelism(), env!("CARGO_PKG_NAME")).build();
-        runtime.into()
-    }
-
-    if let Some(runtime) = RUNTIME.get() {
-        return runtime;
-    }
-
-    // Never wait for another initializer while holding the interpreter.
-    Python::try_attach(|py| py.detach(|| RUNTIME.get_or_init(create)))
-        .unwrap_or_else(|| RUNTIME.get_or_init(create))
+/// The runtime this thread is in, else the shared one.
+fn current() -> Handle {
+    Handle::try_current().unwrap_or_else(|_| Runtime::shared().handle.clone())
 }
 
 #[cfg(test)]
@@ -447,7 +494,7 @@ mod tests {
             })
             .unwrap();
         assert!(nested);
-        assert!(!driving());
+        assert!(!Runtime::driving());
     }
 
     #[test]
@@ -467,7 +514,7 @@ mod tests {
                     .build(),
             );
             let weak = Arc::downgrade(runtime.inner.as_ref().unwrap());
-            let handle = runtime.handle().clone();
+            let handle = runtime.handle.clone();
             let (dropped, released) = std::sync::mpsc::channel();
             let guard = NotifyOnDrop(dropped);
             let background = handle.spawn(async move {

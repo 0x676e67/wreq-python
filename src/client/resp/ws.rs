@@ -65,7 +65,7 @@ impl WebSocket {
         );
         let websocket = response.into_websocket().await?;
         let protocol = websocket.protocol().cloned();
-        let cmd = cmd::spawn(websocket);
+        let cmd = cmd::spawn(&runtime, websocket);
 
         Ok(WebSocket {
             runtime,

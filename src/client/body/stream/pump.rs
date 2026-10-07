@@ -9,12 +9,13 @@ use std::{
 
 use futures_util::{Stream, StreamExt};
 use pyo3::prelude::*;
-use tokio::{runtime::Handle, sync::mpsc::error::TrySendError, task::spawn_blocking, time};
+use tokio::{sync::mpsc::error::TrySendError, time};
 
 use super::{
     Item, PyBytesLike, lock, next_item,
     queue::{self, Permit},
 };
+use crate::runtime::Runtime;
 
 /// An iterator read ahead by pump tasks on the blocking pool, within the upload budget. When
 /// the budget stays full, a pump parks the iterator with the chunk it read and frees its
@@ -62,7 +63,7 @@ impl Stream for Pumped {
         let parked = lock(&this.parked).take();
         if let Some(pump) = parked {
             let parked = this.parked.clone();
-            spawn_blocking(move || pump.run(&parked));
+            Runtime::spawn_blocking(move || pump.run(&parked));
         }
         poll
     }
@@ -77,7 +78,6 @@ impl Pump {
     /// Queue chunks until the iterator ends or raises, the body is dropped, or the budget
     /// stays full past [`PARK_AFTER`](Self::PARK_AFTER).
     fn run(mut self, parked: &Mutex<Option<Pump>>) {
-        let handle = Handle::current();
         // Once Python is unavailable, stop reading without creating a PyErr that could
         // require another attachment to format.
         Python::try_attach(|py| {
@@ -93,7 +93,7 @@ impl Pump {
                         None => return,
                     },
                 };
-                let permit = match self.wait_for_room(py, &handle, &chunk) {
+                let permit = match self.wait_for_room(py, &chunk) {
                     Some(permit) => permit,
                     None => {
                         // Park under the lock the body takes after receiving, so either it
@@ -119,18 +119,13 @@ impl Pump {
 
     /// Reserve room for `chunk`, waiting detached up to [`PARK_AFTER`](Self::PARK_AFTER) while
     /// the budget is full; `None` if it stays full or the body is dropped.
-    fn wait_for_room(
-        &self,
-        py: Python<'_>,
-        handle: &Handle,
-        chunk: &PyBytesLike,
-    ) -> Option<Permit<'_>> {
+    fn wait_for_room(&self, py: Python<'_>, chunk: &PyBytesLike) -> Option<Permit<'_>> {
         match self.tx.try_reserve(chunk) {
             Ok(permit) => Some(permit),
             Err(TrySendError::Closed(())) => None,
             Err(TrySendError::Full(())) => {
-                let wait = time::timeout(Self::PARK_AFTER, self.tx.reserve(chunk));
-                py.detach(|| handle.block_on(wait)).ok().flatten()
+                let wait = async { time::timeout(Self::PARK_AFTER, self.tx.reserve(chunk)).await };
+                Runtime::block_on_in_pool(py, wait).ok().flatten()
             }
         }
     }

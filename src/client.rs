@@ -300,7 +300,7 @@ impl Client {
 
 impl Default for Client {
     fn default() -> Self {
-        let runtime = runtime::get();
+        let runtime = runtime::Runtime::shared();
         Self {
             inner: wreq::Client::default(),
             runtime: runtime.clone(),
@@ -317,7 +317,7 @@ impl Client {
         py.detach(|| {
             let runtime = match kwds.as_ref().and_then(|config| config.runtime.as_ref()) {
                 Some(runtime) => runtime.select()?,
-                None => runtime::get().clone(),
+                None => runtime::Runtime::shared().clone(),
             };
             // Create the client builder.
             let mut builder = wreq::Client::builder();

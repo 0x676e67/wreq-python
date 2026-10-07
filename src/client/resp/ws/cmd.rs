@@ -26,7 +26,7 @@ use wreq::ws::{
 };
 
 use super::Message;
-use crate::{error::Error, extractor::Text};
+use crate::{error::Error, extractor::Text, runtime::Runtime};
 
 /// The request channels of a WebSocket's read and write tasks.
 #[derive(Clone)]
@@ -45,14 +45,14 @@ enum Write {
     Close(Option<u16>, Option<Text>, Sender<PyResult<()>>),
 }
 
-/// Start the read and write tasks of `ws` on the current runtime.
-pub fn spawn(ws: WebSocket) -> Handle {
+/// Start the read and write tasks of `ws` on `runtime`'s selected worker.
+pub fn spawn(runtime: &Runtime, ws: WebSocket) -> Handle {
     let (writer, reader) = ws.split();
     let (reads, read_rx) = mpsc::unbounded_channel();
     let (writes, write_rx) = mpsc::unbounded_channel();
     let closed = CancellationToken::new();
-    tokio::spawn(read(reader, read_rx, closed.clone()));
-    tokio::spawn(write(writer, write_rx, closed));
+    runtime.spawn(read(reader, read_rx, closed.clone()));
+    runtime.spawn(write(writer, write_rx, closed));
     Handle { reads, writes }
 }
 

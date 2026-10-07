@@ -9,7 +9,7 @@ use crate::{
     error::Error,
     extractor::{Binary, Text},
     header::HeaderMap,
-    runtime,
+    runtime::Runtime,
 };
 
 /// A multipart form for a request.
@@ -136,7 +136,7 @@ impl Part {
             Value::Text(text) => multipart::Part::stream(text.0),
             Value::Bytes(bytes) => multipart::Part::stream(bytes.0),
             // Opening the file blocks, so only that waits detached.
-            Value::File(path) => runtime::get().block_on(
+            Value::File(path) => Runtime::shared().block_on(
                 py,
                 multipart::Part::file(path).map_err(|err| Error::from(err).into()),
             )?,

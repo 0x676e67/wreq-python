@@ -2,7 +2,7 @@
 
 use std::{
     mem,
-    pin::{Pin, pin},
+    pin::Pin,
     task::{Context, Poll, ready},
     thread::{self, ThreadId},
 };
@@ -12,10 +12,9 @@ use pyo3::{
     exceptions::{PyException, PyKeyboardInterrupt},
     prelude::*,
 };
-use tokio::task::yield_now;
 
 use super::{Item, next_item, pump::Pumped};
-use crate::runtime;
+use crate::runtime::Runtime;
 
 /// A request body from a Python iterator.
 ///
@@ -65,7 +64,7 @@ impl Stream for SyncStream {
         if let SyncStream::Idle { .. } = this
             && let SyncStream::Idle { iter, owner } = mem::replace(this, SyncStream::Done)
         {
-            *this = if runtime::driving() {
+            *this = if Runtime::driving() {
                 SyncStream::Inline(Inline {
                     iter,
                     owner,
@@ -101,7 +100,7 @@ impl Inline {
             return Poll::Ready(());
         }
         self.flushed = true;
-        let _ = pin!(yield_now()).poll(cx);
+        Runtime::defer_wake(cx);
         Poll::Pending
     }
 }
@@ -122,7 +121,7 @@ impl Stream for Inline {
                 && (this.owner == thread::current().id()
                     || err.is_instance_of::<PyKeyboardInterrupt>(py))
             {
-                runtime::interrupt(err.clone_ref(py));
+                Runtime::interrupt(err.clone_ref(py));
             }
             item
         })

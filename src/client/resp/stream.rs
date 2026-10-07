@@ -28,7 +28,7 @@ use crate::{
     coroutine::{self, Coroutine},
     error::Error,
     header::HeaderMap,
-    runtime::{self, Runtime},
+    runtime::Runtime,
 };
 
 /// A response frame exposed as a read-only memoryview or a header map.
@@ -185,9 +185,7 @@ impl Streamer {
         if !iteration.takes_ready(resp) {
             return None;
         }
-        // A read timeout starts a timer on its first poll, which needs the runtime.
-        let _runtime = self.runtime.handle().enter();
-        let Some(frame) = Self::next_frame(resp).now_or_never()? else {
+        let Some(frame) = self.runtime.poll_now(Self::next_frame(resp))? else {
             *state = State::Closed;
             return Some(Err(iteration.end().into()));
         };
@@ -198,7 +196,7 @@ impl Streamer {
         // Confirm the end before returning: an unpolled body's read timeout keeps running
         // while the caller works on this frame. Remaining frames go to the read-ahead task,
         // so a stalled caller does not stall the network read.
-        match Self::next_frame(resp).now_or_never() {
+        match self.runtime.poll_now(Self::next_frame(resp)) {
             Some(None) => *state = State::Closed,
             next => {
                 if let State::Idle(resp) = mem::replace(&mut *state, State::Closed) {
@@ -220,10 +218,9 @@ impl Streamer {
                 return State::Reading { rx, _task: None };
             }
         }
-        let task =
-            self.runtime
-                .handle()
-                .spawn(Self::read_ahead(resp, tx, self.reader.arrived.clone()));
+        let task = self
+            .runtime
+            .spawn(Self::read_ahead(resp, tx, self.reader.arrived.clone()));
         State::Reading {
             rx,
             _task: Some(AbortOnDropHandle::new(task)),
@@ -287,7 +284,7 @@ impl Streamer {
 
     fn __next__(&self, py: Python) -> PyResult<Frame> {
         // Refused before any frame, so a nested read never leaves a stream half consumed.
-        runtime::refuse_nested()?;
+        Runtime::refuse_nested()?;
         // Frames already received are returned without releasing the GIL.
         if let Some(frame) = self.ready_frame(Iteration::Sync) {
             return frame;

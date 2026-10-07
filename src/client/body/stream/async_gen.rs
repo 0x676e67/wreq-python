@@ -12,10 +12,10 @@ use std::{
 
 use futures_util::{Stream, StreamExt};
 use pyo3::{IntoPyObjectExt, exceptions::PyRuntimeError, intern, prelude::*, sync::PyOnceLock};
-use tokio::{runtime::Handle, sync::mpsc::error::TrySendError};
+use tokio::sync::mpsc::error::TrySendError;
 
 use super::{Item, PyBytesLike, lock, queue};
-use crate::{coroutine, runtime};
+use crate::{coroutine, runtime::Runtime};
 
 /// A request body from a Python async generator, forwarded within the upload budget by a
 /// task on the loop that was running at extraction. Dropping it cancels that task.
@@ -99,10 +99,8 @@ impl Drop for AsyncStream {
         // Senders see the body gone at once, and a send waiting for room resolves to `False`.
         self.rx.close();
         if let Some((task, event_loop)) = self.task.take() {
-            // Body drop can run on Tokio: cancel from a blocking thread, preferring the current
-            // runtime so a drop on a client's own runtime does not start the shared one.
-            let handle = Handle::try_current().unwrap_or_else(|_| runtime::get().handle().clone());
-            handle.spawn_blocking(move || {
+            // Body drop can run on Tokio: cancel from a blocking thread.
+            Runtime::spawn_blocking(move || {
                 Python::try_attach(|py| {
                     if let Ok(cancel) = task.bind(py).getattr(intern!(py, "cancel")) {
                         let _ = event_loop.call_method1(

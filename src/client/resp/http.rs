@@ -23,7 +23,7 @@ use crate::{
     header::HeaderMap,
     http::{StatusCode, Version},
     redirect::History,
-    runtime::{self, Runtime},
+    runtime::Runtime,
     tls::TlsInfo,
 };
 
@@ -487,7 +487,7 @@ impl BlockingResponse {
         T: Send,
     {
         // Refused before the body is taken, so it can still be read afterwards.
-        runtime::refuse_nested()?;
+        Runtime::refuse_nested()?;
         let runtime = &self.0.runtime;
         let (read, inline) = self.0.read_body(Some(READ_ATTACHED), read)?;
         if inline {
@@ -583,7 +583,7 @@ impl BlockingResponse {
 
     /// Read the body as a read-only memoryview, retaining its data after the response closes.
     pub fn bytes(&self, py: Python) -> PyResult<PyBuffer> {
-        runtime::refuse_nested()?;
+        Runtime::refuse_nested()?;
         let response = &self.0;
         match response.take_bytes(Some(READ_ATTACHED))? {
             BodyRead::Ready(bytes) => Ok(PyBuffer::from(bytes)),
