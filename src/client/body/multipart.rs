@@ -74,11 +74,18 @@ impl FromPyObject<'_, '_> for Multipart {
     fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
         let multipart = ob.cast::<Multipart>()?;
         let mut multipart = multipart.try_borrow_mut()?;
-        // Copied for one request: reusable values stay, a stream moves into it.
+        // Copied for one request: reusable values stay, a stream moves into it and belongs
+        // to the thread sending it.
         let parts = multipart
             .parts
             .iter_mut()
-            .map(Part::try_clone)
+            .map(|part| {
+                let mut part = part.try_clone()?;
+                if let Some(Value::Stream(stream)) = &mut part.value {
+                    stream.claim();
+                }
+                Ok(part)
+            })
             .collect::<PyResult<_>>()?;
         Ok(Multipart { parts })
     }

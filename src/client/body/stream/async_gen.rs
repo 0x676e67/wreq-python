@@ -3,16 +3,13 @@
 use std::{
     ffi::CStr,
     pin::Pin,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::Mutex,
     task::{Context, Poll, ready},
 };
 
 use futures_util::{Stream, StreamExt};
-use pyo3::{IntoPyObjectExt, exceptions::PyRuntimeError, intern, prelude::*, sync::PyOnceLock};
-use tokio::sync::mpsc::error::TrySendError;
+use pyo3::{IntoPyObjectExt, intern, prelude::*, sync::PyOnceLock};
+use tokio::sync::TryAcquireError;
 
 use super::{Item, PyBytesLike, lock, queue};
 use crate::{coroutine, runtime::Runtime};
@@ -21,8 +18,6 @@ use crate::{coroutine, runtime::Runtime};
 /// task on the loop that was running at extraction. Dropping it cancels that task.
 pub(super) struct AsyncStream {
     rx: queue::Rx,
-    /// Set by [`Sender::finish`], so the queue closing reads as the end of the body.
-    finished: Arc<AtomicBool>,
     /// The forwarding task and its loop, until forwarding ends.
     task: Option<(Py<PyAny>, Py<PyAny>)>,
 }
@@ -33,7 +28,6 @@ pub(super) struct AsyncStream {
 #[pyclass(frozen)]
 struct Sender {
     tx: Mutex<Option<queue::Tx>>,
-    finished: Arc<AtomicBool>,
 }
 
 // ===== impl AsyncStream =====
@@ -55,10 +49,8 @@ impl AsyncStream {
             .map(Bound::unbind)
         })?;
         let (tx, rx) = queue::channel();
-        let finished = Arc::new(AtomicBool::new(false));
         let sender = Sender {
             tx: Mutex::new(Some(tx)),
-            finished: finished.clone(),
         };
         let coroutine = forward.bind(py).call1((generator, sender))?;
         // create_task captures the caller's contextvars on the running loop.
@@ -69,7 +61,6 @@ impl AsyncStream {
             })?;
         Ok(Self {
             rx,
-            finished,
             task: Some((task.unbind(), event_loop.unbind())),
         })
     }
@@ -80,17 +71,12 @@ impl Stream for AsyncStream {
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
-        Poll::Ready(match ready!(this.rx.poll_next_unpin(cx)) {
-            Some(item) => Some(item),
-            // Every sender is gone: the end after `finish`. Otherwise the forwarding task was
-            // cancelled or destroyed, so the body is incomplete.
-            None if this.task.take().is_some() && !this.finished.load(Ordering::Acquire) => {
-                Some(Err(PyRuntimeError::new_err(
-                    "async body generator stopped before it finished",
-                )))
-            }
-            None => None,
-        })
+        let item = ready!(this.rx.poll_next_unpin(cx));
+        // Forwarding is over once the body ends or fails, so a drop need not cancel it.
+        if !matches!(item, Some(Ok(_))) {
+            this.task = None;
+        }
+        Poll::Ready(item)
     }
 }
 
@@ -128,8 +114,8 @@ impl Sender {
         let tx = match &*lock(&self.tx) {
             Some(tx) => match tx.try_reserve(&chunk) {
                 Ok(permit) => return permit.send(chunk).into_bound_py_any(py),
-                Err(TrySendError::Full(())) => tx.clone(),
-                Err(TrySendError::Closed(())) => return false.into_bound_py_any(py),
+                Err(TryAcquireError::NoPermits) => tx.clone(),
+                Err(TryAcquireError::Closed) => return false.into_bound_py_any(py),
             },
             None => return false.into_bound_py_any(py),
         };
@@ -152,12 +138,13 @@ impl Sender {
         }
     }
 
-    /// Mark the normal end of the body. The last chunk may still be queued: it is read
-    /// before the closed channel, so finishing never waits for room.
+    /// Mark the normal end of the body, which skips the budget, so finishing never waits.
     fn finish(&self) {
-        self.finished.store(true, Ordering::Release);
         // Python may retain the sender after completion, especially on PyPy.
-        self.close();
+        let tx = lock(&self.tx).take();
+        if let Some(tx) = tx {
+            tx.finish();
+        }
     }
 
     /// Drop the channel end at once, so the body fails instead of waiting for more.

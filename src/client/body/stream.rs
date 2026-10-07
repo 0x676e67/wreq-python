@@ -90,6 +90,16 @@ impl FromPyObject<'_, '_> for PyStream {
     }
 }
 
+impl PyStream {
+    /// Hand an unread iterator to a request the calling thread sends; an async generator
+    /// keeps forwarding on its own loop.
+    pub fn claim(&mut self) {
+        if let Either::Left(stream) = &mut self.0 {
+            stream.claim();
+        }
+    }
+}
+
 impl Stream for PyStream {
     type Item = Item;
 

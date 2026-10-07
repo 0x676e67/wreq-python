@@ -13,22 +13,19 @@ use pyo3::{
     prelude::*,
 };
 
-use super::{Item, next_item, pump::Pumped};
+use super::{Item, next_item, pump::Pumped, queue};
 use crate::runtime::Runtime;
 
 /// A request body from a Python iterator.
 ///
 /// Worker runtimes read the iterator on Tokio's blocking pool ([`Pumped`]): neither a worker
 /// nor a blocked caller runs it, so a slow `__next__` cannot delay the response, a timeout or
-/// cancellation. A current-thread runtime reads it on its driving thread instead
-/// ([`Inline`]), which waits for the request anyway.
+/// cancellation. A current-thread runtime reads it on whichever thread drives it
+/// ([`Inline`]), which is already blocked in a call on that runtime, though not necessarily
+/// this request's.
 pub(super) enum SyncStream {
-    /// Not polled yet; the first poll picks where the iterator is read. `owner` passed the
-    /// iterator to the request.
-    Idle {
-        iter: Py<PyAny>,
-        owner: ThreadId,
-    },
+    /// Not polled yet; the first poll picks where the iterator is read.
+    Idle(Inline),
     Inline(Inline),
     Pumped(Pumped),
     /// The inline iterator ended or raised.
@@ -38,7 +35,7 @@ pub(super) enum SyncStream {
 /// An iterator read on the thread driving a current-thread runtime, between its IO polls.
 pub(super) struct Inline {
     iter: Py<PyAny>,
-    /// The thread that passed the iterator to the request.
+    /// The thread sending the request, whose call an interrupt from the iterator may end.
     owner: ThreadId,
     /// Whether a poll has returned to the connection since the last item.
     flushed: bool,
@@ -49,9 +46,17 @@ pub(super) struct Inline {
 impl SyncStream {
     /// An iterator the calling thread passes to a request.
     pub(super) fn new(iter: Py<PyAny>) -> Self {
-        SyncStream::Idle {
+        SyncStream::Idle(Inline {
             iter,
             owner: thread::current().id(),
+            flushed: false,
+        })
+    }
+
+    /// Hand an unread iterator to a request the calling thread sends.
+    pub(super) fn claim(&mut self) {
+        if let SyncStream::Idle(inline) = self {
+            inline.owner = thread::current().id();
         }
     }
 }
@@ -61,17 +66,13 @@ impl Stream for SyncStream {
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
-        if let SyncStream::Idle { .. } = this
-            && let SyncStream::Idle { iter, owner } = mem::replace(this, SyncStream::Done)
+        if let SyncStream::Idle(_) = this
+            && let SyncStream::Idle(inline) = mem::replace(this, SyncStream::Done)
         {
             *this = if Runtime::driving() {
-                SyncStream::Inline(Inline {
-                    iter,
-                    owner,
-                    flushed: false,
-                })
+                SyncStream::Inline(inline)
             } else {
-                SyncStream::Pumped(Pumped::new(iter))
+                SyncStream::Pumped(Pumped::new(inline.iter))
             };
         }
         match this {
@@ -84,7 +85,7 @@ impl Stream for SyncStream {
                 poll
             }
             SyncStream::Pumped(pumped) => pumped.poll_next_unpin(cx),
-            SyncStream::Idle { .. } | SyncStream::Done => Poll::Ready(None),
+            SyncStream::Idle(_) | SyncStream::Done => Poll::Ready(None),
         }
     }
 }
@@ -111,7 +112,7 @@ impl Stream for Inline {
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
         ready!(this.poll_flush(cx));
-        // Like a pump, stop reading once Python is unavailable.
+        // Like a pump, fail the body once Python is unavailable instead of ending it short.
         Python::try_attach(|py| {
             let item = next_item(py, &this.iter);
             // A KeyboardInterrupt or SystemExit reaches the caller as itself: the owner's call,
@@ -125,7 +126,7 @@ impl Stream for Inline {
             }
             item
         })
-        .flatten()
+        .unwrap_or_else(|| Some(Err(queue::unfinished())))
         .into()
     }
 }

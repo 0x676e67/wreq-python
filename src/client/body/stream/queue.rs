@@ -1,18 +1,16 @@
 //! The queue between a chunk producer and its request body: each queued chunk holds a share
 //! of the upload budget until the body takes it, and dropping the body closes the budget.
+//! The producer marks the end of the body, so a producer that stops early fails it.
 
 use std::{
     pin::Pin,
     sync::Arc,
-    task::{Context, Poll},
+    task::{Context, Poll, ready},
 };
 
 use futures_util::Stream;
-use pyo3::PyErr;
-use tokio::sync::{
-    OwnedSemaphorePermit, Semaphore, TryAcquireError,
-    mpsc::{self, error::TrySendError},
-};
+use pyo3::{PyErr, exceptions::PyRuntimeError};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, TryAcquireError, mpsc};
 
 use super::{Item, PyBytesLike};
 
@@ -22,7 +20,7 @@ const UPLOAD_BUDGET: usize = 256 * 1024;
 /// The least budget a queued chunk holds, so small chunks queue at most 64 items.
 const UPLOAD_CHARGE: usize = 4 * 1024;
 
-/// The producer end. Errors skip the budget, so the error that ends a body never waits.
+/// The producer end. The end and errors skip the budget, so finishing never waits.
 #[derive(Clone)]
 pub(super) struct Tx {
     chan: mpsc::UnboundedSender<Queued>,
@@ -39,11 +37,14 @@ pub(super) struct Permit<'a> {
 pub(super) struct Rx {
     chan: mpsc::UnboundedReceiver<Queued>,
     budget: Arc<Semaphore>,
+    /// Set once the body ended or failed; later polls end it again.
+    ended: bool,
 }
 
-/// A queued item and the share it holds until the body takes it.
+/// A queued chunk, the error that ends the body, or `None` for its normal end, with the
+/// share a chunk holds until the body takes it.
 struct Queued {
-    item: Item,
+    item: Option<Item>,
     _share: Option<OwnedSemaphorePermit>,
 }
 
@@ -55,7 +56,12 @@ pub(super) fn channel() -> (Tx, Rx) {
         chan: tx,
         budget: budget.clone(),
     };
-    (tx, Rx { chan: rx, budget })
+    let rx = Rx {
+        chan: rx,
+        budget,
+        ended: false,
+    };
+    (tx, rx)
 }
 
 /// The budget a queued `chunk` holds; one larger than the budget takes all of it.
@@ -63,19 +69,24 @@ fn charge(chunk: &PyBytesLike) -> u32 {
     u32::try_from(chunk.len().clamp(UPLOAD_CHARGE, UPLOAD_BUDGET)).unwrap_or(u32::MAX)
 }
 
+/// The error for a body whose producer stopped before ending it.
+pub(super) fn unfinished() -> PyErr {
+    PyRuntimeError::new_err("request body stopped before it finished")
+}
+
 // ===== impl Tx =====
 
 impl Tx {
-    /// Reserve `chunk`'s share if the budget has room; `Closed` once the body is dropped.
-    pub(super) fn try_reserve(&self, chunk: &PyBytesLike) -> Result<Permit<'_>, TrySendError<()>> {
-        match self.budget.clone().try_acquire_many_owned(charge(chunk)) {
-            Ok(share) => Ok(Permit {
+    /// Reserve `chunk`'s share if the budget has room: `NoPermits` while it is full,
+    /// `Closed` once the body is dropped.
+    pub(super) fn try_reserve(&self, chunk: &PyBytesLike) -> Result<Permit<'_>, TryAcquireError> {
+        self.budget
+            .clone()
+            .try_acquire_many_owned(charge(chunk))
+            .map(|share| Permit {
                 chan: &self.chan,
                 share,
-            }),
-            Err(TryAcquireError::NoPermits) => Err(TrySendError::Full(())),
-            Err(TryAcquireError::Closed) => Err(TrySendError::Closed(())),
-        }
+            })
     }
 
     /// Wait for room for `chunk`'s share; `None` once the body is dropped.
@@ -92,10 +103,18 @@ impl Tx {
         })
     }
 
+    /// Queue the normal end of the body.
+    pub(super) fn finish(&self) {
+        let _ = self.chan.send(Queued {
+            item: None,
+            _share: None,
+        });
+    }
+
     /// Queue the error that ends the body.
     pub(super) fn fail(&self, err: PyErr) {
         let _ = self.chan.send(Queued {
-            item: Err(err),
+            item: Some(Err(err)),
             _share: None,
         });
     }
@@ -113,7 +132,7 @@ impl Permit<'_> {
     pub(super) fn send(self, chunk: PyBytesLike) -> bool {
         self.chan
             .send(Queued {
-                item: Ok(chunk),
+                item: Some(Ok(chunk)),
                 _share: Some(self.share),
             })
             .is_ok()
@@ -134,11 +153,17 @@ impl Rx {
 impl Stream for Rx {
     type Item = Item;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        // Taking an item returns its share of the budget.
-        self.chan
-            .poll_recv(cx)
-            .map(|queued| queued.map(|queued| queued.item))
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.get_mut();
+        if this.ended {
+            return Poll::Ready(None);
+        }
+        // Taking an item returns its share of the budget. Every producer gone without the
+        // end means one stopped early, so the body is incomplete.
+        let item = ready!(this.chan.poll_recv(cx))
+            .map_or_else(|| Some(Err(unfinished())), |queued| queued.item);
+        this.ended = !matches!(item, Some(Ok(_)));
+        Poll::Ready(item)
     }
 }
 

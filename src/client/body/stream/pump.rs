@@ -9,7 +9,7 @@ use std::{
 
 use futures_util::{Stream, StreamExt};
 use pyo3::prelude::*;
-use tokio::{sync::mpsc::error::TrySendError, time};
+use tokio::{sync::TryAcquireError, time};
 
 use super::{
     Item, PyBytesLike, lock, next_item,
@@ -78,8 +78,8 @@ impl Pump {
     /// Queue chunks until the iterator ends or raises, the body is dropped, or the budget
     /// stays full past [`PARK_AFTER`](Self::PARK_AFTER).
     fn run(mut self, parked: &Mutex<Option<Pump>>) {
-        // Once Python is unavailable, stop reading without creating a PyErr that could
-        // require another attachment to format.
+        // Once Python is unavailable, stop without ending the body, which then fails as
+        // incomplete instead of sending a truncated one.
         Python::try_attach(|py| {
             while !self.tx.is_closed() {
                 let chunk = match self.pending.take() {
@@ -90,7 +90,10 @@ impl Pump {
                             self.tx.fail(err);
                             return;
                         }
-                        None => return,
+                        None => {
+                            self.tx.finish();
+                            return;
+                        }
                     },
                 };
                 let permit = match self.wait_for_room(py, &chunk) {
@@ -101,8 +104,8 @@ impl Pump {
                         let mut slot = lock(parked);
                         match self.tx.try_reserve(&chunk) {
                             Ok(permit) => permit,
-                            Err(TrySendError::Closed(())) => return,
-                            Err(TrySendError::Full(())) => {
+                            Err(TryAcquireError::Closed) => return,
+                            Err(TryAcquireError::NoPermits) => {
                                 self.pending = Some(chunk);
                                 *slot = Some(self);
                                 return;
@@ -122,8 +125,8 @@ impl Pump {
     fn wait_for_room(&self, py: Python<'_>, chunk: &PyBytesLike) -> Option<Permit<'_>> {
         match self.tx.try_reserve(chunk) {
             Ok(permit) => Some(permit),
-            Err(TrySendError::Closed(())) => None,
-            Err(TrySendError::Full(())) => {
+            Err(TryAcquireError::Closed) => None,
+            Err(TryAcquireError::NoPermits) => {
                 let wait = async { time::timeout(Self::PARK_AFTER, self.tx.reserve(chunk)).await };
                 Runtime::block_on_in_pool(py, wait).ok().flatten()
             }
