@@ -22,10 +22,12 @@ use super::{Port, scope::Scope};
 ///
 /// Each suspension hands the task a real asyncio future, so task cancellation and
 /// the C task fast path work unchanged. A throw it accepts, or a close, drops the Rust
-/// future, which aborts any spawned work. PyO3's borrow flag rejects reentrant polls.
+/// future, which aborts any spawned work.
 ///
-/// A coroutine built with [`managed`](super::managed) also works as `async with`, as
-/// `async with await` would; the `scope` module holds that state.
+/// A request coroutine also works as `async with`, as `async with await` would.
+//
+// The doc above is the Python docstring. PyO3's borrow flag rejects reentrant polls;
+// coroutines built by `managed` support `async with`, and the `scope` module holds that state.
 #[pyclass(module = "wreq")]
 pub struct Coroutine {
     qualname: &'static str,

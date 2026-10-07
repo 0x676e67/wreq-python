@@ -128,7 +128,12 @@ def test_legacy_coroutine_throw():
 
     coroutine = wreq.get("")
 
-    class UsesCoroutine(Exception):
+    class ChecksCoroutine(type):
+        def __subclasscheck__(cls, subclass):
+            assert coroutine.__qualname__
+            return super().__subclasscheck__(subclass)
+
+    class UsesCoroutine(Exception, metaclass=ChecksCoroutine):
         def __init__(self):
             super().__init__(coroutine.__qualname__)
 
@@ -148,6 +153,10 @@ def test_legacy_coroutine_throw():
         # The exception is built before the throw borrows the coroutine.
         with pytest.raises(UsesCoroutine):
             coroutine.throw(UsesCoroutine)
+        uses = UsesCoroutine()
+        with pytest.raises(UsesCoroutine) as caught:
+            coroutine.throw(UsesCoroutine, uses)
+        assert caught.value is uses
         with pytest.raises(ValueError) as caught:
             coroutine.throw(error)
         assert caught.value is error
