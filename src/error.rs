@@ -2,8 +2,8 @@ use std::io;
 
 use hickory_resolver::net::NetError;
 use pyo3::{
-    PyErr, Python, create_exception,
-    exceptions::{PyException, PyRuntimeError, PyStopAsyncIteration, PyStopIteration},
+    PyErr, Python,
+    exceptions::{PyRuntimeError, PyStopAsyncIteration, PyStopIteration},
 };
 use tokio::time::error::Elapsed;
 use wreq::header;
@@ -22,43 +22,58 @@ Potential solutions:
 3) Change the order of operations to reference the instance before borrowing it.
 "#;
 
-// System-level and runtime errors
-create_exception!(exceptions, RustPanic, PyException);
+/// Exception types defined in `wreq/exceptions.py`, which also holds their hierarchy.
+mod exceptions {
+    use pyo3::import_exception;
 
-// Network connection errors
-create_exception!(exceptions, ConnectionError, PyException);
-create_exception!(exceptions, ProxyConnectionError, PyException);
-create_exception!(exceptions, ConnectionResetError, PyException);
-create_exception!(exceptions, TlsError, PyException);
+    import_exception!(wreq.exceptions, Error);
+    import_exception!(wreq.exceptions, BuilderError);
+    import_exception!(wreq.exceptions, TlsError);
+    import_exception!(wreq.exceptions, RequestError);
+    import_exception!(wreq.exceptions, ConnectionError);
+    import_exception!(wreq.exceptions, ProxyConnectionError);
+    import_exception!(wreq.exceptions, ConnectionResetError);
+    import_exception!(wreq.exceptions, TimeoutError);
+    import_exception!(wreq.exceptions, BodyError);
+    import_exception!(wreq.exceptions, DecodingError);
+    import_exception!(wreq.exceptions, RedirectError);
+    import_exception!(wreq.exceptions, StatusError);
+    import_exception!(wreq.exceptions, WebSocketError);
+    import_exception!(wreq.exceptions, UpgradeError);
+}
 
-// HTTP protocol and request/response errors
-create_exception!(exceptions, RequestError, PyException);
-create_exception!(exceptions, StatusError, PyException);
-create_exception!(exceptions, RedirectError, PyException);
-create_exception!(exceptions, TimeoutError, PyException);
-
-// Data processing and encoding errors
-create_exception!(exceptions, BodyError, PyException);
-create_exception!(exceptions, DecodingError, PyException);
-
-// Configuration and builder errors
-create_exception!(exceptions, BuilderError, PyException);
-
-// Protocol upgrade and WebSocket errors
-create_exception!(exceptions, UpgradeError, PyException);
-create_exception!(exceptions, WebSocketError, PyException);
-
-macro_rules! wrap_error {
-    ($error:expr, $($variant:ident => $exception:ident),*) => {
-        {
+/// Map a library error to its exception. Causes found in the source chain come before
+/// error kinds, so a body read that timed out raises `TimeoutError`, not `BodyError`.
+fn library_error(error: wreq::Error) -> PyErr {
+    macro_rules! classify {
+        ($($variant:ident => $exception:ident),*) => {
             $(
-                if $error.$variant() {
-                    return $exception::new_err(format_library_error(&$error, concat!(stringify!($variant), " error")));
+                if error.$variant() {
+                    return exceptions::$exception::new_err(format_library_error(
+                        &error,
+                        concat!(stringify!($variant), " error"),
+                    ));
                 }
             )*
-            UpgradeError::new_err(format_library_error(&$error, "error"))
-        }
-    };
+        };
+    }
+
+    classify!(
+        is_timeout => TimeoutError,
+        is_proxy_connect => ProxyConnectionError,
+        is_connection_reset => ConnectionResetError,
+        is_connect => ConnectionError,
+        is_tls => TlsError,
+        is_body => BodyError,
+        is_decode => DecodingError,
+        is_redirect => RedirectError,
+        is_status => StatusError,
+        is_upgrade => UpgradeError,
+        is_websocket => WebSocketError,
+        is_builder => BuilderError,
+        is_request => RequestError
+    );
+    exceptions::Error::new_err(format_library_error(&error, "error"))
 }
 
 /// Error sources can include PyErr, whose formatting attaches to Python.
@@ -95,35 +110,31 @@ impl From<Error> for PyErr {
                 PyStopAsyncIteration::new_err("The async iterator is exhausted")
             }
             Error::WebSocketDisconnected => {
-                PyRuntimeError::new_err("The WebSocket has been disconnected")
+                exceptions::WebSocketError::new_err("The WebSocket has been disconnected")
             }
             Error::InvalidHeaderName(err) => {
-                PyRuntimeError::new_err(format!("Invalid header name: {err:?}"))
+                exceptions::BuilderError::new_err(format!("Invalid header name: {err:?}"))
             }
             Error::InvalidHeaderValue(err) => {
-                PyRuntimeError::new_err(format!("Invalid header value: {err:?}"))
+                exceptions::BuilderError::new_err(format!("Invalid header value: {err:?}"))
             }
-            Error::Timeout(err) => TimeoutError::new_err(format!("Timeout error: {err:?}")),
-            Error::IO(err) => PyRuntimeError::new_err(format!("IO error: {err:?}")),
-            Error::Decode(err) => DecodingError::new_err(format!("Decode error: {err:?}")),
-            Error::Builder(err) => BuilderError::new_err(format!("Builder error: {err:?}")),
-            Error::Dns(err) => BuilderError::new_err(format!("DNS resolver error: {err:?}")),
-            Error::Json(err) => PyRuntimeError::new_err(format!("JSON error: {err:?}")),
-            Error::Form(err) => PyRuntimeError::new_err(format!("Form error: {err:?}")),
-            Error::Library(err) => wrap_error!(err,
-                is_body => BodyError,
-                is_tls => TlsError,
-                is_websocket => WebSocketError,
-                is_connect => ConnectionError,
-                is_proxy_connect => ProxyConnectionError,
-                is_connection_reset => ConnectionResetError,
-                is_decode => DecodingError,
-                is_redirect => RedirectError,
-                is_timeout => TimeoutError,
-                is_status => StatusError,
-                is_request => RequestError,
-                is_builder => BuilderError
-            ),
+            Error::Timeout(err) => {
+                exceptions::TimeoutError::new_err(format!("Timeout error: {err:?}"))
+            }
+            // PyO3 raises the matching `OSError` subclass, such as `FileNotFoundError`.
+            Error::IO(err) => err.into(),
+            Error::Decode(err) => {
+                exceptions::DecodingError::new_err(format!("Decode error: {err:?}"))
+            }
+            Error::Builder(err) => {
+                exceptions::BuilderError::new_err(format!("Builder error: {err:?}"))
+            }
+            Error::Dns(err) => {
+                exceptions::BuilderError::new_err(format!("DNS resolver error: {err:?}"))
+            }
+            Error::Json(err) => exceptions::BuilderError::new_err(format!("JSON error: {err:?}")),
+            Error::Form(err) => exceptions::BuilderError::new_err(format!("Form error: {err:?}")),
+            Error::Library(err) => library_error(err),
         }
     }
 }

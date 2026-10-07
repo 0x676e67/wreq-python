@@ -49,55 +49,32 @@ if __name__ == "__main__":
 
 ### Error Handling
 
-Handle various request exceptions:
+Every wreq error derives from `wreq.Error`; catch a subclass to handle one failure:
 
 ```python
+import asyncio
 import datetime
 import wreq
-import asyncio
-import wreq.exceptions as exceptions
-
-wreq_errors = (
-    exceptions.BodyError,
-    exceptions.BuilderError,
-    exceptions.ConnectionError,
-    exceptions.ConnectionResetError,
-    exceptions.DecodingError,
-    exceptions.RedirectError,
-    exceptions.TimeoutError,
-    exceptions.StatusError,
-    exceptions.RequestError,
-    exceptions.UpgradeError,
-)
 
 
-async def test_timeout_error():
-    print("\n--- TimeoutError (timeout) ---")
+async def main():
     try:
         await wreq.get(
             "https://httpbin.io/delay/10", timeout=datetime.timedelta(seconds=1)
         )
-    except wreq_errors as e:
-        print(f"Caught: {type(e).__name__}: {e}")
-    except Exception as e:
-        print(f"Other error: {type(e).__name__}: {e}")
-
-
-async def test_connection_error():
-    print("\n--- ConnectionError (refused) ---")
-    try:
-        await wreq.get("http://127.0.0.1:9999")
-    except wreq_errors as e:
-        print(f"Caught: {type(e).__name__}: {e}")
-    except Exception as e:
-        print(f"Other error: {type(e).__name__}: {e}")
-
-
-async def main():
-    await test_timeout_error()
-    await test_connection_error()
+    except wreq.TimeoutError as e:
+        print(f"Timed out: {e}")
+    except wreq.ConnectionError as e:
+        print(f"Could not connect: {e}")
+    except wreq.Error as e:
+        print(f"Request failed: {type(e).__name__}: {e}")
 
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
+
+`RequestError` groups transport failures, so it catches connection errors and
+timeouts alike. `ConnectionError`, `ConnectionResetError` and `TimeoutError` also
+derive from the builtins of the same name. See
+[`wreq.exceptions`](../api/exceptions.md) for the full hierarchy.

@@ -75,6 +75,8 @@ async def test_websocket_close_frame(code, reason, expected):
             async with client.websocket(url) as ws:
                 assert await ws.close(code, reason) is None
             assert await asyncio.wait_for(frames.get(), 5) == expected
+            with pytest.raises(wreq.WebSocketError, match="disconnected"):
+                await ws.recv()
     finally:
         server.close()
         await server.wait_closed()
