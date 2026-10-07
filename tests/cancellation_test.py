@@ -95,9 +95,43 @@ def test_legacy_coroutine_throw():
     assert type(caught) is HiddenTraceback
     assert caught.args == ("constructor failure",)
     assert not contains(BaseException.__traceback__.__get__(caught))
-    assert type(invoke(NotAnException)) is TypeError
+    # A failure without a traceback of its own takes the given one.
+    for args in ((NotAnException, None), (UnicodeDecodeError, ("a",))):
+        caught = invoke(*args, origin)
+        assert type(caught) is TypeError
+        assert contains(caught.__traceback__)
+
+    unrelated = KeyError("unrelated")
+    caught = invoke(ValueError, unrelated, origin)
+    assert type(caught) is ValueError
+    assert caught.args == (unrelated,)
+    assert contains(caught.__traceback__)
+    assert invoke(ValueError, value=("keyword",), traceback=origin).args == ("keyword",)
+
+    class RefusingMeta(type):
+        def __subclasscheck__(cls, subclass):
+            raise ZeroDivisionError
+
+    class Refusing(Exception, metaclass=RefusingMeta):
+        pass
+
+    assert type(invoke(Refusing, ValueError())) is ZeroDivisionError
+
+    constructed = []
+
+    class NotRaisable:
+        def __init__(self):
+            constructed.append(self)
+
+    assert type(invoke(NotRaisable)) is TypeError
+    assert not constructed
 
     coroutine = wreq.get("")
+
+    class UsesCoroutine(Exception):
+        def __init__(self):
+            super().__init__(coroutine.__qualname__)
+
     try:
         for args in (
             (object(),),
@@ -107,6 +141,13 @@ def test_legacy_coroutine_throw():
         ):
             with pytest.raises(TypeError):
                 coroutine.throw(*args)
+        # A rejected throw leaves the coroutine running, as a generator's does.
+        with pytest.raises(Exception) as caught:
+            coroutine.send(None)
+        assert "cannot reuse" not in str(caught.value)
+        # The exception is built before the throw borrows the coroutine.
+        with pytest.raises(UsesCoroutine):
+            coroutine.throw(UsesCoroutine)
         with pytest.raises(ValueError) as caught:
             coroutine.throw(error)
         assert caught.value is error

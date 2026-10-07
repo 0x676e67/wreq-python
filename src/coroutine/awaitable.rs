@@ -21,8 +21,8 @@ use super::{Port, scope::Scope};
 /// An awaitable driving a Rust future on the asyncio event loop thread.
 ///
 /// Each suspension hands the task a real asyncio future, so task cancellation and
-/// the C task fast path work unchanged. A throw or close drops the Rust future,
-/// which aborts any spawned work. PyO3's borrow flag rejects reentrant polls.
+/// the C task fast path work unchanged. A throw it accepts, or a close, drops the Rust
+/// future, which aborts any spawned work. PyO3's borrow flag rejects reentrant polls.
 ///
 /// A coroutine built with [`managed`](super::managed) also works as `async with`, as
 /// `async with await` would; the `scope` module holds that state.
@@ -153,18 +153,20 @@ impl Coroutine {
         self.step(py, Some(value)).and_then(Step::into_result)
     }
 
-    /// Raise `exc` at the await point. Like a generator's, it also takes the legacy
-    /// `(type, value, traceback)` form, in which PyPy delegates throws.
+    // Like a generator's, this also takes the legacy `(type, value, traceback)` form, in
+    // which PyPy delegates throws. The exception is built before borrowing the coroutine,
+    // as its constructor may use it.
     #[pyo3(signature = (exc, value = None, traceback = None))]
     fn throw(
-        &mut self,
-        py: Python<'_>,
+        slf: &Bound<'_, Self>,
         exc: Bound<'_, PyAny>,
         value: Option<Bound<'_, PyAny>>,
         traceback: Option<Bound<'_, PyAny>>,
     ) -> PyResult<Py<PyAny>> {
         let exc = thrown(exc, value, traceback)?;
-        self.throw_step(py, exc).and_then(Step::into_result)
+        slf.try_borrow_mut()?
+            .throw_step(slf.py(), exc)
+            .and_then(Step::into_result)
     }
 
     fn close(&mut self, py: Python<'_>) -> PyResult<()> {
@@ -216,13 +218,12 @@ impl Step {
 }
 
 /// The exception `throw(exc, value, traceback)` raises, built as a generator's `throw`
-/// builds it: a constructor that fails raises its own error instead.
+/// builds it.
 fn thrown<'py>(
     exc: Bound<'py, PyAny>,
     value: Option<Bound<'py, PyAny>>,
     traceback: Option<Bound<'py, PyAny>>,
-) -> PyResult<Bound<'py, PyAny>> {
-    let py = exc.py();
+) -> PyResult<Bound<'py, PyBaseException>> {
     if traceback
         .as_ref()
         .is_some_and(|tb| !tb.is_exact_instance_of::<PyTraceback>())
@@ -231,75 +232,77 @@ fn thrown<'py>(
             "throw() third argument must be a traceback object",
         ));
     }
-    if exc.is_instance_of::<PyBaseException>() {
-        if value.is_some() {
+    let ty = match exc.cast_into::<PyBaseException>() {
+        Ok(_) if value.is_some() => {
             return Err(PyTypeError::new_err(
                 "instance exception may not have a separate value",
             ));
         }
-        if traceback.is_some() {
-            set_traceback(&exc, traceback.as_ref())?;
+        Ok(exc) => {
+            if traceback.is_some() {
+                set_traceback(&exc, traceback.as_ref())?;
+            }
+            return Ok(exc);
         }
-        return Ok(exc);
-    }
-    let ty = match exc.cast_into::<PyType>() {
-        Ok(ty) if ty.is_subclass_of::<PyBaseException>()? => ty,
-        _ => {
-            return Err(PyTypeError::new_err(
-                "exceptions must derive from BaseException",
-            ));
-        }
+        Err(err) => match err.into_inner().cast_into::<PyType>() {
+            Ok(ty) if ty.is_subclass_of::<PyBaseException>()? => ty,
+            _ => {
+                return Err(PyTypeError::new_err(
+                    "exceptions must derive from BaseException",
+                ));
+            }
+        },
     };
-    let (instance, traceback) = match instantiate(&ty, value) {
-        Ok(instance) if instance.is_instance_of::<PyBaseException>() => (instance, traceback),
-        Ok(_) => (
-            PyTypeError::new_err("exception constructor did not return an exception")
-                .into_value(py)
-                .into_bound(py)
-                .into_any(),
-            traceback,
-        ),
-        Err(err) => {
-            let own = err.traceback(py).map(Bound::into_any);
-            (
-                err.into_value(py).into_bound(py).into_any(),
-                own.or(traceback),
-            )
+    let py = ty.py();
+    let exc = match instantiate(&ty, value) {
+        Ok(exc) => exc,
+        // A failed constructor raises its own error, keeping that error's traceback if it has
+        // one. PyPy reports a missing traceback as `None`.
+        Err(err) if err.traceback(py).is_some_and(|tb| !tb.is_none()) => {
+            return Ok(err.into_value(py).into_bound(py));
         }
+        Err(err) => err.into_value(py).into_bound(py),
     };
-    set_traceback(&instance, traceback.as_ref())?;
-    Ok(instance)
+    set_traceback(&exc, traceback.as_ref())?;
+    Ok(exc)
 }
 
-/// `ty`'s exception for `value`: `value` itself if it already is one, else `ty` called with
-/// no arguments, the tuple's items or `value`.
+/// `value` itself if it already is a `ty` instance, else `ty()`, `ty(*value)` for a tuple or
+/// `ty(value)`. A result that is not an exception is a `TypeError`.
 fn instantiate<'py>(
     ty: &Bound<'py, PyType>,
     value: Option<Bound<'py, PyAny>>,
-) -> PyResult<Bound<'py, PyAny>> {
-    match value {
+) -> PyResult<Bound<'py, PyBaseException>> {
+    let exc = match value {
         Some(value)
             if value.is_instance_of::<PyBaseException>() && value.get_type().is_subclass(ty)? =>
         {
-            Ok(value)
+            value
         }
-        None => ty.call0(),
+        None => ty.call0()?,
         Some(value) => match value.cast_into::<PyTuple>() {
-            Ok(args) => ty.call1(args),
-            Err(err) => ty.call1((err.into_inner(),)),
+            Ok(args) => ty.call1(args)?,
+            Err(err) => ty.call1((err.into_inner(),))?,
         },
+    };
+    match exc.cast_into::<PyBaseException>() {
+        Ok(exc) => Ok(exc),
+        Err(err) => Err(PyTypeError::new_err(format!(
+            "calling {ty} should have returned an instance of BaseException, not {}",
+            err.into_inner().get_type().name()?
+        ))),
     }
 }
 
-/// Set or clear `exception`'s traceback through `BaseException`, never an override.
-fn set_traceback<'py>(
-    exception: &Bound<'py, PyAny>,
-    traceback: Option<&Bound<'py, PyAny>>,
+/// Set or clear `exc`'s traceback through `BaseException`, never an override.
+fn set_traceback(
+    exc: &Bound<'_, PyBaseException>,
+    traceback: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<()> {
-    let py = exception.py();
+    let py = exc.py();
     py.get_type::<PyBaseException>()
         .getattr(intern!(py, "with_traceback"))?
-        .call1((exception, traceback))
+        .call1((exc, traceback))
         .map(drop)
 }
 
