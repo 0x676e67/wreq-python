@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 import wreq
 from wreq import Multipart, Part
+from wreq.runtime import Runtime, Scheduler
 
 client = wreq.Client(tls_info=True)
 
@@ -90,3 +91,22 @@ async def test_reuse_same_part_without_copy_fails_for_stream_value():
 
     with pytest.raises(RuntimeError):
         Multipart(part)
+
+
+@pytest.mark.asyncio
+async def test_file_parts_open_when_the_request_is_built(tmp_path):
+    url = "http://localhost:8080/post"
+    path = tmp_path / "part.txt"
+    path.write_bytes(b"file part")
+    blocking = wreq.blocking.Client(runtime=Runtime(scheduler=Scheduler.CURRENT_THREAD))
+
+    # A current-thread client opens the file on its own runtime, driven by the caller.
+    with blocking.post(url, multipart=Multipart(Part(name="f", value=path))) as resp:
+        assert resp.json()["files"]["f"] == "file part"
+
+    # A missing file fails the request rather than building the form.
+    form = Multipart(Part(name="f", value=tmp_path / "missing.txt"))
+    with pytest.raises(RuntimeError, match="IO error"):
+        blocking.post(url, multipart=form)
+    with pytest.raises(RuntimeError, match="IO error"):
+        await client.post(url, multipart=form)

@@ -151,9 +151,9 @@ bound or request is sent.
 (512 and 10 seconds). With
 `Scheduler.PER_WORKER` these limits apply to **each worker's** blocking pool, not
 the pool as a whole. Python async upload generators still run on the caller's event loop.
-Standalone multipart file preparation and upload-task cleanup can use the
-shared runtime; a dedicated client runtime does not isolate Python's GIL or
-every process resource. DNS resolvers are owned by individual clients so their
+Multipart files open on the client's runtime when the request is built; only
+upload cleanup that runs outside any runtime uses the shared runtime. A dedicated
+client runtime does not isolate Python's GIL or every process resource. DNS resolvers are owned by individual clients so their
 connections are not shared across runtimes.
 
 Closing a client cancels pending requests and rejects new requests with

@@ -372,12 +372,9 @@ where
             // Body options.
             apply_option!(set_if_some_ref, builder, request.form, form);
             apply_option!(set_if_some_ref, builder, request.json, json);
-            apply_option!(
-                set_if_some,
-                builder,
-                request.multipart.and_then(|form| form.form),
-                multipart
-            );
+            if let Some(multipart) = request.multipart {
+                builder = builder.multipart(multipart.into_form().await?);
+            }
             apply_option!(
                 set_if_some_map_try,
                 builder,
