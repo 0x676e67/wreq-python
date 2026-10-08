@@ -16,6 +16,7 @@ from bench.charts import write_charts
 from bench.clients import CAPABILITIES
 from bench.report import render_markdown
 from bench.results import require_publish, validate_document
+from bench.workloads import WARMUP_REQUESTS_PER_BATCH
 from docs.benchmark_view import render_explorer
 
 MAX_DATA_BYTES = 8 * 1024 * 1024
@@ -125,6 +126,11 @@ def prepare(
                     api: {
                         "source": value["source"],
                         "generated_at": value["generated_at"],
+                        **(
+                            {"measurement_sources": value["measurement_sources"]}
+                            if "measurement_sources" in value
+                            else {}
+                        ),
                     }
                     for api, value in (("async", document), ("blocking", blocking))
                 },
@@ -137,18 +143,18 @@ def prepare(
             and value["configuration"].get(
                 "warmup_requests", value["configuration"]["requests"]
             )
-            != value["configuration"]["requests"]
+            < WARMUP_REQUESTS_PER_BATCH
         ]
         if experiments:
             settings = "; ".join(
-                f"{config['warmup_requests']} warm-up requests and "
+                f"{config.get('warmup_requests', config['requests'])} warm-up requests and "
                 f"{config['requests']} timed requests per batch"
                 for config in experiments
             )
             charts = (
                 '!!! note "Experimental warm-up budget"\n\n'
-                f"    This preview uses {settings}. The warm-up budget differs "
-                "from the published method; these results have not replaced "
+                f"    This preview uses {settings}. The warm-up budget is below "
+                "the published minimum; these results have not replaced "
                 "the published snapshots.\n\n" + charts
             )
         snapshot.parent.mkdir(parents=True, exist_ok=True)

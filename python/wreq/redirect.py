@@ -11,12 +11,8 @@ class Policy:
     """
     Represents the redirect policy for HTTP requests.
 
-    The default value will catch redirect loops, and has a maximum of 10
-    redirects it will follow in a chain before returning an error.
-    """
-
-    """
-    Create a default Policy instance.
+    Clients do not follow redirects by default. Use limited() to enable
+    redirect following with a limit (10 when max is omitted).
     """
 
     @staticmethod
@@ -78,7 +74,7 @@ class Policy:
             def policy(attempt: redirect.Attempt) -> redirect.Action:
                 if len(attempt.previous) > 5:
                     return attempt.error("too many redirects")
-                elif "example.com" in attempt.uri:
+                elif "example.com" in attempt.next:
                     return attempt.stop()
                 else:
                     return attempt.follow()

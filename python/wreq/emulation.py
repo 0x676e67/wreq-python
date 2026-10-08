@@ -365,17 +365,18 @@ class Emulation:
         Create a new emulation configuration.
 
         Args:
-            profile: Whether to change the profile (browser/okhttp) information.
-            platform: Whether to change the platform (Windows/macOS/Linux/Android/iOS) information.
-            http2: Whether to enable HTTP/2.
-            headers: Whether to include default headers.
+            profile: The browser or HTTP client profile to use.
+            platform: The platform used for the profile's headers and user agent.
+            http2: Whether to apply the profile's HTTP/2 settings. False does not disable HTTP/2.
+            headers: Whether to apply the profile's header preset.
 
         Returns:
             A configured Emulation instance
 
         Example:
             ```python
-            # Chrome on Windows with HTTP/2 disabled
+            # Chrome on Windows without the profile's HTTP/2 settings
+            from wreq.emulation import Emulation, Platform, Profile
             option = Emulation(
                 profile=Profile.Chrome137,
                 platform=Platform.Windows,

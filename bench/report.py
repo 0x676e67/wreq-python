@@ -104,6 +104,17 @@ def render_markdown(
                 "**Local measurement: the source checkout had uncommitted changes.**",
                 "",
             ]
+    if include_source and document.get("measurement_sources"):
+        lines += ["Combined results from separate measured runs:", ""]
+        for measurement in document["measurement_sources"]:
+            measured_at = datetime.fromisoformat(measurement["generated_at"])
+            revision = measurement["source"]["commit"]
+            lines.append(
+                f"- {escape(measurement['label'])}: "
+                f"[{revision[:12]}]({REPOSITORY}/commit/{revision}), "
+                f"{measured_at:%Y-%m-%d %H:%M UTC}."
+            )
+        lines.append("")
     if data_link is not None:
         lines += [f"[Download this build's raw JSON]({safe_data_link(data_link)}).", ""]
     if environment_heading is not None:

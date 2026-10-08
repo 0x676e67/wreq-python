@@ -98,6 +98,7 @@ nav:
       - Quick Start: getting-started/quickstart.md
   - Guides:
       - Basic Usage: guide/basic.md
+      - Runtimes: guide/runtime.md
       - Emulation: guide/emulation.md
       - Authentication: guide/auth.md
       - Cookie: guide/cookie.md

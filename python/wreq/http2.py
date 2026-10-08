@@ -117,7 +117,7 @@ class StreamId:
     MAX: ClassVar[Self]
     """The maximum allowed stream ID."""
 
-    def __init__(self, src: int) -> None:
+    def __init__(self, value: int) -> None:
         """
         Create a new StreamId.
         """

@@ -63,7 +63,7 @@ connections, and use context managers to close resources when you're done.
     Clients share a runtime by default. Supply your own `Runtime` to choose
     worker settings for a workload, including a single-worker runtime.
 
-    [Runtime API](../api/runtime.md)
+    [Runtime guide](../guide/runtime.md)
 
 - **Protocol settings**
 
