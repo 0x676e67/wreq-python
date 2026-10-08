@@ -122,7 +122,7 @@ def make_document(configuration=None, commit="a" * 40):
 def test_configuration_and_aggregation():
     defaults = benchmark.parse_args(["--server", "server"])
     assert defaults.sizes == list(BODY_CASES)
-    assert defaults.concurrency == [10, 50, 100, 150] and defaults.requests == 300
+    assert defaults.concurrency == [2, 10, 50, 100] and defaults.requests == 300
     for size, chunk_bytes in {**BODY_CASES, 123: 123, 70000: 65536}.items():
         body = b"a" * size
         chunks = prepare_chunks(body, "stream")
@@ -278,9 +278,9 @@ def test_blocking_workers_and_failure_cleanup(monkeypatch):
 def test_independent_warmup_budget(monkeypatch):
     args = benchmark.parse_args(["--server", "server", "--warmup-requests", "150"])
     assert args.requests == 300 and args.warmup_requests == 150
-    assert benchmark.parse_args(["--server", "server"]).warmup_requests == 300
+    assert benchmark.parse_args(["--server", "server"]).warmup_requests == 200
     with pytest.raises(SystemExit):
-        benchmark.parse_args(["--server", "server", "--warmup-requests", "149"])
+        benchmark.parse_args(["--server", "server", "--warmup-requests", "99"])
     calls = []
 
     @contextmanager

@@ -240,12 +240,13 @@ class Client:
         # Examples
 
         ```python
+        from datetime import timedelta
         import asyncio
         import wreq
 
         client = wreq.blocking.Client(
             user_agent="Mozilla/5.0",
-            timeout=10,
+            timeout=timedelta(seconds=10),
         )
         response = client.get('https://httpbin.io/get')
         print(response.text())

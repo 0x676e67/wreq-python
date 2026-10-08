@@ -20,7 +20,12 @@ if __package__:
         PACKAGES,
         supports,
     )
-    from .workloads import BODY_CASES, CONCURRENCY_CASES
+    from .workloads import (
+        BODY_CASES,
+        CONCURRENCY_CASES,
+        REQUESTS_PER_BATCH,
+        WARMUP_REQUESTS_PER_BATCH,
+    )
 else:
     from clients import (
         CAPABILITIES,
@@ -30,7 +35,12 @@ else:
         PACKAGES,
         supports,
     )
-    from workloads import BODY_CASES, CONCURRENCY_CASES
+    from workloads import (
+        BODY_CASES,
+        CONCURRENCY_CASES,
+        REQUESTS_PER_BATCH,
+        WARMUP_REQUESTS_PER_BATCH,
+    )
 
 DIMENSIONS = ("client", "protocol", "body_kind", "payload_bytes", "concurrency")
 BLOCKING_CLIENTS = tuple(
@@ -61,23 +71,43 @@ def require_publish(config, *, blocking=False, allow_legacy_snapshot=False):
     }
     message = (
         f"Publishing requires the complete {'blocking' if blocking else 'default'} matrix, "
-        ">=300 timed and warm-up requests, >=3 rounds, >=1 warm-up and timed sample"
+        f">={REQUESTS_PER_BATCH} timed and >={WARMUP_REQUESTS_PER_BATCH} warm-up requests, "
+        ">=3 rounds, >=1 warm-up and timed sample"
     )
     try:
+        requests_minimum = REQUESTS_PER_BATCH
+        warmup_minimum = WARMUP_REQUESTS_PER_BATCH
+        if allow_legacy_snapshot and set(config.get("concurrency", ())) == {
+            10, 50, 100, 150
+        }:
+            axes["concurrency"] = (10, 50, 100, 150)
+            requests_minimum = warmup_minimum = 300
+            message += (
+                "; historical four-concurrency snapshots require "
+                ">=300 timed and warm-up requests"
+            )
+        if allow_legacy_snapshot and set(config.get("concurrency", ())) == {
+            10, 50, 100
+        }:
+            axes["concurrency"] = (10, 50, 100)
         complete = all(
             len(config[key]) == len(values) and set(config[key]) == set(values)
             for key, values in axes.items()
         ) and all(
             type(config[key]) is int and config[key] >= minimum
             for key, minimum in (
-                ("requests", 300),
+                ("requests", requests_minimum),
                 ("rounds", 3),
                 ("warmup", 1),
                 ("samples", 1),
             )
         )
         warmup_requests = config.get("warmup_requests", config["requests"])
-        complete = complete and type(warmup_requests) is int and warmup_requests >= 300
+        complete = (
+            complete
+            and type(warmup_requests) is int
+            and warmup_requests >= warmup_minimum
+        )
     except (KeyError, TypeError) as exc:
         raise ValueError(message) from exc
     if not complete:
@@ -262,7 +292,7 @@ def validate_document(document):
                 isinstance(measurements, list) and bool(measurements),
                 "Invalid measurement sources",
             )
-            assigned_clients = []
+            assigned_cases = []
             for measurement in measurements:
                 require(
                     isinstance(measurement, dict)
@@ -281,7 +311,15 @@ def validate_document(document):
                     and all(isinstance(client, str) for client in members),
                     "Invalid measurement clients",
                 )
-                assigned_clients.extend(members)
+                concurrency = measurement.get("concurrency", config["concurrency"])
+                require(
+                    isinstance(concurrency, list)
+                    and bool(concurrency)
+                    and all(integer(value) for value in concurrency)
+                    and set(concurrency) <= set(config["concurrency"]),
+                    "Invalid measurement concurrency",
+                )
+                assigned_cases.extend(product(members, concurrency))
                 measured_at = datetime.fromisoformat(measurement["generated_at"])
                 require(
                     measured_at.utcoffset() is not None
@@ -303,9 +341,10 @@ def validate_document(document):
                         "Invalid measurement artifact",
                     )
             require(
-                len(assigned_clients) == len(set(assigned_clients))
-                and set(assigned_clients) == set(config["clients"]),
-                "Measurement sources must cover every client exactly once",
+                len(assigned_cases) == len(set(assigned_cases))
+                and set(assigned_cases)
+                == set(product(config["clients"], config["concurrency"])),
+                "Measurement sources must cover every client/concurrency pair exactly once",
             )
         environment = document["environment"]
         require(

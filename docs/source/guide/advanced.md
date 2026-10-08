@@ -1,227 +1,182 @@
-# Advanced Features
+# Advanced features
 
-!!! info "On this page"
-    - Header order
-    - Other advanced usage
+Use streaming uploads for data produced incrementally, and multipart forms for
+named fields and files. Response streaming is covered in [basic usage](basic.md).
 
-### Streaming Request Body
+## Streaming request bodies
 
-Send data using async generators for streaming uploads:
-
-Async upload generators run on the caller's running event loop with its context variables.
-Their exceptions fail the request. When an upload ends, the generator is closed;
-cancelling or dropping the upload schedules producer cancellation and cleanup on that loop.
-Keep the loop running until generator cleanup has finished. This also applies to async multipart parts.
-Construct async-generator `Part` objects inside a running event loop; their producers
-start at construction. A producer reads ahead until its queued chunks fill a 256 KiB
-budget. Each chunk counts as at least 4 KiB, so at most 64 small chunks queue, and a chunk
-above 256 KiB queues alone at its full size. One more chunk can wait for room outside the
-budget, so memory held ahead of the upload also grows with the chunk size.
-Use synchronous iterators for blocking uploads. They run on the runtime's blocking pool
-with the same budget, except on a current-thread runtime, which reads each chunk only when
-the upload needs it. A blocking call on the producer's event-loop thread prevents async
-generators from progressing.
+Pass a synchronous iterator or an async generator to `body`. Each item must
+be a supported body chunk, such as `bytes` or `str`:
 
 ```python
 import asyncio
-import wreq
-
-
-async def gen():
-    for i in range(10):
-        await asyncio.sleep(0.1)
-
-        if i <= 5:
-            # bytes chunk
-            yield bytes(f"Hello {i}\n", "utf-8")
-        else:
-            # str chunk
-            yield str("Hello {}\n".format(i)).encode("utf-8")
-
-
-async def main():
-    async with wreq.post(
-        "https://httpbin.io/anything",
-        body=gen(),
-    ) as resp:
-        print(await resp.text())
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Multipart File Upload
-
-Upload multiple files and data parts:
-
-```python
-from pathlib import Path
-import asyncio
-import aiofiles
-import wreq
-from wreq import Multipart, Part
-
-
-async def file_to_bytes_stream(file_path):
-    async with aiofiles.open(file_path, "rb") as f:
-        while chunk := await f.read(1024):
-            yield chunk
-
-
-async def main():
-    async with wreq.post(
-        "https://httpbin.io/anything",
-        multipart=Multipart(
-            # Upload text data
-            Part(name="def", value="111", filename="def.txt", mime="text/plain"),
-            # Upload binary data
-            Part(name="abc", value=b"000", filename="abc.txt", mime="text/plain"),
-            # Upload file data
-            Part(
-                name="LICENSE",
-                value=Path("LICENSE"),
-                filename="LICENSE",
-                mime="text/plain",
-            ),
-            # Upload bytes stream file data
-            Part(
-                name="README",
-                value=file_to_bytes_stream("README.md"),
-                filename="README.md",
-                mime="text/plain",
-            ),
-        ),
-    ) as resp:
-        print(await resp.text())
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Custom runtimes
-
-Clients share a global multi-thread runtime when `runtime` is omitted or `None`.
-It starts on first use. Construct a `Runtime` to give an async or blocking
-client its own runtime:
-
-```python
-from datetime import timedelta
 
 from wreq import Client
-from wreq.runtime import Runtime, Scheduler
 
-runtime = Runtime(
-    scheduler=Scheduler.PER_WORKER,
-    workers=1,
-    thread_name="http-client",
-    max_blocking_threads=8,
-    thread_keep_alive=timedelta(seconds=10),
-)
-client = Client(runtime=runtime)
+
+async def chunks():
+    for number in range(3):
+        await asyncio.sleep(0.01)
+        yield f"line {number}\n".encode()
+
+
+async def main():
+    async with Client() as client:
+        async with client.post("https://httpbin.io/post", body=chunks()) as response:
+            response.raise_for_status()
+            print(await response.json())
+
+
+asyncio.run(main())
 ```
 
-`scheduler` selects how the runtime runs client work. It replaces `work_steal`:
-`work_steal=False` is `Scheduler.PER_WORKER`, and the old default is
-`Scheduler.WORK_STEALING`.
+Async upload generators run on the caller's event loop with its context
+variables. An exception fails the request. The producer closes the generator
+after use; cancellation or dropping an upload schedules its cancellation and
+cleanup on that loop. Keep the loop running until cleanup finishes.
 
-- `Scheduler.WORK_STEALING` (the default) uses one multi-thread pool whose
-  workers steal work from each other.
-- `Scheduler.PER_WORKER` gives each worker its own single-thread Tokio runtime.
-- `Scheduler.CURRENT_THREAD` has no workers: blocking calls drive its IO, which
-  is fastest with a client and runtime per thread. It serves only blocking
-  clients; see the [blocking guide](blocking.md#current-thread-runtime).
+Use synchronous iterators for blocking uploads. A blocking call on the
+producer's event-loop thread prevents an async generator from progressing.
+Create a fresh iterator for each request; an exhausted upload cannot be replayed.
 
-With `Scheduler.PER_WORKER`, each client is assigned one worker for its
-lifetime; requests, response reads, streams and WebSocket operations use that
-worker. With multiple workers, newly created clients select a worker randomly and
-keep that selection. This is not CPU pinning. Sharing the same `Runtime` between
-clients is supported, and `client.runtime` returns the shared runtime object.
+??? note "Upload buffering"
 
-With either worker scheduler, async reads of an HTTP/1 body of known length that
-the client does not decompress finish on the event loop thread once the data has
-arrived: `bytes()` and `text()` up to 64 KiB, `json()` up to 8 KiB, and a stream's
-first frame of any size, plus the next one if it is already buffered. Other reads
-and later stream frames run on the runtime.
+    Async generators and synchronous iterators on worker schedulers read ahead
+    within a 256 KiB queue budget. Each chunk counts
+    as at least 4 KiB, so up to 64 small chunks can queue. A chunk larger than
+    256 KiB queues alone at its full size. One more chunk can wait outside the
+    budget, so this is not a hard limit on total upload memory.
 
-`workers=None` uses the available CPU parallelism, or 1 if it cannot be determined;
-`Scheduler.CURRENT_THREAD` requires it.
-Worker schedulers start their threads during construction, before any client is
-bound or request is sent; `Scheduler.CURRENT_THREAD` starts none.
+    Synchronous iterators use the runtime's blocking pool with worker schedulers.
+    A current-thread runtime reads them on demand on its driving thread. See
+    [runtimes](runtime.md#current-thread) for its restrictions.
 
-`thread_name=None` uses the package name, `wreq-python`, as the thread name.
+## Multipart fields and files
 
-`thread_keep_alive` accepts a nonnegative `datetime.timedelta`.
-`max_blocking_threads` and `thread_keep_alive` default to Tokio's settings
-(512 and 10 seconds). With
-`Scheduler.PER_WORKER` these limits apply to **each worker's** blocking pool, not
-the pool as a whole. Python async upload generators still run on the caller's event loop.
-Multipart files open on the client's runtime when the request is built; only
-upload cleanup that runs outside any runtime uses the shared runtime. A dedicated
-client runtime does not isolate Python's GIL or every process resource. DNS resolvers are owned by individual clients so their
-connections are not shared across runtimes.
-
-Closing a client cancels pending requests and rejects new requests with
-`asyncio.CancelledError`, for both async and blocking APIs. It does not shut down
-the runtime or invalidate existing responses and WebSockets.
-Clients, responses, streams and active tasks share ownership. Dropping the last
-owner automatically releases a custom runtime without synchronously waiting for
-its workers; already running blocking work may finish later. The default runtime
-is shared for the process lifetime. Zero thread counts, NUL characters in thread
-names and negative durations raise `ValueError`.
-
-### TLS Key Logging
-
-Capture TLS keys for debugging with tools like Wireshark:
+`Part` accepts text, bytes, a `pathlib.Path`, or an upload iterator. The following
+example expects `report.txt` in the current directory. A path streams the file
+without first loading it into Python memory:
 
 ```python
 import asyncio
+from pathlib import Path
+
+from wreq import Client, Multipart, Part
+
+
+async def main():
+    form = Multipart(
+        Part(name="description", value="Monthly report"),
+        Part(
+            name="document",
+            value=Path("report.txt"),
+            filename="report.txt",
+            mime="text/plain",
+        ),
+    )
+    async with Client() as client:
+        async with client.post("https://httpbin.io/post", multipart=form) as response:
+            response.raise_for_status()
+            print(await response.json())
+
+
+asyncio.run(main())
+```
+
+File paths are opened on the client's runtime when building the request. A
+missing file raises an error at that point. Stream parts are consumed once;
+recreate them for another request. Text, bytes and path parts can be reused.
+
+Construct async-generator parts inside a running event loop: their producers
+start at `Part` construction. Their buffering and cleanup follow the same rules
+as async request bodies. The [Multipart and Part reference](../api/wreq.md)
+also covers stream lengths and per-part headers.
+
+## Custom runtimes
+
+The [runtime guide](runtime.md) explains shared and dedicated worker pools,
+MT/ST settings, caller-driven blocking I/O, and client lifetime. Use the default
+runtime unless your workload needs a different scheduling configuration.
+
+## TLS certificates and key logging
+
+Certificate and hostname verification are enabled by default. For a private
+certificate authority, pass a PEM bundle using `tls_verify=Path("ca.pem")`.
+For mutual TLS, construct an `Identity` and pass it as `tls_identity`. See the
+[TLS reference](../api/tls.md) for certificate and key formats.
+
+Use `tls_keylog` to write TLS session keys for tools such as Wireshark:
+
+```python
+import asyncio
+
 from wreq import Client
 from wreq.tls import KeyLog
 
 
 async def main():
-    client = Client(keylog=KeyLog.file("keylog.log"))
-    async with client.get("https://www.google.com") as resp:
-        print(await resp.text())
+    async with Client(tls_keylog=KeyLog.file("keylog.log")) as client:
+        async with client.get("https://httpbin.io/get") as response:
+            print(await response.text())
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+asyncio.run(main())
 ```
 
-### Original Header Order Preservation
+The log contains keys that can decrypt captured traffic. Keep it private and
+enable logging only when you need it.
 
-Preserve header case and order for specific sites:
+## DNS and protocol options
+
+`dns_options` selects the resolver and can override specific host addresses.
+Overrides retain the URL's hostname for HTTP and TLS. This configuration uses
+system DNS; omit it to use the default Hickory resolver:
+
+```python
+from wreq.blocking import Client
+from wreq.dns import DnsOptions
+
+
+with Client(dns_options=DnsOptions(system_dns=True)) as client:
+    with client.get("https://httpbin.io/get") as response:
+        print(response.text())
+```
+
+For explicit addresses, use `DnsOptions.add_resolve()` with `ipaddress` objects.
+`lookup_ip_strategy` applies to Hickory, not system DNS. See the
+[DNS reference](../api/dns.md).
+
+At client construction, `http1_only=True` or `http2_only=True` restricts the
+protocol. A request can also specify `version=Version.HTTP_11` or
+`version=Version.HTTP_2`. Check `response.version` to see the protocol used.
+Use [Http1Options](../api/http1.md), [Http2Options](../api/http2.md) and
+[TlsOptions](../api/tls.md) for individual protocol settings, or an
+[emulation profile](emulation.md) for a coordinated browser configuration.
+
+## Header case and order
+
+`headers` supplies values. `orig_headers` supplies HTTP/1 header spelling and
+ordering; naming a header there does not create its value. HTTP/2 uses lowercase
+field names and separate pseudo-header settings.
 
 ```python
 import asyncio
-import wreq
-from wreq.emulation import Emulation
+
+from wreq import Client
 
 
 async def main():
-    async with wreq.websocket(
-        "wss://gateway.discord.gg/",
-        emulation=Emulation.Chrome137,
-        headers={"Origin": "https://discord.com"},
-        # Preserve HTTP/1 case and header order
-        orig_headers=[
-            "User-Agent",
-            "Origin",
-            "Host",
-            "Accept",
-            "Accept-Encoding",
-            "Accept-Language",
-        ],
-    ) as ws:
-        msg = await ws.recv()
-        if msg is not None:
-            print(msg.json())
-        await ws.close()
+    async with Client(
+        http1_only=True,
+        headers={"User-Agent": "my-app/1.0", "Accept": "application/json"},
+        orig_headers=["Host", "User-Agent", "Accept"],
+    ) as client:
+        async with client.get("https://httpbin.io/headers") as response:
+            print(await response.json())
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+asyncio.run(main())
 ```
+
+For repeated headers and explicit ordering, see
+[HeaderMap and OrigHeaderMap](../api/header.md).

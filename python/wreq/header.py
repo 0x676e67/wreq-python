@@ -11,7 +11,7 @@ including proper support for headers that can have multiple values (like
 Set-Cookie, Accept-Encoding, etc.).
 """
 
-from typing import Mapping, Iterator, Sequence, Tuple
+from typing import Iterator, Tuple
 
 __all__ = ["HeaderMap", "OrigHeaderMap"]
 
@@ -61,13 +61,13 @@ class HeaderMap:
         ...
 
     def __init__(
-        self, init: Mapping[str, str] | None = None, capacity: int | None = None
+        self, dict: dict[str, str] | None = None, capacity: int | None = None
     ) -> None:
         """
         Create a new HeaderMap.
 
         Args:
-            init: Optional dictionary to initialize headers from
+            dict: Optional dictionary to initialize headers from
             capacity: Optional initial capacity hint for performance
 
         Returns:
@@ -270,7 +270,7 @@ class OrigHeaderMap:
 
     def __init__(
         self,
-        init: Sequence[str] | None = None,
+        init: list[str] | None = None,
         capacity: int | None = None,
     ) -> None:
         """
@@ -301,24 +301,22 @@ class OrigHeaderMap:
         """
         Insert a new header name into the collection.
 
-        If the map did not previously have this key present, then False is returned.
-        If the map did have this key present, the new value is pushed to the end
-        of the list of values currently associated with the key. The key is not
-        updated, though; this matters for types that can be == without being identical.
+        Append the spelling to the entries for this case-insensitive name.
+        Repeated names retain their individual spelling and insertion order.
 
         Args:
             value: The header name to insert.
 
         Returns:
-            True if the key was newly inserted, False if it already existed.
+            True if the name already existed, False if it is a new name.
         """
         ...
 
-    def extend(self, other: "OrigHeaderMap") -> None:
+    def extend(self, iter: "OrigHeaderMap") -> None:
         """
         Extends the map with all entries from another OrigHeaderMap, preserving order.
 
         Args:
-            other: Another OrigHeaderMap to extend from.
+            iter: Another OrigHeaderMap to extend from.
         """
         ...

@@ -1,0 +1,162 @@
+Measured revision: [c816f085be90](https://github.com/0x676e67/wreq-python/commit/c816f085be9064f366716b268b4264ca9050982b). Collected 2026-10-06 05:05 UTC.
+
+### Measurement environment
+
+| Item | Value |
+| --- | --- |
+| Python | CPython 3&#46;14&#46;6 &#40;main, Jul 23 2026, 14:45:24&#41; &#91;Clang 22&#46;1&#46;3 &#93; |
+| OS | Linux&#45;6&#46;18&#46;33&#46;2&#45;microsoft&#45;standard&#45;WSL2&#45;x86&#95;64&#45;with&#45;glibc2&#46;39 |
+| Architecture | x86&#95;64 |
+| CPU | AMD Ryzen 9 9950X 16&#45;Core Processor; 32 logical CPUs |
+| Python event loop | asyncio |
+| Server | Controlled Rust TLS echo server; 4 workers |
+| TLS | TLS 1.3; certificate verification disabled for the local test server |
+| Repeats | Rounds: 3; timed batches/round: 1; timed requests/batch: 300; warm-up batches/round: 1; warm-up requests/batch: 200 |
+| Stream upload chunk | Varies by payload; see body cases below |
+
+### Body cases
+
+Each payload uses the upload modes and concurrency levels listed in this run.
+
+| Upload / echo payload | Stream upload chunk |
+| --- | --- |
+| 1 KiB | 1 KiB |
+| 10 KiB | 10 KiB |
+| 64 KiB | 16 KiB |
+| 128 KiB | 32 KiB |
+| 1 MiB | 64 KiB |
+| 2 MiB | 128 KiB |
+| 4 MiB | 256 KiB |
+
+### Client versions and runtimes
+
+| Client | API | Package | Version | Runtime | Protocols | Uploads |
+| --- | --- | --- | --- | --- | --- | --- |
+| wreq &#40;blocking MT&#41; | blocking | wreq | 0&#46;13&#46;0 | Thread pool; one client per logical worker | HTTP/1.1, HTTP/2 | Full, Stream |
+| wreq &#40;blocking ST&#41; | blocking | wreq | 0&#46;13&#46;0 | Thread pool; one client per logical worker | HTTP/1.1, HTTP/2 | Full, Stream |
+| ry &#40;blocking&#41; | blocking | ry | 0&#46;0&#46;101 | Thread pool; one client per logical worker | HTTP/1.1, HTTP/2 | Full, Stream |
+| requests | blocking | requests | 2&#46;34&#46;2 | Thread pool; one client per logical worker | HTTP/1.1 | Full, Stream |
+| httpx &#40;blocking&#41; | blocking | httpx | 0&#46;28&#46;1 | Thread pool; one client per logical worker | HTTP/1.1, HTTP/2 | Full, Stream |
+| niquests &#40;blocking&#41; | blocking | niquests | 3&#46;21&#46;2 | Thread pool; one client per logical worker | HTTP/1.1, HTTP/2 | Full, Stream |
+| curl&#95;cffi &#40;blocking&#41; | blocking | curl&#95;cffi | 0&#46;16&#46;3 | Thread pool; one client per logical worker | HTTP/1.1, HTTP/2 | Full, Stream |
+| PycURL | blocking | pycurl | 7&#46;48&#46;0 | Thread pool; one client per logical worker | HTTP/1.1, HTTP/2 | Full, Stream |
+
+### Throughput comparison
+
+Each value is total measured requests divided by total measured time across all rounds, in requests per second (RPS). All timed samples count. The raw JSON keeps individual timings, per-round results, response-payload MB/s and native artifact SHA-256 hashes. Read chunking, buffering and connection pools differ between adapters; their configurations are recorded in the raw JSON.
+
+### Blocking clients
+
+N/A means the client API doesn't support that protocol or upload mode. It doesn't indicate a failed request or zero throughput.
+
+#### HTTP/1.1: Full upload
+
+Unit: requests/s (RPS, requests per second). Higher is better.
+
+| Upload / echo payload | Concurrency | wreq &#40;blocking MT&#41; | wreq &#40;blocking ST&#41; | ry &#40;blocking&#41; | requests | httpx &#40;blocking&#41; | niquests &#40;blocking&#41; | curl&#95;cffi &#40;blocking&#41; | PycURL |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 KiB | 10 | 22,319.9 | 22,282.3 | 9,288.8 | 1,548.5 | 1,871.5 | 1,644.7 | 570.1 | 13,631.4 |
+| 1 KiB | 50 | 17,320.7 | 18,413.3 | 8,386.3 | 1,480.7 | 1,833.4 | 1,594.9 | 578.6 | 11,481.4 |
+| 1 KiB | 100 | 15,092.9 | 15,245.2 | 7,733.8 | 1,449.8 | 1,792.1 | 1,514.7 | 578.7 | 10,858.8 |
+| 10 KiB | 10 | 21,970.0 | 21,342.2 | 9,109.1 | 1,514.4 | 1,877.2 | 1,608.8 | 577.3 | 13,689.7 |
+| 10 KiB | 50 | 17,068.0 | 18,220.0 | 8,436.0 | 1,485.8 | 1,845.3 | 1,574.1 | 579.3 | 11,869.1 |
+| 10 KiB | 100 | 14,850.1 | 15,469.3 | 7,748.0 | 1,410.6 | 1,771.0 | 1,489.8 | 574.3 | 10,864.4 |
+| 64 KiB | 10 | 19,779.6 | 15,604.9 | 9,289.5 | 1,054.1 | 1,188.8 | 1,072.7 | 525.8 | 4,716.9 |
+| 64 KiB | 50 | 16,212.2 | 14,848.9 | 8,249.5 | 1,033.7 | 1,166.0 | 1,067.0 | 533.8 | 4,508.4 |
+| 64 KiB | 100 | 13,961.4 | 13,485.0 | 7,484.5 | 1,011.6 | 1,135.5 | 1,045.5 | 528.4 | 4,246.7 |
+| 128 KiB | 10 | 18,162.4 | 11,558.0 | 8,977.8 | 822.3 | 885.6 | 844.5 | 492.3 | 2,858.0 |
+| 128 KiB | 50 | 15,560.7 | 9,396.9 | 7,909.8 | 798.2 | 869.3 | 826.2 | 493.3 | 2,771.1 |
+| 128 KiB | 100 | 12,652.0 | 7,538.9 | 7,215.3 | 781.5 | 850.5 | 807.5 | 486.4 | 2,671.4 |
+| 1 MiB | 10 | 5,405.3 | 1,620.7 | 5,229.9 | 200.8 | 185.7 | 198.2 | 241.4 | 433.9 |
+| 1 MiB | 50 | 4,418.8 | 1,530.6 | 4,051.4 | 196.1 | 187.5 | 196.3 | 242.1 | 444.4 |
+| 1 MiB | 100 | 4,323.9 | 1,479.0 | 3,757.2 | 196.4 | 187.4 | 195.1 | 241.7 | 435.2 |
+| 2 MiB | 10 | 2,224.8 | 856.1 | 2,324.6 | 106.4 | 98.2 | 105.5 | 152.9 | 222.0 |
+| 2 MiB | 50 | 2,124.6 | 855.2 | 1,994.8 | 106.2 | 99.6 | 103.9 | 153.2 | 229.1 |
+| 2 MiB | 100 | 1,952.2 | 857.3 | 1,827.3 | 107.2 | 98.9 | 106.1 | 152.1 | 221.5 |
+| 4 MiB | 10 | 1,036.3 | 441.7 | 1,032.5 | 55.4 | 50.2 | 54.9 | 88.9 | 112.4 |
+| 4 MiB | 50 | 1,008.0 | 455.1 | 987.2 | 55.5 | 51.5 | 54.5 | 88.0 | 118.4 |
+| 4 MiB | 100 | 936.6 | 459.3 | 912.7 | 56.2 | 51.0 | 55.6 | 87.5 | 117.1 |
+
+#### HTTP/1.1: Stream upload
+
+Unit: requests/s (RPS, requests per second). Higher is better.
+
+| Upload / echo payload | Concurrency | wreq &#40;blocking MT&#41; | wreq &#40;blocking ST&#41; | ry &#40;blocking&#41; | requests | httpx &#40;blocking&#41; | niquests &#40;blocking&#41; | curl&#95;cffi &#40;blocking&#41; | PycURL |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 KiB | 10 | 8,733.9 | 8,322.4 | 5,688.2 | 1,384.2 | 1,581.5 | 1,457.4 | 536.1 | 7,167.0 |
+| 1 KiB | 50 | 7,722.3 | 7,519.8 | 5,194.5 | 1,340.9 | 1,561.0 | 1,412.4 | 547.1 | 6,791.5 |
+| 1 KiB | 100 | 7,167.6 | 7,409.2 | 4,958.7 | 1,323.0 | 1,525.6 | 1,405.5 | 538.4 | 6,377.1 |
+| 10 KiB | 10 | 8,626.1 | 8,330.7 | 5,675.9 | 1,389.7 | 1,588.7 | 1,455.7 | 545.0 | 7,117.8 |
+| 10 KiB | 50 | 7,686.7 | 7,581.5 | 5,217.4 | 1,337.1 | 1,559.1 | 1,413.3 | 548.3 | 6,710.9 |
+| 10 KiB | 100 | 7,262.1 | 7,323.7 | 4,917.1 | 1,307.2 | 1,513.7 | 1,386.3 | 545.0 | 6,204.0 |
+| 64 KiB | 10 | 4,648.2 | 4,102.7 | 3,558.0 | 816.8 | 813.4 | 841.4 | 477.1 | 2,577.9 |
+| 64 KiB | 50 | 4,359.9 | 3,849.6 | 3,455.6 | 791.0 | 787.2 | 794.8 | 479.0 | 2,571.8 |
+| 64 KiB | 100 | 4,131.9 | 3,587.3 | 3,289.0 | 776.2 | 781.4 | 801.8 | 472.3 | 2,487.2 |
+| 128 KiB | 10 | 4,637.2 | 3,474.8 | 3,580.6 | 669.4 | 652.3 | 672.2 | 445.6 | 1,914.4 |
+| 128 KiB | 50 | 4,291.5 | 3,262.9 | 3,386.9 | 655.4 | 645.6 | 659.6 | 445.9 | 1,923.5 |
+| 128 KiB | 100 | 4,022.5 | 3,133.8 | 3,219.7 | 637.7 | 630.7 | 659.4 | 442.4 | 1,831.6 |
+| 1 MiB | 10 | 1,441.8 | 764.9 | 1,230.4 | 160.8 | 144.0 | 159.7 | 187.3 | 291.4 |
+| 1 MiB | 50 | 1,420.9 | 717.0 | 1,268.5 | 160.6 | 144.3 | 159.7 | 185.1 | 291.7 |
+| 1 MiB | 100 | 1,350.7 | 699.6 | 1,218.1 | 161.4 | 144.0 | 160.1 | 184.1 | 289.5 |
+| 2 MiB | 10 | 1,305.5 | 483.5 | 1,097.8 | 94.6 | 84.8 | 94.5 | 119.3 | 159.7 |
+| 2 MiB | 50 | 1,289.7 | 473.5 | 1,042.2 | 94.0 | 85.8 | 93.7 | 118.4 | 162.7 |
+| 2 MiB | 100 | 1,222.9 | 457.5 | 1,026.6 | 95.8 | 85.2 | 94.9 | 117.6 | 161.8 |
+| 4 MiB | 10 | 982.5 | 318.8 | 961.1 | 51.7 | 46.5 | 51.2 | 69.8 | 84.4 |
+| 4 MiB | 50 | 954.8 | 278.1 | 782.9 | 51.5 | 47.2 | 51.2 | 68.5 | 85.9 |
+| 4 MiB | 100 | 909.7 | 282.5 | 766.1 | 52.4 | 47.0 | 52.1 | 67.5 | 84.9 |
+
+#### HTTP/2: Full upload
+
+Unit: requests/s (RPS, requests per second). Higher is better.
+
+| Upload / echo payload | Concurrency | wreq &#40;blocking MT&#41; | wreq &#40;blocking ST&#41; | ry &#40;blocking&#41; | requests | httpx &#40;blocking&#41; | niquests &#40;blocking&#41; | curl&#95;cffi &#40;blocking&#41; | PycURL |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 KiB | 10 | 19,636.5 | 19,816.1 | 9,200.3 | N/A | 1,613.5 | 1,356.2 | 579.7 | 13,335.0 |
+| 1 KiB | 50 | 15,792.5 | 17,168.7 | 8,262.4 | N/A | 1,557.6 | 1,321.2 | 581.1 | 11,966.7 |
+| 1 KiB | 100 | 13,269.2 | 14,781.5 | 7,671.4 | N/A | 1,496.5 | 1,302.7 | 575.7 | 10,789.2 |
+| 10 KiB | 10 | 19,801.8 | 17,310.3 | 9,131.8 | N/A | 1,591.6 | 1,366.5 | 580.2 | 13,443.0 |
+| 10 KiB | 50 | 15,884.5 | 15,419.2 | 8,267.7 | N/A | 1,518.6 | 1,335.0 | 578.7 | 11,837.7 |
+| 10 KiB | 100 | 13,484.2 | 14,647.4 | 7,664.1 | N/A | 1,506.6 | 1,286.9 | 577.9 | 10,524.3 |
+| 64 KiB | 10 | 11,815.9 | 7,189.9 | 4,839.0 | N/A | 635.0 | 708.8 | 502.8 | 3,098.9 |
+| 64 KiB | 50 | 10,089.1 | 7,211.7 | 4,390.7 | N/A | 621.2 | 683.8 | 504.0 | 3,165.3 |
+| 64 KiB | 100 | 9,366.4 | 6,855.8 | 4,218.9 | N/A | 614.9 | 672.3 | 497.8 | 3,017.1 |
+| 128 KiB | 10 | 11,283.9 | 5,172.6 | 2,935.2 | N/A | 370.2 | 448.9 | 437.4 | 1,669.9 |
+| 128 KiB | 50 | 9,776.6 | 5,028.9 | 2,781.5 | N/A | 369.5 | 437.4 | 441.1 | 1,715.4 |
+| 128 KiB | 100 | 9,132.0 | 4,613.8 | 2,657.5 | N/A | 361.6 | 420.9 | 437.9 | 1,621.7 |
+| 1 MiB | 10 | 2,896.8 | 892.9 | 443.6 | N/A | 52.2 | 72.7 | 157.7 | 221.2 |
+| 1 MiB | 50 | 2,598.0 | 842.8 | 440.5 | N/A | 51.1 | 72.6 | 158.2 | 227.9 |
+| 1 MiB | 100 | 2,476.8 | 832.7 | 434.2 | N/A | 50.4 | 73.0 | 158.0 | 226.6 |
+| 2 MiB | 10 | 1,570.2 | 451.0 | 220.6 | N/A | 25.3 | 37.2 | 91.1 | 109.2 |
+| 2 MiB | 50 | 1,423.9 | 429.2 | 228.8 | N/A | 23.9 | 37.1 | 91.4 | 115.5 |
+| 2 MiB | 100 | 1,328.0 | 434.9 | 225.3 | N/A | 23.6 | 37.3 | 90.8 | 116.5 |
+| 4 MiB | 10 | 800.2 | 215.9 | 109.3 | N/A | 11.4 | 18.9 | 49.2 | 54.8 |
+| 4 MiB | 50 | 747.5 | 206.4 | 112.4 | N/A | 10.4 | 18.9 | 49.4 | 57.5 |
+| 4 MiB | 100 | 693.9 | 207.4 | 114.5 | N/A | 10.3 | 19.0 | 49.1 | 58.0 |
+
+#### HTTP/2: Stream upload
+
+Unit: requests/s (RPS, requests per second). Higher is better.
+
+| Upload / echo payload | Concurrency | wreq &#40;blocking MT&#41; | wreq &#40;blocking ST&#41; | ry &#40;blocking&#41; | requests | httpx &#40;blocking&#41; | niquests &#40;blocking&#41; | curl&#95;cffi &#40;blocking&#41; | PycURL |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 KiB | 10 | 8,158.2 | 6,878.8 | 5,578.7 | N/A | 1,595.4 | 1,297.4 | 542.4 | 7,146.4 |
+| 1 KiB | 50 | 7,248.7 | 6,870.9 | 5,266.5 | N/A | 1,482.4 | 1,309.6 | 542.7 | 6,721.8 |
+| 1 KiB | 100 | 6,759.6 | 6,981.6 | 4,974.1 | N/A | 1,512.0 | 1,220.3 | 542.0 | 6,253.1 |
+| 10 KiB | 10 | 8,167.4 | 6,043.3 | 5,416.6 | N/A | 1,589.0 | 1,349.1 | 537.0 | 7,106.6 |
+| 10 KiB | 50 | 7,307.1 | 6,212.8 | 5,256.4 | N/A | 1,548.8 | 1,300.3 | 545.3 | 6,622.9 |
+| 10 KiB | 100 | 6,694.2 | 6,384.9 | 4,987.2 | N/A | 1,498.0 | 1,279.1 | 543.8 | 6,252.5 |
+| 64 KiB | 10 | 3,959.6 | 2,919.2 | 2,603.4 | N/A | 635.1 | 698.4 | 454.2 | 2,027.1 |
+| 64 KiB | 50 | 3,678.0 | 2,900.8 | 2,546.9 | N/A | 626.3 | 689.6 | 460.0 | 2,053.4 |
+| 64 KiB | 100 | 3,561.8 | 2,767.0 | 2,461.7 | N/A | 609.6 | 660.1 | 455.0 | 1,981.9 |
+| 128 KiB | 10 | 3,761.4 | 2,413.7 | 1,919.5 | N/A | 373.1 | 443.5 | 398.9 | 1,284.5 |
+| 128 KiB | 50 | 3,568.7 | 2,412.2 | 1,891.8 | N/A | 368.6 | 437.3 | 404.2 | 1,308.8 |
+| 128 KiB | 100 | 3,465.9 | 2,230.5 | 1,832.3 | N/A | 365.9 | 434.5 | 401.0 | 1,283.1 |
+| 1 MiB | 10 | 1,080.4 | 546.6 | 347.3 | N/A | 54.4 | 72.7 | 141.7 | 192.0 |
+| 1 MiB | 50 | 1,066.1 | 531.6 | 349.0 | N/A | 54.7 | 72.8 | 142.1 | 200.5 |
+| 1 MiB | 100 | 1,021.0 | 503.5 | 346.0 | N/A | 54.3 | 72.8 | 141.4 | 198.9 |
+| 2 MiB | 10 | 828.4 | 343.9 | 194.8 | N/A | 27.3 | 37.0 | 81.1 | 96.8 |
+| 2 MiB | 50 | 804.3 | 326.0 | 197.6 | N/A | 27.5 | 37.1 | 81.3 | 100.5 |
+| 2 MiB | 100 | 761.7 | 312.2 | 196.7 | N/A | 27.1 | 37.2 | 80.3 | 100.4 |
+| 4 MiB | 10 | 559.8 | 192.3 | 102.8 | N/A | 13.6 | 18.7 | 43.9 | 48.7 |
+| 4 MiB | 50 | 537.8 | 182.5 | 104.6 | N/A | 13.7 | 18.8 | 43.7 | 50.5 |
+| 4 MiB | 100 | 511.3 | 183.0 | 104.3 | N/A | 13.5 | 18.9 | 43.1 | 50.7 |

@@ -133,9 +133,10 @@ class Identity:
     """
 
     @staticmethod
-    def from_pkcs12_der(buf: bytes, pass_: str) -> "Identity":
+    def from_pkcs12_der(buf: bytes, pass_: str, /) -> "Identity":
         """
         Parses a DER-formatted PKCS #12 archive, using the specified password to decrypt the key.
+        Pass the archive and password positionally: Identity.from_pkcs12_der(data, password).
 
         The archive should contain a leaf certificate and its private key, as well any intermediate
         certificates that allow clients to build a chain to a trusted root.
@@ -172,7 +173,7 @@ class CertStore:
         self,
         der_certs: Sequence[bytes] | None = None,
         pem_certs: Sequence[str] | None = None,
-        default_paths: bool | None = None,
+        default_paths: bool = False,
     ) -> None:
         """
         Creates a new CertStore.
@@ -180,7 +181,7 @@ class CertStore:
         Args:
             der_certs: Optional list of DER-encoded certificates (as bytes).
             pem_certs: Optional list of PEM-encoded certificates (as str).
-            default_paths: If True, use system default certificate paths.
+            default_paths: If True, use system default certificate paths. Defaults to False.
         """
         ...
 

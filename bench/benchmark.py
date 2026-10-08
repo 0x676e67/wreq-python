@@ -34,7 +34,9 @@ if __package__:
     from .workloads import (
         BODY_CASES,
         CONCURRENCY_CASES,
+        REQUESTS_PER_BATCH,
         STREAM_CHUNK_BYTES,
+        WARMUP_REQUESTS_PER_BATCH,
         prepare_chunks,
         upload_chunk_bytes,
     )
@@ -53,7 +55,9 @@ else:
     from workloads import (
         BODY_CASES,
         CONCURRENCY_CASES,
+        REQUESTS_PER_BATCH,
         STREAM_CHUNK_BYTES,
+        WARMUP_REQUESTS_PER_BATCH,
         prepare_chunks,
         upload_chunk_bytes,
     )
@@ -124,11 +128,14 @@ def parse_args(argv=None):
     parser.add_argument("--rounds", type=positive, default=3)
     parser.add_argument("--warmup", type=nonnegative, default=1)
     parser.add_argument("--samples", type=positive, default=1)
-    parser.add_argument("--requests", type=positive, default=300)
+    parser.add_argument("--requests", type=positive, default=REQUESTS_PER_BATCH)
     parser.add_argument(
         "--warmup-requests",
         type=positive,
-        help="Requests per warm-up batch; defaults to --requests",
+        help=(
+            "Requests per warm-up batch; defaults to the smaller of --requests "
+            f"and {WARMUP_REQUESTS_PER_BATCH}"
+        ),
     )
     parser.add_argument("--server-workers", type=positive, default=4)
     parser.add_argument(
@@ -144,7 +151,7 @@ def parse_args(argv=None):
     parser.add_argument("--worker", choices=CLIENTS, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     if args.warmup_requests is None:
-        args.warmup_requests = args.requests
+        args.warmup_requests = min(args.requests, WARMUP_REQUESTS_PER_BATCH)
     if args.worker is None:
         if args.server is None:
             parser.error("--server is required")

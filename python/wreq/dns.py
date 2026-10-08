@@ -44,9 +44,9 @@ class DnsOptions:
             resolver and has no effect when using the system DNS resolver.
 
     Example:
-        >>> from wreq import DnsOptions, LookupIpStrategy
+        >>> from wreq.dns import DnsOptions, LookupIpStrategy
         >>> from ipaddress import IPv4Address
-        >>> options = DnsOptions(LookupIpStrategy.IPV4_ONLY)
+        >>> options = DnsOptions(lookup_ip_strategy=LookupIpStrategy.IPV4_ONLY)
         >>> options.add_resolve("example.com", [IPv4Address("127.0.0.1")])
     """
 

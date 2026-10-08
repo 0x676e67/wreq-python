@@ -1,141 +1,136 @@
-# Proxy Usage
+# Proxies
 
-!!! info "On this page"
-    - HTTP/HTTPS proxy
-    - Proxy with Authentication
-    - Per-request proxy with custom headers
-    - Unix Socket proxy for local services (Docker, Podman)
-    - Constructor reference and choosing the right one
+Set `Client(proxies=[...])` to route a client's requests through a proxy, or
+pass `proxy=...` to choose a proxy for one request. These options work with
+both the asynchronous and [blocking API](blocking.md).
 
-The `Proxy` class provides several constructors depending on what you want to intercept:
+| Constructor | Requests it handles |
+| --- | --- |
+| `Proxy.all(url)` | HTTP and HTTPS destinations |
+| `Proxy.http(url)` | HTTP destinations |
+| `Proxy.https(url)` | HTTPS destinations |
+| `Proxy.unix(path)` | A local service on a Unix socket |
 
-| Constructor | What it proxies |
-|---|---|
-| `Proxy.all(url)` | All requests (HTTP + HTTPS) |
-| `Proxy.http(url)` | HTTP requests only |
-| `Proxy.https(url)` | HTTPS requests only |
-| `Proxy.unix(path)` | Requests via a Unix socket |
+`http` and `https` select the destination scheme. The proxy URL separately
+specifies how to connect to the proxy: for example,
+`Proxy.https("http://proxy.example.com:8080")` tunnels HTTPS requests through
+an HTTP proxy.
 
-You can pass a proxy in two ways:
-- **Per-client** via `Client(proxies=[...])` — applies to every request made by that client.
-- **Per-request** via `wreq.get(..., proxy=...)` — overrides or sets a proxy for a single request.
+## Configuring a client
 
----
-
-## HTTP / HTTPS Proxy
-
-### Basic usage with a client
+Replace the example address with a running proxy before executing this example.
 
 ```python
 import asyncio
 from wreq import Client, Proxy
 
+
 async def main():
-    client = Client(
+    async with Client(
         proxies=[Proxy.all("http://proxy.example.com:8080")]
-    )
+    ) as client:
+        async with client.get("https://httpbin.org/ip") as response:
+            print(await response.json())
 
-    async with client.get("https://httpbin.io/ip") as resp:
-        print(await resp.text())
 
 asyncio.run(main())
 ```
 
-All requests made through this `client` will be routed via the proxy.
-
----
-
-### Proxy with authentication
-
-If your proxy requires credentials, include them directly in the URL using the `username:password@host:port` syntax.
-
-**HTTP / HTTPS proxy with credentials:**
+For direct connections that ignore environment and system proxy settings, use
+`Client(no_proxy=True)`. This also clears proxies configured on that client.
+To exclude hosts from a particular proxy, pass an exclusion list when creating
+it:
 
 ```python
-proxy = Proxy.all("http://username:password@proxy.example.com:8080")
+from wreq import Proxy
 
-client = Client(proxies=[proxy])
-```
-
-Or using the credentials separately
-
-```python
 proxy = Proxy.all(
-    url="http://proxy.example.com:8080",
+    "http://proxy.example.com:8080",
+    exclusion="localhost,127.0.0.1,internal.example.com",
+)
+```
+
+## Proxy authentication
+
+Supply both `username` and `password`, or include them in the proxy URL.
+
+```python
+from wreq import Proxy
+
+proxy = Proxy.all(
+    "http://proxy.example.com:8080",
     username="username",
-    password="password"
+    password="password",
 )
-
-client = Client(proxies=[proxy])
 ```
 
-**SOCKS5 proxy with credentials:**
+For a proxy that expects another HTTP authorization scheme, use
+`custom_http_auth="Bearer example-token"`. These options authenticate to the
+proxy; [request authentication](auth.md) authenticates to the destination.
+
+## SOCKS proxies
+
+Use `socks5://` for local DNS resolution or `socks5h://` to resolve destination
+hostnames at the proxy. SOCKS4 and SOCKS4a URLs are also supported.
 
 ```python
-# SOCKS5
-client = Client(
-    proxies=[Proxy.all("socks5://username:password@127.0.0.1:1080")]
-)
+from wreq import Proxy
 
-
-# SOCKS5h (DNS also resolved by the proxy)
-client = Client(
-    proxies=[Proxy.all("socks5h://username:password@127.0.0.1:6152")]
-)
+proxy = Proxy.all("socks5h://username:password@127.0.0.1:1080")
 ```
 
-> The difference between `socks5://` and `socks5h://` is that `socks5h` delegates DNS resolution to the proxy server, which helps avoid DNS leaks.
+Pass this object to `Client(proxies=[proxy])` or a request's `proxy` argument.
 
----
+## Selecting a proxy for one request
 
-### Per-request proxy with custom headers
-
-You can configure a proxy for a single request and attach custom headers sent to the proxy server:
+Use the singular `proxy` argument on requests. `custom_http_headers` configures
+headers for the HTTP proxy connection, such as headers required by a provider
+on a CONNECT request. Use the request's `headers` argument for destination
+headers.
 
 ```python
 import asyncio
-import wreq
-from wreq import Proxy
+from wreq import Client, Proxy
+
 
 async def main():
-    async with wreq.get(
-        "https://httpbin.io/anything",
-        proxy=Proxy.all(
-                url="http://127.0.0.1:6152",
-                custom_http_headers={
-                    "user-agent": "wreq",
-                    "accept": "*/*",
-                    "accept-encoding": "gzip, deflate, br",
-                    "x-proxy": "wreq",
-                },
-            )
-    ) as resp:
-        print(await resp.text())
+    async with Client() as client:
+        async with client.get(
+            "https://httpbin.org/ip",
+            proxy=Proxy.all(
+                "http://proxy.example.com:8080",
+                custom_http_headers={"X-Proxy-Region": "us"},
+            ),
+        ) as response:
+            print(await response.json())
+
 
 asyncio.run(main())
 ```
 
-> **Note:** `custom_http_headers` are headers sent *to the proxy itself*, not to the final destination server.
+## Unix sockets
 
----
-
-## Unix Socket Proxy
-
-Unix sockets allow communication with local services without going through a network port. This is common when working with Docker, Podman, or other daemons that expose a socket file.
+On Unix platforms, `Proxy.unix` connects to a local socket. The example below
+requires access to a running Docker daemon at `/var/run/docker.sock`. Change
+the path and endpoint for another service. This constructor is not supported
+on Windows.
 
 ```python
 import asyncio
-import wreq
-from wreq import Proxy
+from wreq import Client, Proxy
+
 
 async def main():
-    async with wreq.get(
-        "http://localhost/v1.41/containers/json",
-        proxies=[Proxy.unix("/var/run/docker.sock")],
-    ) as resp:
-        print(await resp.text())
+    async with Client() as client:
+        async with client.get(
+            "http://localhost/containers/json",
+            proxy=Proxy.unix("/var/run/docker.sock"),
+        ) as response:
+            print(await response.json())
+
 
 asyncio.run(main())
 ```
 
-Even though the URL says `http://localhost`, the request never touches the network. It goes directly through the socket file at the given path.
+The URL supplies the HTTP request path and host; the connection uses the socket
+instead of a TCP port.

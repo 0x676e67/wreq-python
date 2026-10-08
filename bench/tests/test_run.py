@@ -28,6 +28,7 @@ def publication_config(blocking=False):
         "payload_bytes": list(BODY_CASES),
         "concurrency": list(CONCURRENCY_CASES),
         "requests": 300,
+        "warmup_requests": 200,
         "rounds": 3,
         "samples": 1,
         "warmup": 1,
@@ -49,7 +50,7 @@ def test_separate_publication_gates_reject_subsets_and_weak_batches():
         config = publication_config(blocking)
         require_publish(config, blocking=blocking)
         with pytest.raises(ValueError):
-            require_publish({**config, "warmup_requests": 150}, blocking=blocking)
+            require_publish({**config, "warmup_requests": 199}, blocking=blocking)
         with pytest.raises(ValueError):
             require_publish(config, blocking=not blocking)
         for key in (
@@ -76,23 +77,36 @@ def test_separate_publication_gates_reject_subsets_and_weak_batches():
 
 def test_default_suite_includes_wreq_mt_st_and_reads_legacy_snapshots():
     args = benchmark.parse_args(["--server", "server"])
-    assert {
-        "wreq",
-        "wreq_st",
-        "wreq_blocking",
-        "wreq_blocking_st",
-        "wreq_blocking_ct",
-    } <= set(args.clients)
+    assert {"wreq", "wreq_st", "wreq_blocking", "wreq_blocking_st", "wreq_blocking_ct"} <= set(args.clients)
     assert len(args.clients) == 18
-    assert args.requests == args.warmup_requests == 300
+    assert args.requests == 300 and args.warmup_requests == 200
+    assert args.concurrency == [2, 10, 50, 100]
     for blocking in (False, True):
+        previous = {**publication_config(blocking), "concurrency": [10, 50, 100]}
+        require_publish(previous, blocking=blocking, allow_legacy_snapshot=True)
+        with pytest.raises(ValueError):
+            require_publish(previous, blocking=blocking)
         legacy = publication_config(blocking)
-        # Snapshots from before CT, then from before ST as well.
         for client in ("wreq_blocking_ct", "wreq_blocking_st"):
             legacy["clients"].remove(client)
             require_publish(legacy, blocking=blocking, allow_legacy_snapshot=True)
             with pytest.raises(ValueError):
                 require_publish(legacy, blocking=blocking)
+        historical = {
+            **publication_config(blocking),
+            "concurrency": [150, 10, 100, 50],
+            "requests": 300,
+            "warmup_requests": 300,
+        }
+        require_publish(historical, blocking=blocking, allow_legacy_snapshot=True)
+        with pytest.raises(ValueError):
+            require_publish(historical, blocking=blocking)
+        with pytest.raises(ValueError):
+            require_publish(
+                {**historical, "warmup_requests": 100},
+                blocking=blocking,
+                allow_legacy_snapshot=True,
+            )
         legacy["clients"].remove("wreq_blocking")
         with pytest.raises(ValueError):
             require_publish(legacy, blocking=blocking, allow_legacy_snapshot=True)

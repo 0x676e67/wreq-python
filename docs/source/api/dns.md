@@ -1,6 +1,6 @@
 # wreq.dns
 
-DNS resolution settings and custom nameservers.
+DNS resolver selection and address overrides.
 
 ::: wreq.dns
     options:
