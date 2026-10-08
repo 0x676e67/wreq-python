@@ -154,6 +154,9 @@ class StatusError(Error):
 class WebSocketError(Error):
     r"""
     A WebSocket operation failed, or the connection is already closed.
+
+    A connection reset raises `ConnectionResetError`, and a receive timeout
+    raises `TimeoutError`; catch `Error` to handle every failure.
     """
 
 
