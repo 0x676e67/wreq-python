@@ -221,24 +221,24 @@ class Message:
     """
 
     @staticmethod
-    def from_binary(data: bytes | Any) -> "Message":
+    def from_binary(like: bytes | Any) -> "Message":
         r"""
         Creates a new binary message.
 
         # Arguments
 
-        * `data` - The binary data or any JSON-serializable data of the message.
+        * `like` - The binary data or any JSON-serializable data of the message.
         """
         ...
 
     @staticmethod
-    def from_text(data: str | Any) -> "Message":
+    def from_text(like: str | Any) -> "Message":
         r"""
         Creates a new text message.
 
         # Arguments
 
-        * `data` - The text content or any JSON-serializable data of the message.
+        * `like` - The text content or any JSON-serializable data of the message.
         """
         ...
 
@@ -1167,13 +1167,14 @@ class Client:
         Examples:
 
         ```python
+        from datetime import timedelta
         import asyncio
         import wreq
 
         async def main():
             client = wreq.Client(
                 user_agent="Mozilla/5.0",
-                timeout=10,
+                timeout=timedelta(seconds=10),
             )
             async with client.get('https://httpbin.io/get') as response:
                 print(await response.text())

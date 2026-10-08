@@ -1,6 +1,6 @@
 # wreq.emulation
 
-Browser and client emulation settings to bypass detection and fingerprinting.
+Browser and HTTP client profile settings.
 
 ::: wreq.emulation
     options:
