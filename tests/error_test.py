@@ -41,20 +41,27 @@ async def test_errors_share_one_hierarchy():
         refused = f"http://127.0.0.1:{sock.getsockname()[1]}/"
 
     async with wreq.Client(proxies=[]) as client:
-        # A refused connection is also a builtin `ConnectionError`, and pickles.
+        # A refused connection is also a builtin `ConnectionError`. Its URL stays out
+        # of the message, and the predicates and URL survive pickling.
         with pytest.raises(wreq.ConnectionError) as caught:
             await client.get(refused)
-        assert isinstance(caught.value, wreq.RequestError)
-        assert isinstance(caught.value, builtins.ConnectionError)
-        copy = pickle.loads(pickle.dumps(caught.value))
-        assert type(copy) is type(caught.value) and str(copy) == str(caught.value)
+        error = caught.value
+        assert isinstance(error, wreq.RequestError)
+        assert isinstance(error, builtins.ConnectionError)
+        assert error.is_connect() and error.is_request() and not error.is_timeout()
+        assert error.url == refused and refused not in str(error)
+        copy = pickle.loads(pickle.dumps(error))
+        assert type(copy) is type(error) and str(copy) == str(error)
+        assert copy.is_connect() and copy.url == refused
 
-        # Invalid input fails as a `BuilderError`.
-        with pytest.raises(wreq.BuilderError, match="Invalid header name"):
+        # An error the binding raises matches the predicate of its class.
+        with pytest.raises(wreq.BuilderError, match="Invalid header name") as caught:
             await client.get(refused, headers={"bad name": "v"})
+        assert caught.value.is_builder() and caught.value.url is None
 
-        # A timeout while reading the body is a `TimeoutError`, not a `BodyError`.
         async with local_server() as (url, connections):
+            # A timeout while reading the body is a `TimeoutError` that is also
+            # `is_body()`.
             task = asyncio.create_task(
                 client.get(url, read_timeout=timedelta(seconds=0.2))
             )
@@ -64,3 +71,15 @@ async def test_errors_share_one_hierarchy():
             with pytest.raises(wreq.TimeoutError) as caught:
                 await asyncio.wait_for(response.bytes(), 5)
             assert isinstance(caught.value, builtins.TimeoutError)
+            assert caught.value.is_timeout() and caught.value.is_body()
+
+            # A `StatusError` carries the response status, which pickles too.
+            task = asyncio.create_task(client.get(url))
+            _, writer = await asyncio.wait_for(connections.get(), 5)
+            writer.write(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n")
+            response = await asyncio.wait_for(task, 5)
+            with pytest.raises(wreq.StatusError) as caught:
+                response.raise_for_status()
+            copy = pickle.loads(pickle.dumps(caught.value))
+            assert copy.status == 404 and copy.status.is_client_error()
+            assert copy.is_status() and copy.url == url

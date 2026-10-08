@@ -1,4 +1,7 @@
-use pyo3::{class::basic::CompareOp, prelude::*, pyclass::PyClassGuardError};
+use pyo3::{
+    class::basic::CompareOp, exceptions::PyValueError, prelude::*, pyclass::PyClassGuardError,
+    types::PyType,
+};
 
 define_enum!(
     /// An HTTP version.
@@ -28,7 +31,7 @@ define_enum!(
 
 /// HTTP status code.
 #[derive(Clone, Copy)]
-#[pyclass(subclass, frozen, str, skip_from_py_object)]
+#[pyclass(subclass, frozen, str, skip_from_py_object, module = "wreq")]
 pub struct StatusCode(pub wreq::StatusCode);
 
 impl<'a, 'py> FromPyObject<'a, 'py> for StatusCode {
@@ -41,6 +44,18 @@ impl<'a, 'py> FromPyObject<'a, 'py> for StatusCode {
 
 #[pymethods]
 impl StatusCode {
+    /// Create a status code from an integer in 100-999.
+    #[new]
+    fn new(code: u16) -> PyResult<Self> {
+        wreq::StatusCode::from_u16(code)
+            .map(Self)
+            .map_err(|err| PyValueError::new_err(err.to_string()))
+    }
+
+    fn __reduce__<'py>(slf: &Bound<'py, Self>) -> (Bound<'py, PyType>, (u16,)) {
+        (slf.get_type(), (slf.get().as_int(),))
+    }
+
     /// Return the status code as an integer.
     pub const fn as_int(&self) -> u16 {
         self.0.as_u16()
