@@ -54,6 +54,7 @@ wreq = { version = "0.16.1", default-features = false, features = [
     "form",
     "json",
     "socks",
+    "system-proxy",
     "stream",
     "multipart",
     "cookies",

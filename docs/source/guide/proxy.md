@@ -36,6 +36,11 @@ async def main():
 asyncio.run(main())
 ```
 
+By default, a client without `proxies` uses the system proxy: the
+`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` and `NO_PROXY` environment variables
+(and their lowercase forms), plus the operating system proxy settings on macOS
+and Windows.
+
 For direct connections that ignore environment and system proxy settings, use
 `Client(no_proxy=True)`. This also clears proxies configured on that client.
 To exclude hosts from a particular proxy, pass an exclusion list when creating
