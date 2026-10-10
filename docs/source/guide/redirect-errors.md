@@ -92,7 +92,7 @@ async def main():
             async with client.get("https://httpbin.org/status/404") as response:
                 print(await response.text())
         except exceptions.StatusError as error:
-            print("HTTP error:", error)
+            print("HTTP error:", error.status, error.url)
 
 
 asyncio.run(main())
@@ -127,18 +127,39 @@ async def main():
                 print(await response.text())
         except exceptions.TimeoutError as error:
             print("Request timed out:", error)
-        except (exceptions.ConnectionError, exceptions.TlsError) as error:
+        except exceptions.ConnectionError as error:
             print("Connection failed:", error)
+        except exceptions.Error as error:
+            print("Request failed:", error)
 
 
 asyncio.run(main())
 ```
 
-Catch the failures your application can handle. Other exception types include
-`ProxyConnectionError`, `ConnectionResetError`, `BodyError`, `DecodingError`,
-`BuilderError`, and `WebSocketError`; see the
-[exception reference](../api/exceptions.md). `RequestError` is not a common
-base class for all wreq errors.
+Every wreq exception derives from `exceptions.Error`, so catch the failures
+your application can handle and let `Error` cover the rest. `RequestError`
+groups transport failures: `ConnectionError` (including a failed TLS handshake,
+`ProxyConnectionError` and `ConnectionResetError`) and `TimeoutError`.
+`ConnectionError`, `ConnectionResetError` and `TimeoutError` also derive from
+the builtins of the same name. See the
+[exception reference](../api/exceptions.md) for the full hierarchy.
+
+The class names the main cause; `is_*` methods on `Error` report every detail
+wreq found. A connect timeout raises `TimeoutError` with both `is_timeout()` and
+`is_connect()`, and a DNS failure raises `ConnectionError` with `is_dns()`.
+The message leaves out the request URL because it may hold credentials; read it
+from `error.url` instead.
+
+```python
+except exceptions.TimeoutError as error:
+    stage = "connecting" if error.is_connect() else "waiting for a response"
+    print(f"Timed out while {stage}:", error.url)
+```
+
+Predicates reflect what wreq, its protocol libraries and the operating system
+report, so the ones a failure matches may change between releases, and message
+text is unspecified. Choose handlers by exception class, and use predicates to
+refine them or for diagnostics.
 
 Asynchronous cancellation uses `asyncio.CancelledError`. Allow it to propagate
 when a caller cancels the task. The same request options and wreq exception

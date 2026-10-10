@@ -1,206 +1,293 @@
 """
 HTTP Client Exceptions
 
-This module defines all exceptions that can be raised by the wreq HTTP client.
-The exceptions are organized into logical categories based on their cause and
-severity, making it easier to handle specific types of errors appropriately.
+Every exception wreq raises for a failed request, response, or WebSocket derives
+from `Error`, so `except wreq.Error` catches them all. Misuse, such as reading a
+consumed body or awaiting a coroutine twice, raises Python's builtin exceptions.
+
+    Error
+    ├── BuilderError
+    ├── TlsError
+    ├── RequestError
+    │   ├── ConnectionError
+    │   │   ├── ProxyConnectionError
+    │   │   └── ConnectionResetError
+    │   └── TimeoutError
+    ├── BodyError
+    ├── DecodingError
+    ├── RedirectError
+    ├── StatusError
+    └── WebSocketError
+        └── UpgradeError
+
+`ConnectionError`, `ConnectionResetError` and `TimeoutError` also derive from the
+builtins of the same name, so generic network handlers catch them too.
+
+The class names the main cause of a failure; the `is_*` methods of `Error` report
+every detail wreq found, and `url` holds the request URL, which the message omits.
 """
 
+import builtins
+from typing import TYPE_CHECKING, Iterable
+
+if TYPE_CHECKING:
+    from .wreq import StatusCode
+
 __all__ = [
+    "Error",
+    "BuilderError",
     "TlsError",
+    "RequestError",
     "ConnectionError",
     "ProxyConnectionError",
     "ConnectionResetError",
-    "BodyError",
-    "BuilderError",
-    "DecodingError",
-    "StatusError",
-    "RequestError",
-    "RedirectError",
-    "UpgradeError",
-    "WebSocketError",
     "TimeoutError",
+    "BodyError",
+    "DecodingError",
+    "RedirectError",
+    "StatusError",
+    "WebSocketError",
+    "UpgradeError",
 ]
 
+
+class Error(Exception):
+    r"""
+    Base class for all wreq errors.
+
+    The `is_*` methods mirror the predicates of the Rust `wreq::Error`. Several
+    can match one failure: a connect timeout raises `TimeoutError` and matches
+    both `is_timeout()` and `is_connect()`.
+
+    Predicates depend on what wreq, its protocol libraries and the operating
+    system report, so the ones a given failure matches may change between
+    releases; the message text is unspecified as well. Choose handlers by
+    exception class, and use predicates to refine them or for diagnostics.
+    """
+
+    url: "str | None"
+    r"""
+    The request URL, if known. The message leaves it out because it may hold
+    credentials.
+    """
+
+    status: "StatusCode | None"
+    r"""
+    The response status of a `StatusError`, otherwise None.
+    """
+
+    def __init__(
+        self,
+        message: str = "",
+        predicates: Iterable[str] = (),
+        url: "str | None" = None,
+        status: "StatusCode | None" = None,
+    ) -> None:
+        # Only the message goes to the base, so the `OSError` subclasses keep
+        # `args == (message,)` instead of reading the rest as an errno.
+        super().__init__(message)
+        self._predicates = frozenset(predicates)
+        self.url = url
+        self.status = status
+
+    def is_builder(self) -> bool:
+        r"""
+        Whether building the client, the request, or one of its options failed.
+        """
+        return "builder" in self._predicates
+
+    def is_request(self) -> bool:
+        r"""
+        Whether sending the request or receiving its response failed.
+        """
+        return "request" in self._predicates
+
+    def is_connect(self) -> bool:
+        r"""
+        Whether connecting to the destination failed, including the TLS handshake.
+        """
+        return "connect" in self._predicates
+
+    def is_proxy_connect(self) -> bool:
+        r"""
+        Whether connecting through the proxy failed.
+        """
+        return "proxy_connect" in self._predicates
+
+    def is_connection_reset(self) -> bool:
+        r"""
+        Whether the peer reset the connection.
+        """
+        return "connection_reset" in self._predicates
+
+    def is_dns(self) -> bool:
+        r"""
+        Whether resolving the host name failed.
+        """
+        return "dns" in self._predicates
+
+    def is_timeout(self) -> bool:
+        r"""
+        Whether a timeout elapsed.
+        """
+        return "timeout" in self._predicates
+
+    def is_body(self) -> bool:
+        r"""
+        Whether streaming a request or response body failed.
+        """
+        return "body" in self._predicates
+
+    def is_tls(self) -> bool:
+        r"""
+        Whether TLS settings or material are invalid; a failed handshake is
+        `is_connect()`.
+        """
+        return "tls" in self._predicates
+
+    def is_decode(self) -> bool:
+        r"""
+        Whether reading or decoding the response failed.
+        """
+        return "decode" in self._predicates
+
+    def is_redirect(self) -> bool:
+        r"""
+        Whether the redirect policy stopped the request.
+        """
+        return "redirect" in self._predicates
+
+    def is_status(self) -> bool:
+        r"""
+        Whether the response has an error status.
+        """
+        return "status" in self._predicates
+
+    def is_upgrade(self) -> bool:
+        r"""
+        Whether upgrading the connection failed.
+        """
+        return "upgrade" in self._predicates
+
+    def is_websocket(self) -> bool:
+        r"""
+        Whether a WebSocket operation failed.
+        """
+        return "websocket" in self._predicates
+
+
 # ========================================
-# Network and System-Level Errors
+# Configuration Errors
 # ========================================
 
 
-class RustPanic(Exception):
+class BuilderError(Error):
     r"""
-    Compatibility exception; Rust panics are not translated to this type.
+    A client, request, or one of their options is invalid.
+
+    Raised for malformed URLs, header names or values, form or JSON bodies,
+    proxies, and DNS resolver settings.
     """
 
 
-class TlsError(Exception):
+class TlsError(Error):
     r"""
-    An error occurred in the TLS security layer.
+    TLS settings or material are invalid, such as an unparsable certificate,
+    identity, or certificate store.
 
-    This exception covers TLS/SSL related issues such as:
-    - Certificate verification failures
-    - TLS handshake failures
-    - Protocol version mismatches
-    - Cipher suite negotiations
-    """
-
-
-class ConnectionError(Exception):
-    r"""
-    An error occurred while establishing a connection.
-
-    This exception is raised when the client cannot establish a
-    TCP connection to the remote server. Common causes include:
-    - Server is unreachable
-    - Port is closed or blocked
-    - Network connectivity issues
-    - Firewall blocking the connection
-    """
-
-
-class ProxyConnectionError(Exception):
-    r"""
-    An error occurred while connecting through a proxy server.
-
-    This exception is raised when the client cannot establish a
-    connection to the target server via the specified proxy. Common
-    causes include:
-    - Invalid proxy address or port
-    - Proxy server is unreachable
-    - Authentication failures with the proxy
-    - Network connectivity issues between client and proxy
-    """
-
-
-class ConnectionResetError(Exception):
-    r"""
-    The connection was reset by the remote peer.
-
-    This exception occurs when an established connection is
-    unexpectedly closed by the remote server. This can happen
-    due to server overload, network issues, or server-side
-    connection limits.
-    """
-
-
-# ========================================
-# Request/Response Processing Errors
-# ========================================
-
-
-class BodyError(Exception):
-    r"""
-    An error occurred while processing the body of a request or response.
-
-    This exception covers issues with reading, writing, or processing
-    HTTP message bodies, including:
-    - Invalid content encoding
-    - Incomplete body data
-    - Body size limit exceeded
-    """
-
-
-class BuilderError(Exception):
-    r"""
-    An error occurred while building a request or response.
-
-    This exception is raised when there are issues constructing
-    HTTP requests or responses, such as:
-    - Invalid header combinations
-    - Malformed request parameters
-    - Configuration conflicts
-    """
-
-
-class DecodingError(Exception):
-    r"""
-    An error occurred while decoding a response.
-
-    This exception covers failures in decoding response content,
-    including:
-    - Character encoding issues (UTF-8, Latin-1, etc.)
-    - Compression decompression failures (gzip, deflate, etc.)
-    - Content format parsing errors
-    """
-
-
-class StatusError(Exception):
-    r"""
-    An error occurred while processing the status code of a response.
-
-    This exception is typically raised for HTTP error status codes
-    (4xx, 5xx) when automatic error handling is enabled, or when
-    there are issues interpreting the status line.
-    """
-
-
-class RequestError(Exception):
-    r"""
-    An error occurred while making a request.
-
-    This is a general exception for request-related issues that
-    don't fit into more specific categories. It covers various
-    problems during the request lifecycle.
-    """
-
-
-# ========================================
-# HTTP Protocol and Navigation Errors
-# ========================================
-
-
-class RedirectError(Exception):
-    r"""
-    An error occurred while following a redirect.
-
-    This exception is raised when there are issues with HTTP
-    redirects, such as:
-    - Too many redirects (redirect loop)
-    - Invalid redirect location
-    - Cross-protocol redirects when not allowed
-    - Redirect limit exceeded
-    """
-
-
-class UpgradeError(Exception):
-    r"""
-    An error occurred while upgrading a connection.
-
-    This exception covers failures when upgrading HTTP connections
-    to other protocols, such as:
-    - WebSocket upgrade failures
-    - HTTP/2 upgrade issues
-    - Protocol negotiation errors
-    """
-
-
-class WebSocketError(Exception):
-    r"""
-    An error occurred while handling a WebSocket connection.
-
-    This exception covers WebSocket-specific issues including:
-    - WebSocket handshake failures
-    - Frame parsing errors
-    - Connection state violations
-    - Message sending/receiving errors
+    A failed TLS handshake raises `ConnectionError`.
     """
 
 
 # ========================================
-# Timeout Errors
+# Transport Errors
 # ========================================
 
 
-class TimeoutError(Exception):
+class RequestError(Error):
     r"""
-    A timeout occurred while waiting for a response.
+    The request failed in transit: while connecting, sending it, or waiting
+    on the peer.
 
-    This exception is raised when operations exceed their configured
-    time limits, including:
-    - Connection timeout (time to establish connection)
-    - Read timeout (time to receive response)
-    - Total request timeout (entire request lifecycle)
+    Raised directly for transport failures without a more specific subclass,
+    including errors raised by an upload stream.
+    """
 
-    Timeouts can often be resolved by increasing timeout values
-    or retrying the request.
+
+class ConnectionError(RequestError, builtins.ConnectionError):
+    r"""
+    The connection could not be established, for example on a DNS failure, a
+    refused connection, or a failed TLS handshake.
+    """
+
+
+class ProxyConnectionError(ConnectionError):
+    r"""
+    The connection through the configured proxy could not be established.
+    """
+
+
+class ConnectionResetError(ConnectionError, builtins.ConnectionResetError):
+    r"""
+    The peer reset the connection.
+    """
+
+
+class TimeoutError(RequestError, builtins.TimeoutError):
+    r"""
+    A configured timeout elapsed while connecting, reading the response or its
+    body, or receiving a WebSocket message.
+    """
+
+
+# ========================================
+# Response Errors
+# ========================================
+
+
+class BodyError(Error):
+    r"""
+    Streaming a request or response body failed.
+    """
+
+
+class DecodingError(Error):
+    r"""
+    The response body could not be read in full or decoded as requested,
+    such as an unknown charset, corrupt compression, or invalid JSON.
+    """
+
+
+class RedirectError(Error):
+    r"""
+    The redirect policy stopped the request, for example after too many
+    redirects.
+    """
+
+
+class StatusError(Error):
+    r"""
+    The response has an error status (4xx or 5xx) while status checking is
+    enabled.
+    """
+
+
+# ========================================
+# WebSocket Errors
+# ========================================
+
+
+class WebSocketError(Error):
+    r"""
+    A WebSocket operation failed, or the connection is already closed.
+
+    A connection reset raises `ConnectionResetError`, and a receive timeout
+    raises `TimeoutError`; catch `Error` to handle every failure.
+    """
+
+
+class UpgradeError(WebSocketError):
+    r"""
+    The WebSocket handshake failed, for example on an unexpected status or a
+    missing upgrade header.
     """

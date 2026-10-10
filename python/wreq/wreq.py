@@ -67,6 +67,12 @@ class StatusCode:
     HTTP status code.
     """
 
+    def __init__(self, code: int) -> None:
+        r"""
+        Create a status code from an integer in 100-999.
+        """
+        ...
+
     def as_int(self) -> int:
         r"""
         Return the status code as an integer.

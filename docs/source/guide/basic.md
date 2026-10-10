@@ -176,8 +176,8 @@ except (ConnectionError, TimeoutError) as exc:
 ```
 
 Other failures, including TLS and decoding errors, have their own
-[exception classes](../api/exceptions.md). They do not all inherit from
-`RequestError`, so catch the types relevant to your application.
+[exception classes](../api/exceptions.md). All of them derive from
+`wreq.exceptions.Error`, so catch it to handle any other failure.
 
 ## Read response metadata and bodies
 

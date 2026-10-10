@@ -30,7 +30,6 @@ use client::{
 use cookie::{Cookie, Jar, SameSite};
 use dns::{DnsOptions, LookupIpStrategy};
 use emulate::{Emulation, Platform, Profile};
-use error::*;
 use header::{HeaderMap, OrigHeaderMap};
 use http::{Method, StatusCode, Version};
 use http1::Http1Options;
@@ -349,7 +348,6 @@ fn wreq(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(emulation_module))?;
     m.add_wrapped(wrap_pymodule!(redirect_module))?;
     m.add_wrapped(wrap_pymodule!(blocking_module))?;
-    m.add_wrapped(wrap_pymodule!(exceptions_module))?;
 
     let sys = PyModule::import(py, intern!(py, "sys"))?;
     let sys_modules: Bound<'_, PyDict> = sys.getattr(intern!(py, "modules"))?.cast_into()?;
@@ -381,10 +379,6 @@ fn wreq(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     sys_modules.set_item(
         intern!(py, "wreq.blocking"),
         m.getattr(intern!(py, "blocking"))?,
-    )?;
-    sys_modules.set_item(
-        intern!(py, "wreq.exceptions"),
-        m.getattr(intern!(py, "exceptions"))?,
     )?;
     Ok(())
 }
@@ -495,36 +489,5 @@ fn blocking_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<BlockingClient>()?;
     m.add_class::<BlockingResponse>()?;
     m.add_class::<BlockingWebSocket>()?;
-    Ok(())
-}
-
-#[pymodule(gil_used = false, name = "exceptions")]
-fn exceptions_module(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add(intern!(py, "TlsError"), py.get_type::<TlsError>())?;
-    m.add(intern!(py, "BodyError"), py.get_type::<BodyError>())?;
-    m.add(intern!(py, "BuilderError"), py.get_type::<BuilderError>())?;
-    m.add(
-        intern!(py, "ConnectionError"),
-        py.get_type::<ConnectionError>(),
-    )?;
-    m.add(
-        intern!(py, "ProxyConnectionError"),
-        py.get_type::<ProxyConnectionError>(),
-    )?;
-    m.add(
-        intern!(py, "ConnectionResetError"),
-        py.get_type::<ConnectionResetError>(),
-    )?;
-    m.add(intern!(py, "DecodingError"), py.get_type::<DecodingError>())?;
-    m.add(intern!(py, "RedirectError"), py.get_type::<RedirectError>())?;
-    m.add(intern!(py, "TimeoutError"), py.get_type::<TimeoutError>())?;
-    m.add(intern!(py, "StatusError"), py.get_type::<StatusError>())?;
-    m.add(intern!(py, "RequestError"), py.get_type::<RequestError>())?;
-    m.add(intern!(py, "UpgradeError"), py.get_type::<UpgradeError>())?;
-    m.add(
-        intern!(py, "WebSocketError"),
-        py.get_type::<WebSocketError>(),
-    )?;
-    m.add(intern!(py, "RustPanic"), py.get_type::<RustPanic>())?;
     Ok(())
 }

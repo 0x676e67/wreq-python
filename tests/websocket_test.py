@@ -75,6 +75,8 @@ async def test_websocket_close_frame(code, reason, expected):
             async with client.websocket(url) as ws:
                 assert await ws.close(code, reason) is None
             assert await asyncio.wait_for(frames.get(), 5) == expected
+            with pytest.raises(wreq.WebSocketError, match="disconnected"):
+                await ws.recv()
     finally:
         server.close()
         await server.wait_closed()
@@ -147,5 +149,29 @@ async def test_websocket_reads_and_writes_do_not_block_each_other():
                 assert (await asyncio.wait_for(ws.recv(), 5)).text == "second"
     finally:
         release.set()
+        server.close()
+        await server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_websocket_protocol_error_is_websocket_error():
+    async def bad_frame(reader, writer):
+        try:
+            await handshake(reader, writer)
+            # A frame with the reserved opcode 0x3.
+            writer.write(b"\x83\x00")
+            await writer.drain()
+            await reader.read()
+        finally:
+            writer.close()
+
+    server = await asyncio.start_server(bad_frame, "127.0.0.1", 0)
+    url = f"ws://127.0.0.1:{server.sockets[0].getsockname()[1]}/"
+    try:
+        async with wreq.Client(proxies=[]) as client:
+            async with client.websocket(url) as ws:
+                with pytest.raises(wreq.WebSocketError):
+                    await asyncio.wait_for(ws.recv(), 5)
+    finally:
         server.close()
         await server.wait_closed()
