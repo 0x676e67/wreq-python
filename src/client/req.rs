@@ -15,6 +15,7 @@ use crate::{
         Client,
         body::{Body, Form, Json, multipart::Multipart},
         query::Query,
+        reject_unknown_kwargs,
         resp::{Response, WebSocket},
     },
     cookie::{Cookies, Jar},
@@ -188,6 +189,39 @@ impl FromPyObject<'_, '_> for Request {
     type Error = PyErr;
 
     fn extract(ob: Borrowed<PyAny>) -> PyResult<Request> {
+        if let Ok(kwargs) = ob.cast::<pyo3::types::PyDict>() {
+            reject_unknown_kwargs(
+                kwargs,
+                &[
+                    "json",
+                    "form",
+                    "query",
+                    "headers",
+                    "timeout",
+                    "read_timeout",
+                    "cookies",
+                    "auth",
+                    "bearer_auth",
+                    "basic_auth",
+                    "emulation",
+                    "proxy",
+                    "local_address",
+                    "local_addresses",
+                    "interface",
+                    "version",
+                    "orig_headers",
+                    "default_headers",
+                    "redirect",
+                    "cookie_provider",
+                    "gzip",
+                    "brotli",
+                    "deflate",
+                    "zstd",
+                    "body",
+                    "multipart",
+                ],
+            )?;
+        }
         let mut request = Self::default();
         // Common keys first. A body or multipart form can start a generator or take stream
         // parts, so they are extracted last, after every other option has been validated.
@@ -232,6 +266,34 @@ impl FromPyObject<'_, '_> for WebSocketRequest {
     type Error = PyErr;
 
     fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
+        if let Ok(kwargs) = ob.cast::<pyo3::types::PyDict>() {
+            reject_unknown_kwargs(
+                kwargs,
+                &[
+                    "emulation",
+                    "proxy",
+                    "local_address",
+                    "local_addresses",
+                    "interface",
+                    "headers",
+                    "orig_headers",
+                    "default_headers",
+                    "cookies",
+                    "protocols",
+                    "version",
+                    "auth",
+                    "bearer_auth",
+                    "basic_auth",
+                    "query",
+                    "read_buffer_size",
+                    "write_buffer_size",
+                    "max_write_buffer_size",
+                    "max_message_size",
+                    "max_frame_size",
+                    "accept_unmasked_frames",
+                ],
+            )?;
+        }
         let mut params = Self::default();
         extract_option!(ob, params, emulation);
         extract_option!(ob, params, proxy);

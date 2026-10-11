@@ -63,6 +63,20 @@ def test_runtime_configuration():
         client.close()
 
 
+def test_client_rejects_unknown_options():
+    with pytest.raises(TypeError, match="unexpected keyword argument 'dns_option'"):
+        wreq.Client(dns_option=object())
+
+
+@pytest.mark.asyncio
+async def test_request_rejects_unknown_options():
+    async with wreq.Client(proxies=[]) as client:
+        with pytest.raises(TypeError, match="unexpected keyword argument 'complete_nonsense'"):
+            await client.get("http://127.0.0.1", complete_nonsense=1)
+        with pytest.raises(TypeError, match="unexpected keyword argument 'complete_nonsense'"):
+            await client.websocket("ws://127.0.0.1", complete_nonsense=1)
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("scheduler", [Scheduler.PER_WORKER, Scheduler.WORK_STEALING])
 async def test_response_and_stream_keep_runtime_alive(scheduler):

@@ -11,7 +11,11 @@ use std::{
 };
 
 use pyo3::{
-    IntoPyObjectExt, exceptions::PyValueError, prelude::*, pybacked::PyBackedStr, types::PyDict,
+    IntoPyObjectExt,
+    exceptions::{PyTypeError, PyValueError},
+    prelude::*,
+    pybacked::PyBackedStr,
+    types::PyDict,
 };
 use req::{Request, WebSocketRequest};
 use tokio_util::sync::CancellationToken;
@@ -36,6 +40,21 @@ use crate::{
     redirect, runtime,
     tls::{Identity, KeyLog, TlsOptions, TlsVerify, TlsVersion},
 };
+
+pub(crate) fn reject_unknown_kwargs(
+    kwargs: Borrowed<'_, '_, PyDict>,
+    allowed: &[&str],
+) -> PyResult<()> {
+    for (key, _) in kwargs.iter() {
+        let key = key.extract::<&str>()?;
+        if !allowed.contains(&key) {
+            return Err(PyTypeError::new_err(format!(
+                "unexpected keyword argument '{key}'"
+            )));
+        }
+    }
+    Ok(())
+}
 
 /// An IP socket address.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -172,6 +191,58 @@ impl FromPyObject<'_, '_> for Builder {
     type Error = PyErr;
 
     fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
+        if let Ok(kwargs) = ob.cast::<PyDict>() {
+            reject_unknown_kwargs(
+                kwargs,
+                &[
+                    "runtime",
+                    "emulation",
+                    "user_agent",
+                    "headers",
+                    "orig_headers",
+                    "referer",
+                    "redirect",
+                    "raise_for_status",
+                    "cookie_store",
+                    "cookie_provider",
+                    "timeout",
+                    "connect_timeout",
+                    "read_timeout",
+                    "tcp_keepalive",
+                    "tcp_keepalive_interval",
+                    "tcp_keepalive_retries",
+                    "tcp_user_timeout",
+                    "tcp_nodelay",
+                    "tcp_reuse_address",
+                    "pool_idle_timeout",
+                    "pool_max_idle_per_host",
+                    "pool_max_size",
+                    "no_proxy",
+                    "proxies",
+                    "local_address",
+                    "local_addresses",
+                    "interface",
+                    "https_only",
+                    "http1_only",
+                    "http2_only",
+                    "http1_options",
+                    "http2_options",
+                    "tls_verify",
+                    "tls_verify_hostname",
+                    "tls_identity",
+                    "tls_keylog",
+                    "tls_info",
+                    "tls_min_version",
+                    "tls_max_version",
+                    "tls_options",
+                    "dns_options",
+                    "gzip",
+                    "brotli",
+                    "deflate",
+                    "zstd",
+                ],
+            )?;
+        }
         let mut builder = Self::default();
         extract_option!(ob, builder, runtime);
         extract_option!(ob, builder, emulation);
