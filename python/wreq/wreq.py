@@ -8,6 +8,7 @@ from typing import (
     Mapping,
     Generator,
     NotRequired,
+    Self,
     Sequence,
     Mapping,
     Tuple,
@@ -320,7 +321,7 @@ class Streamer:
 
     def __next__(self) -> memoryview | HeaderMap: ...
 
-    def __enter__(self) -> Any: ...
+    def __enter__(self) -> Self: ...
 
     def __exit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
         r"""
@@ -331,7 +332,7 @@ class Streamer:
 
     async def __anext__(self) -> memoryview | HeaderMap: ...
 
-    async def __aenter__(self) -> Any: ...
+    async def __aenter__(self) -> Self: ...
 
     async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
         r"""
@@ -455,7 +456,7 @@ class Response:
         `async with` instead releases the body and keeps a fully read connection reusable.
         """
 
-    async def __aenter__(self) -> Any: ...
+    async def __aenter__(self) -> Self: ...
     async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
         r"""
         Release the body without forbidding reuse: a fully read connection returns
@@ -529,7 +530,7 @@ class WebSocket:
         Close the WebSocket connection.
         """
 
-    async def __aenter__(self) -> Any: ...
+    async def __aenter__(self) -> Self: ...
     async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
         r"""
         Close the WebSocket connection without a close code or reason, unless already closed.
@@ -1461,7 +1462,7 @@ class Client:
         """
         ...
 
-    async def __aenter__(self) -> Any: ...
+    async def __aenter__(self) -> Self: ...
     async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
         r"""
         Close the client like `close()`: cancel pending requests and reject new ones.
