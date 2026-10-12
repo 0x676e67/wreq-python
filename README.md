@@ -132,6 +132,20 @@ With free geo-targeting and ~0.5s response times, Byteful helps you collect data
 
 ---
 
+<a href="https://www.lundproxy.com?utm_source=github&utm_medium=sponsorship&utm_campaign=wreq_python&utm_content=description" target="_blank"><img src="./.github/assets/lundproxy.svg" width="170" height="47" alt="LundProxy"></a>
+
+**Unlimited residential traffic, billed by bandwidth**
+
+**[LundProxy](https://www.lundproxy.com?utm_source=github&utm_medium=sponsorship&utm_campaign=wreq_python&utm_content=description)** provides unlimited residential traffic and concurrent connections on 50 Mbps to 1 Gbps plans, billed by download bandwidth with no monthly GB allowance. Use standard HTTP(S) or SOCKS5 clients without a proprietary SDK for price monitoring, public web data collection, and AI datasets.
+
+100M+ residential IPs · 190+ countries · Country targeting · Rotating and sticky sessions
+
+**[Free 50 Mbps, 2-hour trial](https://t.me/lundproxy?text=Hi%20LundProxy%2C%20I%20found%20you%20on%20wreq-python%20GitHub%20and%20would%20like%20the%20free%2050%20Mbps%2C%202-hour%20Unlimited%20Residential%20trial).** Subject to support approval; no payment method required.
+
+**[Dashboard](https://www.lundproxy.com/app/login.html)** | **[Pricing](https://www.lundproxy.com/pricing.html?utm_source=github&utm_medium=sponsorship&utm_campaign=wreq_python&utm_content=pricing)** | **[Docs](https://www.lundproxy.com/developers/?utm_source=github&utm_medium=sponsorship&utm_campaign=wreq_python&utm_content=docs)**
+
+---
+
 <a href="https://go.nodemaven.com/wreqpythonGHaugust" target="_blank">
   <img src="https://raw.githubusercontent.com/0x676e67/wreq-python/main/.github/assets/nodemaven.svg" width="165" height="47" alt="NodeMaven">
 </a>
