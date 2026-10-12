@@ -1,7 +1,23 @@
 use pyo3::{
+    exceptions::PyTypeError,
     prelude::*,
     types::{PyDict, PyString},
 };
+
+pub(crate) fn reject_unknown_kwargs(
+    kwargs: Borrowed<'_, '_, PyDict>,
+    allowed: &[&str],
+) -> PyResult<()> {
+    for (key, _) in kwargs.iter() {
+        let key = key.extract::<&str>()?;
+        if !allowed.contains(&key) {
+            return Err(PyTypeError::new_err(format!(
+                "unexpected keyword argument '{key}'"
+            )));
+        }
+    }
+    Ok(())
+}
 
 /// Look up an optional keyword; a dict answers a missing key without raising KeyError.
 pub(crate) fn lookup<'py>(
@@ -14,45 +30,63 @@ pub(crate) fn lookup<'py>(
     }
 }
 
-macro_rules! extract_option {
-    ($ob:expr, $params:expr, $field:ident) => {
-        if let Some(value) =
-            $crate::macros::lookup(&$ob, pyo3::intern!($ob.py(), stringify!($field)))
-        {
-            $params.$field = value.extract()?;
-        }
-    };
-}
+derive_deftly::define_derive_deftly! {
+    /// Derive keyword names and extraction from the parameter fields.
+    /// Reject unknown keys when the type specifies `deny_unknown`.
+    /// Marked fields are converted last, after other parameters are validated.
+    ExtractOptions for struct:
 
-/// Like [`extract_option!`] for several fields, but stop looking up keys once every key
-/// of a dict has been found. `$last` fields are looked up first and extracted after the
-/// rest. Unknown keys are never found, so they make the scan run to the end and stay ignored.
-macro_rules! extract_options {
-    ($ob:expr, $params:expr, [$($field:ident),* $(,)?], [$($last:ident),* $(,)?]) => {{
-        $(
-            let $last =
-                $crate::macros::lookup(&$ob, pyo3::intern!($ob.py(), stringify!($last)));
-        )*
-        // A dict's length bounds the keys left to find; other mappings are scanned in full.
-        let mut remaining = $ob
-            .cast::<pyo3::types::PyDict>()
-            .map_or(usize::MAX, |dict| dict.len())
-            $(.saturating_sub(usize::from($last.is_some())))*;
-        $(
-            if remaining > 0
-                && let Some(value) =
-                    $crate::macros::lookup(&$ob, pyo3::intern!($ob.py(), stringify!($field)))
-            {
-                $params.$field = value.extract()?;
-                remaining -= 1;
-            }
-        )*
-        $(
-            if let Some(value) = $last {
-                $params.$last = value.extract()?;
-            }
-        )*
-    }};
+    impl<$tgens> $ttype where $twheres {
+        const FIELDS: &'static [&'static str] = &[
+            ${for fields { ${concat $fname}, }}
+        ];
+    }
+
+    impl<'__extract_a, '__extract_py, $tgens>
+        pyo3::FromPyObject<'__extract_a, '__extract_py> for $ttype
+        where $twheres
+    {
+        type Error = pyo3::PyErr;
+
+        fn extract(ob: pyo3::Borrowed<'__extract_a, '__extract_py, pyo3::PyAny>) -> pyo3::PyResult<Self> {
+            use pyo3::prelude::*;
+            ${if tmeta(deny_unknown) {
+                if let Ok(kwargs) = ob.cast::<pyo3::types::PyDict>() {
+                    $crate::macros::reject_unknown_kwargs(kwargs, Self::FIELDS)?;
+                }
+            }}
+            let mut params = Self::default();
+            ${for fields {
+                ${when fmeta(extract_last)}
+                let ${paste pending_ $fname} =
+                    $crate::macros::lookup(&ob, pyo3::intern!(ob.py(), ${concat $fname}));
+            }}
+            let mut remaining = ob.cast::<pyo3::types::PyDict>()
+                .map_or(Self::FIELDS.len(), |dict| dict.len())
+                ${for fields {
+                    ${when fmeta(extract_last)}
+                    .saturating_sub(usize::from(${paste pending_ $fname}.is_some()))
+                }};
+            ${for fields {
+                ${when not(fmeta(extract_last))}
+                if let Some(value) = (remaining > 0)
+                    .then(|| $crate::macros::lookup(&ob, pyo3::intern!(ob.py(), ${concat $fname})))
+                    .flatten()
+                {
+                    params.$fname = value.extract()?;
+                    remaining -= 1;
+                }
+            }}
+            ${for fields {
+                ${when fmeta(extract_last)}
+                if let Some(value) = ${paste pending_ $fname} {
+                    params.$fname = value.extract()?;
+                }
+            }}
+            let _ = remaining;
+            Ok(params)
+        }
+    }
 }
 
 macro_rules! apply_option {

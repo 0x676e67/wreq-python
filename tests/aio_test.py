@@ -216,7 +216,7 @@ async def test_request_coroutine_enters_its_result():
 
             # The response exits even when the block fails.
             with pytest.raises(KeyError):
-                async with wreq.get(url, proxies=[]) as response:
+                async with wreq.get(url) as response:
                     raise KeyError
             with pytest.raises(RuntimeError, match="consumed"):
                 await response.text()

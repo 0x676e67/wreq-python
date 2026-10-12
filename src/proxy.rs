@@ -1,10 +1,13 @@
+use derive_deftly::Deftly;
 use pyo3::{prelude::*, pybacked::PyBackedStr};
 use wreq::header::HeaderValue;
 
 use crate::{error::Error, extractor::Text, header::HeaderMap};
 
 /// A builder for `Proxy`.
-#[derive(Default)]
+#[derive(Default, Deftly)]
+#[derive_deftly(ExtractOptions)]
+#[deftly(deny_unknown)]
 struct Builder {
     // Optional username for proxy authentication.
     username: Option<PyBackedStr>,
@@ -24,25 +27,10 @@ struct Builder {
 
 /// A proxy server for a request.
 /// Supports HTTP, HTTPS, SOCKS4, SOCKS4a, SOCKS5, and SOCKS5h protocols.
+/// Factory methods reject unknown keyword arguments with `TypeError`.
 #[derive(Clone)]
 #[pyclass(subclass, frozen, str, from_py_object)]
 pub struct Proxy(pub wreq::Proxy);
-
-// ===== impl Builder =====
-
-impl FromPyObject<'_, '_> for Builder {
-    type Error = PyErr;
-
-    fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
-        let mut builder = Self::default();
-        extract_option!(ob, builder, username);
-        extract_option!(ob, builder, password);
-        extract_option!(ob, builder, custom_http_auth);
-        extract_option!(ob, builder, custom_http_headers);
-        extract_option!(ob, builder, exclusion);
-        Ok(builder)
-    }
-}
 
 // ===== impl Proxy =====
 

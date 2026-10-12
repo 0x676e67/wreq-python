@@ -159,6 +159,7 @@ mod r#async {
     }
 
     /// Make a request with the given parameters.
+    /// Unknown keywords raise `TypeError` when awaited or entered with `async with`.
     #[pyfunction]
     #[pyo3(signature = (method, url, **kwds))]
     pub fn request<'py>(
@@ -171,6 +172,7 @@ mod r#async {
     }
 
     /// Make a WebSocket connection with the given parameters.
+    /// Unknown keywords raise `TypeError` when awaited or entered with `async with`.
     #[pyfunction]
     #[pyo3(signature = (url, **kwds))]
     pub fn websocket<'py>(
@@ -285,6 +287,7 @@ mod blocking {
     }
 
     /// Make a request with the given parameters (blocking).
+    /// Unknown keywords raise `TypeError` when this function is called.
     #[pyfunction]
     #[pyo3(signature = (method, url, **kwds))]
     pub fn request(
@@ -297,6 +300,7 @@ mod blocking {
     }
 
     /// Make a WebSocket connection with the given parameters (blocking).
+    /// Unknown keywords raise `TypeError` when this function is called.
     #[pyfunction]
     #[pyo3(signature = (url, **kwds))]
     pub fn websocket(

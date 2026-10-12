@@ -63,18 +63,44 @@ def test_runtime_configuration():
         client.close()
 
 
-def test_client_rejects_unknown_options():
+@pytest.mark.parametrize("factory", [wreq.Client, wreq.blocking.Client])
+def test_client_rejects_unknown_options(factory):
     with pytest.raises(TypeError, match="unexpected keyword argument 'dns_option'"):
-        wreq.Client(dns_option=object())
+        factory(dns_option=object())
+
+
+def test_protocol_and_proxy_reject_unknown_options():
+    factories = (
+        wreq.http1.Http1Options,
+        wreq.http2.Http2Options,
+        wreq.tls.TlsOptions,
+        lambda **kwargs: wreq.Proxy.all("http://127.0.0.1:8080", **kwargs),
+    )
+    for factory in factories:
+        for value in (None, object()):
+            with pytest.raises(TypeError, match="unexpected keyword argument 'unknown'"):
+                factory(unknown=value)
 
 
 @pytest.mark.asyncio
 async def test_request_rejects_unknown_options():
     async with wreq.Client(proxies=[]) as client:
-        with pytest.raises(TypeError, match="unexpected keyword argument 'complete_nonsense'"):
-            await client.get("http://127.0.0.1", complete_nonsense=1)
-        with pytest.raises(TypeError, match="unexpected keyword argument 'complete_nonsense'"):
-            await client.websocket("ws://127.0.0.1", complete_nonsense=1)
+        for route in (client, wreq):
+            for method, url in (
+                (route.get, "http://127.0.0.1"),
+                (route.websocket, "ws://127.0.0.1"),
+            ):
+                coroutine = method(url, complete_nonsense=1)
+                with pytest.raises(TypeError, match="unexpected keyword argument"):
+                    await coroutine
+    with wreq.blocking.Client(proxies=[]) as client:
+        for route in (client, wreq.blocking):
+            for method, url in (
+                (route.get, "http://127.0.0.1"),
+                (route.websocket, "ws://127.0.0.1"),
+            ):
+                with pytest.raises(TypeError, match="unexpected keyword argument"):
+                    method(url, complete_nonsense=1)
 
 
 @pytest.mark.asyncio

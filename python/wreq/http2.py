@@ -268,6 +268,8 @@ class SettingsOrder:
 class Params(TypedDict):
     """
     All parameters for HTTP/2 connections.
+
+    Unknown keyword arguments raise `TypeError` when constructing `Http2Options`.
     """
 
     initial_window_size: NotRequired[int]

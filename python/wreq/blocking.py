@@ -216,6 +216,9 @@ class WebSocket:
 class Client:
     r"""
     A blocking client for making HTTP requests.
+
+    Unknown configuration or request keyword arguments raise `TypeError`
+    during the call.
     """
 
     runtime: Runtime

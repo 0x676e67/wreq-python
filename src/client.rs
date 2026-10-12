@@ -10,12 +10,9 @@ use std::{
     time::Duration,
 };
 
+use derive_deftly::Deftly;
 use pyo3::{
-    IntoPyObjectExt,
-    exceptions::{PyTypeError, PyValueError},
-    prelude::*,
-    pybacked::PyBackedStr,
-    types::PyDict,
+    IntoPyObjectExt, exceptions::PyValueError, prelude::*, pybacked::PyBackedStr, types::PyDict,
 };
 use req::{Request, WebSocketRequest};
 use tokio_util::sync::CancellationToken;
@@ -41,21 +38,6 @@ use crate::{
     tls::{Identity, KeyLog, TlsOptions, TlsVerify, TlsVersion},
 };
 
-pub(crate) fn reject_unknown_kwargs(
-    kwargs: Borrowed<'_, '_, PyDict>,
-    allowed: &[&str],
-) -> PyResult<()> {
-    for (key, _) in kwargs.iter() {
-        let key = key.extract::<&str>()?;
-        if !allowed.contains(&key) {
-            return Err(PyTypeError::new_err(format!(
-                "unexpected keyword argument '{key}'"
-            )));
-        }
-    }
-    Ok(())
-}
-
 /// An IP socket address.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[pyclass(eq, str, frozen, skip_from_py_object)]
@@ -77,101 +59,135 @@ impl SocketAddr {
 impl_print_str!(Display, SocketAddr);
 
 /// A builder for `Client`.
-#[derive(Default)]
+#[derive(Default, Deftly)]
+#[derive_deftly(ExtractOptions)]
+#[deftly(deny_unknown)]
 struct Builder {
     runtime: Option<runtime::Runtime>,
+
     /// The Emulation settings for the client.
     emulation: Option<EmulationLike>,
+
     /// The user agent to use for the client.
     user_agent: Option<PyBackedStr>,
+
     /// The headers to use for the client.
     headers: Option<HeaderMap>,
+
     /// The original headers to use for the client.
     orig_headers: Option<OrigHeaderMap>,
+
     /// Whether to use referer.
     referer: Option<bool>,
+
     /// Whether to redirect policy.
     redirect: Option<redirect::Policy>,
+
     /// Whether to raise for status.
     raise_for_status: Option<bool>,
 
     // ========= Cookie options =========
     /// Whether to use cookie store.
     cookie_store: Option<bool>,
+
     /// Whether to use cookie store provider.
     cookie_provider: Option<Jar>,
 
     // ========= Timeout options =========
     /// The timeout to use for the client.
     timeout: Option<Duration>,
+
     /// The connect timeout to use for the client.
     connect_timeout: Option<Duration>,
+
     /// The read timeout to use for the client.
     read_timeout: Option<Duration>,
 
     // ========= TCP options =========
     /// Set that all sockets have `SO_KEEPALIVE` set with the supplied duration.
     tcp_keepalive: Option<Duration>,
+
     /// Set the interval between TCP keepalive probes.
     tcp_keepalive_interval: Option<Duration>,
+
     /// Set the number of retries for TCP keepalive.
     tcp_keepalive_retries: Option<u32>,
+
     /// Set an optional user timeout for TCP sockets.
     tcp_user_timeout: Option<Duration>,
+
     /// Set that all sockets have `NO_DELAY` set.
     tcp_nodelay: Option<bool>,
+
     /// Set that all sockets have `SO_REUSEADDR` set.
     tcp_reuse_address: Option<bool>,
 
     // ========= Connection pool options =========
     /// Set an optional timeout for idle sockets being kept-alive.
     pool_idle_timeout: Option<Duration>,
+
     /// Sets the maximum idle connection per host allowed in the pool.
     pool_max_idle_per_host: Option<usize>,
+
     /// Sets the maximum number of connections in the pool.
     pool_max_size: Option<usize>,
+
+    // ========= Network options =========
+    /// Whether to disable the proxy for the client.
+    no_proxy: Option<bool>,
+
+    /// The proxies to use for the client.
+    proxies: Option<Vec<Proxy>>,
+
+    /// Bind to a local IP Address.
+    local_address: Option<IpAddr>,
+
+    /// Bind to local IP Addresses (IPv4, IPv6).
+    local_addresses: Option<Extractor<(Option<Ipv4Addr>, Option<Ipv6Addr>)>>,
+
+    /// Bind to an interface by `SO_BINDTODEVICE`.
+    interface: Option<String>,
+
+    /// Whether to use HTTPS only.
+    https_only: Option<bool>,
 
     // ========= Protocol options =========
     /// Whether to use the HTTP/1 protocol only.
     http1_only: Option<bool>,
+
     /// Whether to use the HTTP/2 protocol only.
     http2_only: Option<bool>,
-    /// Whether to use HTTPS only.
-    https_only: Option<bool>,
+
     /// Sets the HTTP/1 options for the client.
     http1_options: Option<Http1Options>,
+
     /// sets the HTTP/2 options for the client.
     http2_options: Option<Http2Options>,
 
     // ========= TLS options =========
     /// Whether to verify the SSL certificate or root certificate file path.
     tls_verify: Option<TlsVerify>,
+
     /// Whether to verify the hostname in the SSL certificate.
     tls_verify_hostname: Option<bool>,
+
     /// Represents a private key and X509 cert as a client certificate.
     tls_identity: Option<Identity>,
+
     /// Key logging policy for TLS session keys.
     tls_keylog: Option<KeyLog>,
+
     /// Add TLS information as `TlsInfo` extension to responses.
     tls_info: Option<bool>,
+
     /// The minimum TLS version to use for the client.
     tls_min_version: Option<TlsVersion>,
+
     /// The maximum TLS version to use for the client.
     tls_max_version: Option<TlsVersion>,
+
     /// Sets the TLS options for the client.
     tls_options: Option<TlsOptions>,
-
-    // ========= Network options =========
-    /// Whether to disable the proxy for the client.
-    no_proxy: Option<bool>,
-    /// The proxies to use for the client.
-    proxies: Option<Vec<Proxy>>,
-    /// Bind to a local IP Address.
-    local_address: Option<IpAddr>,
-    /// Bind to local IP Addresses (IPv4, IPv6).
-    local_addresses: Option<Extractor<(Option<Ipv4Addr>, Option<Ipv6Addr>)>>,
-    /// Bind to an interface by `SO_BINDTODEVICE`.
-    interface: Option<String>,
 
     // ========= DNS options =========
     dns_options: Option<DnsOptions>,
@@ -179,130 +195,19 @@ struct Builder {
     // ========= Compression options =========
     /// Sets gzip as an accepted encoding.
     gzip: Option<bool>,
+
     /// Sets brotli as an accepted encoding.
     brotli: Option<bool>,
+
     /// Sets deflate as an accepted encoding.
     deflate: Option<bool>,
+
     /// Sets zstd as an accepted encoding.
     zstd: Option<bool>,
 }
 
-impl FromPyObject<'_, '_> for Builder {
-    type Error = PyErr;
-
-    fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
-        if let Ok(kwargs) = ob.cast::<PyDict>() {
-            reject_unknown_kwargs(
-                kwargs,
-                &[
-                    "runtime",
-                    "emulation",
-                    "user_agent",
-                    "headers",
-                    "orig_headers",
-                    "referer",
-                    "redirect",
-                    "raise_for_status",
-                    "cookie_store",
-                    "cookie_provider",
-                    "timeout",
-                    "connect_timeout",
-                    "read_timeout",
-                    "tcp_keepalive",
-                    "tcp_keepalive_interval",
-                    "tcp_keepalive_retries",
-                    "tcp_user_timeout",
-                    "tcp_nodelay",
-                    "tcp_reuse_address",
-                    "pool_idle_timeout",
-                    "pool_max_idle_per_host",
-                    "pool_max_size",
-                    "no_proxy",
-                    "proxies",
-                    "local_address",
-                    "local_addresses",
-                    "interface",
-                    "https_only",
-                    "http1_only",
-                    "http2_only",
-                    "http1_options",
-                    "http2_options",
-                    "tls_verify",
-                    "tls_verify_hostname",
-                    "tls_identity",
-                    "tls_keylog",
-                    "tls_info",
-                    "tls_min_version",
-                    "tls_max_version",
-                    "tls_options",
-                    "dns_options",
-                    "gzip",
-                    "brotli",
-                    "deflate",
-                    "zstd",
-                ],
-            )?;
-        }
-        let mut builder = Self::default();
-        extract_option!(ob, builder, runtime);
-        extract_option!(ob, builder, emulation);
-        extract_option!(ob, builder, user_agent);
-        extract_option!(ob, builder, headers);
-        extract_option!(ob, builder, orig_headers);
-        extract_option!(ob, builder, referer);
-        extract_option!(ob, builder, redirect);
-        extract_option!(ob, builder, raise_for_status);
-
-        extract_option!(ob, builder, cookie_store);
-        extract_option!(ob, builder, cookie_provider);
-
-        extract_option!(ob, builder, timeout);
-        extract_option!(ob, builder, connect_timeout);
-        extract_option!(ob, builder, read_timeout);
-
-        extract_option!(ob, builder, tcp_keepalive);
-        extract_option!(ob, builder, tcp_keepalive_interval);
-        extract_option!(ob, builder, tcp_keepalive_retries);
-        extract_option!(ob, builder, tcp_user_timeout);
-        extract_option!(ob, builder, tcp_nodelay);
-        extract_option!(ob, builder, tcp_reuse_address);
-
-        extract_option!(ob, builder, pool_idle_timeout);
-        extract_option!(ob, builder, pool_max_idle_per_host);
-        extract_option!(ob, builder, pool_max_size);
-
-        extract_option!(ob, builder, no_proxy);
-        extract_option!(ob, builder, proxies);
-        extract_option!(ob, builder, local_address);
-        extract_option!(ob, builder, local_addresses);
-        extract_option!(ob, builder, interface);
-
-        extract_option!(ob, builder, https_only);
-        extract_option!(ob, builder, http1_only);
-        extract_option!(ob, builder, http2_only);
-        extract_option!(ob, builder, http1_options);
-        extract_option!(ob, builder, http2_options);
-
-        extract_option!(ob, builder, tls_verify);
-        extract_option!(ob, builder, tls_verify_hostname);
-        extract_option!(ob, builder, tls_identity);
-        extract_option!(ob, builder, tls_keylog);
-        extract_option!(ob, builder, tls_info);
-        extract_option!(ob, builder, tls_min_version);
-        extract_option!(ob, builder, tls_max_version);
-        extract_option!(ob, builder, tls_options);
-
-        extract_option!(ob, builder, dns_options);
-
-        extract_option!(ob, builder, gzip);
-        extract_option!(ob, builder, brotli);
-        extract_option!(ob, builder, deflate);
-        extract_option!(ob, builder, zstd);
-        Ok(builder)
-    }
-}
-
-/// A client for making HTTP requests.
+/// A client for making HTTP requests. Unknown keyword arguments raise `TypeError`.
+/// Request options are checked when the coroutine is awaited or entered with `async with`.
 #[derive(Clone)]
 #[pyclass(subclass, frozen, skip_from_py_object)]
 pub struct Client {
@@ -320,6 +225,7 @@ pub struct Client {
 }
 
 /// A blocking client for making HTTP requests.
+/// Unknown keyword arguments raise `TypeError` when the function is called.
 #[derive(Default)]
 #[pyclass(name = "Client", subclass, frozen, skip_from_py_object)]
 pub struct BlockingClient(Client);
@@ -730,6 +636,7 @@ impl Client {
     }
 
     /// Make a request with the given method and URL.
+    /// Unknown keywords raise `TypeError` when awaited or entered with `async with`.
     #[pyo3(signature = (method, url, **kwds))]
     pub fn request<'py>(
         &self,
@@ -742,6 +649,7 @@ impl Client {
     }
 
     /// Make a WebSocket request to the given URL.
+    /// Unknown keywords raise `TypeError` when awaited or entered with `async with`.
     #[pyo3(signature = (url, **kwds))]
     pub fn websocket<'py>(
         &self,
@@ -894,6 +802,7 @@ impl BlockingClient {
     }
 
     /// Make a request with the specified method and URL.
+    /// Unknown keywords raise `TypeError` when this method is called.
     #[pyo3(signature = (method, url, **kwds))]
     pub fn request(
         &self,
@@ -909,6 +818,7 @@ impl BlockingClient {
     }
 
     /// Make a WebSocket request to the specified URL.
+    /// Unknown keywords raise `TypeError` when this method is called.
     #[pyo3(signature = (url, **kwds))]
     pub fn websocket(
         &self,

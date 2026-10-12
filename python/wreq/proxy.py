@@ -27,6 +27,8 @@ class Proxy:
     r"""
     A proxy server for a request.
     Supports HTTP, HTTPS, SOCKS4, SOCKS4a, SOCKS5, and SOCKS5h protocols.
+
+    Unknown keyword arguments passed to its factory methods raise `TypeError`.
     """
 
     @staticmethod
