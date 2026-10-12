@@ -9,10 +9,11 @@ pub(crate) fn reject_unknown_kwargs(
     allowed: &[&str],
 ) -> PyResult<()> {
     for (key, _) in kwargs.iter() {
-        let key = key.extract::<&str>()?;
-        if !allowed.contains(&key) {
+        let key = key.cast::<PyString>()?;
+        if !key.to_str().is_ok_and(|name| allowed.contains(&name)) {
             return Err(PyTypeError::new_err(format!(
-                "unexpected keyword argument '{key}'"
+                "unexpected keyword argument '{}'",
+                key.to_string_lossy()
             )));
         }
     }

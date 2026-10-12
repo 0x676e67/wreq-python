@@ -65,8 +65,9 @@ def test_runtime_configuration():
 
 @pytest.mark.parametrize("factory", [wreq.Client, wreq.blocking.Client])
 def test_client_rejects_unknown_options(factory):
-    with pytest.raises(TypeError, match="unexpected keyword argument 'dns_option'"):
-        factory(dns_option=object())
+    for name in ("dns_option", "\ud800"):
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            factory(**{name: object()})
 
 
 def test_protocol_and_proxy_reject_unknown_options():
@@ -77,9 +78,10 @@ def test_protocol_and_proxy_reject_unknown_options():
         lambda **kwargs: wreq.Proxy.all("http://127.0.0.1:8080", **kwargs),
     )
     for factory in factories:
-        for value in (None, object()):
-            with pytest.raises(TypeError, match="unexpected keyword argument 'unknown'"):
-                factory(unknown=value)
+        for name in ("unknown", "\ud800"):
+            for value in (None, object()):
+                with pytest.raises(TypeError, match="unexpected keyword argument"):
+                    factory(**{name: value})
 
 
 @pytest.mark.asyncio
@@ -90,17 +92,19 @@ async def test_request_rejects_unknown_options():
                 (route.get, "http://127.0.0.1"),
                 (route.websocket, "ws://127.0.0.1"),
             ):
-                coroutine = method(url, complete_nonsense=1)
-                with pytest.raises(TypeError, match="unexpected keyword argument"):
-                    await coroutine
+                for name in ("complete_nonsense", "\ud800"):
+                    coroutine = method(url, **{name: 1})
+                    with pytest.raises(TypeError, match="unexpected keyword argument"):
+                        await coroutine
     with wreq.blocking.Client(proxies=[]) as client:
         for route in (client, wreq.blocking):
             for method, url in (
                 (route.get, "http://127.0.0.1"),
                 (route.websocket, "ws://127.0.0.1"),
             ):
-                with pytest.raises(TypeError, match="unexpected keyword argument"):
-                    method(url, complete_nonsense=1)
+                for name in ("complete_nonsense", "\ud800"):
+                    with pytest.raises(TypeError, match="unexpected keyword argument"):
+                        method(url, **{name: 1})
 
 
 @pytest.mark.asyncio
