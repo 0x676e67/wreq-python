@@ -184,10 +184,12 @@ mod r#async {
         url: PyBackedStr,
         kwds: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, Coroutine>> {
-        if let Some(kwds) = &kwds {
-            reject_unknown_kwargs(kwds.as_borrowed(), WebSocketRequest::FIELDS)?;
-        }
-        let kwds = kwds.map(Bound::unbind);
+        let kwds = kwds
+            .map(|kwds| {
+                reject_unknown_kwargs(kwds.as_borrowed(), WebSocketRequest::FIELDS)
+                    .map(|()| kwds.unbind())
+            })
+            .transpose()?;
         coroutine::managed(py, "websocket", async move {
             Client::default().connect(url, kwds).await
         })
@@ -201,10 +203,11 @@ mod r#async {
         url: PyBackedStr,
         kwds: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, Coroutine>> {
-        if let Some(kwds) = &kwds {
-            reject_unknown_kwargs(kwds.as_borrowed(), Request::FIELDS)?;
-        }
-        let kwds = kwds.map(Bound::unbind);
+        let kwds = kwds
+            .map(|kwds| {
+                reject_unknown_kwargs(kwds.as_borrowed(), Request::FIELDS).map(|()| kwds.unbind())
+            })
+            .transpose()?;
         coroutine::managed(py, qualname, async move {
             Client::default().execute(method, url, kwds).await
         })
