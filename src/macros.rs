@@ -38,7 +38,7 @@ derive_deftly::define_derive_deftly! {
     ExtractOptions for struct:
 
     impl<$tgens> $ttype where $twheres {
-        const FIELDS: &'static [&'static str] = &[
+        pub(crate) const FIELDS: &'static [&'static str] = &[
             ${for fields { ${concat $fname}, }}
         ];
     }
@@ -84,6 +84,7 @@ derive_deftly::define_derive_deftly! {
                     params.$fname = value.extract()?;
                 }
             }}
+            // Avoid an unused-assignment warning after the last generated field.
             let _ = remaining;
             Ok(params)
         }

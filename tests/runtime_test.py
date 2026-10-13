@@ -84,27 +84,38 @@ def test_protocol_and_proxy_reject_unknown_options():
                     factory(**{name: value})
 
 
+def test_request_rejects_unknown_options_at_call():
+    for factory, api in ((wreq.Client, wreq), (wreq.blocking.Client, wreq.blocking)):
+        client = factory(proxies=[])
+        try:
+            for route in (client, api):
+                for operation in (
+                    "get", "post", "put", "patch", "delete", "head",
+                    "options", "trace", "request", "websocket",
+                ):
+                    scheme = "ws" if operation == "websocket" else "http"
+                    url = f"{scheme}://127.0.0.1"
+                    args = (wreq.Method.GET, url) if operation == "request" else (url,)
+                    for options in (
+                        {"complete_nonsense": 1}, {"\ud800": None}, {"proxies": []},
+                    ):
+                        with pytest.raises(TypeError, match="unexpected keyword argument"):
+                            getattr(route, operation)(*args, **options)
+        finally:
+            client.close()
+
+
 @pytest.mark.asyncio
-async def test_request_rejects_unknown_options():
+async def test_request_value_conversion_is_deferred():
     async with wreq.Client(proxies=[]) as client:
         for route in (client, wreq):
             for method, url in (
                 (route.get, "http://127.0.0.1"),
                 (route.websocket, "ws://127.0.0.1"),
             ):
-                for name in ("complete_nonsense", "\ud800"):
-                    coroutine = method(url, **{name: 1})
-                    with pytest.raises(TypeError, match="unexpected keyword argument"):
-                        await coroutine
-    with wreq.blocking.Client(proxies=[]) as client:
-        for route in (client, wreq.blocking):
-            for method, url in (
-                (route.get, "http://127.0.0.1"),
-                (route.websocket, "ws://127.0.0.1"),
-            ):
-                for name in ("complete_nonsense", "\ud800"):
-                    with pytest.raises(TypeError, match="unexpected keyword argument"):
-                        method(url, **{name: 1})
+                coroutine = method(url, headers=object())
+                with pytest.raises(TypeError):
+                    await coroutine
 
 
 @pytest.mark.asyncio

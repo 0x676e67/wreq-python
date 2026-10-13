@@ -826,7 +826,7 @@ class ClientConfig(TypedDict):
 class Request(TypedDict):
     """Keyword options for HTTP request methods and module-level functions.
 
-    Unknown keys raise `TypeError` when request options are checked. Set
+    Unknown keys raise `TypeError` when the method or function is called. Set
     client-only options, such as `connect_timeout`, on `Client`.
     """
 
@@ -1000,7 +1000,7 @@ class Request(TypedDict):
 class WebSocketRequest(TypedDict):
     """Keyword options for WebSocket request methods and module-level functions.
 
-    Unknown keys raise `TypeError` when request options are checked.
+    Unknown keys raise `TypeError` when the method or function is called.
     """
 
     emulation: NotRequired[emulation.Emulation | emulation.Profile]
@@ -1160,9 +1160,9 @@ class Client:
     r"""
     A client for making HTTP requests.
 
-    Unknown keyword arguments raise `TypeError`: client options are checked at
-    construction, and request options when the coroutine is awaited or entered
-    with `async with`.
+    Unknown client or request keyword arguments raise `TypeError` during the
+    call. Values for supported request keywords are converted when the coroutine
+    is first awaited or entered with `async with`.
     """
 
     runtime: Runtime

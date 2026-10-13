@@ -65,9 +65,13 @@ mod r#async {
     use pyo3::{prelude::*, pybacked::PyBackedStr, types::PyDict};
 
     use crate::{
-        client::Client,
+        client::{
+            Client,
+            req::{Request, WebSocketRequest},
+        },
         coroutine::{self, Coroutine},
         http::Method,
+        macros::reject_unknown_kwargs,
     };
 
     /// Make a GET request with the given parameters.
@@ -159,7 +163,7 @@ mod r#async {
     }
 
     /// Make a request with the given parameters.
-    /// Unknown keywords raise `TypeError` when awaited or entered with `async with`.
+    /// Unknown keywords raise `TypeError` when this function is called.
     #[pyfunction]
     #[pyo3(signature = (method, url, **kwds))]
     pub fn request<'py>(
@@ -172,7 +176,7 @@ mod r#async {
     }
 
     /// Make a WebSocket connection with the given parameters.
-    /// Unknown keywords raise `TypeError` when awaited or entered with `async with`.
+    /// Unknown keywords raise `TypeError` when this function is called.
     #[pyfunction]
     #[pyo3(signature = (url, **kwds))]
     pub fn websocket<'py>(
@@ -180,14 +184,16 @@ mod r#async {
         url: PyBackedStr,
         kwds: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, Coroutine>> {
+        if let Some(kwds) = &kwds {
+            reject_unknown_kwargs(kwds.as_borrowed(), WebSocketRequest::FIELDS)?;
+        }
         let kwds = kwds.map(Bound::unbind);
         coroutine::managed(py, "websocket", async move {
             Client::default().connect(url, kwds).await
         })
     }
 
-    /// Return a coroutine named `qualname` that sends a request with the default
-    /// client, created on first await so an unawaited call is inert.
+    /// Return a coroutine named `qualname`; the default client is created on first await.
     fn send<'py>(
         py: Python<'py>,
         qualname: &'static str,
@@ -195,6 +201,9 @@ mod r#async {
         url: PyBackedStr,
         kwds: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, Coroutine>> {
+        if let Some(kwds) = &kwds {
+            reject_unknown_kwargs(kwds.as_borrowed(), Request::FIELDS)?;
+        }
         let kwds = kwds.map(Bound::unbind);
         coroutine::managed(py, qualname, async move {
             Client::default().execute(method, url, kwds).await

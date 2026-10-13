@@ -68,15 +68,16 @@ async with client.request(
 repeated keys. Values can be strings, integers, floats or booleans.
 
 Client constructors and HTTP or WebSocket request methods reject unknown
-keyword arguments with `TypeError`. The same rule applies to module-level
-request functions, `Http1Options`, `Http2Options`, `TlsOptions`, and the
+keyword arguments with `TypeError` when called, in both the async and blocking
+APIs. The same rule applies to module-level request functions, `Http1Options`,
+`Http2Options`, `TlsOptions`, and the
 `Proxy.http()`, `Proxy.https()`, `Proxy.all()` and `Proxy.unix()` factories.
 Set client-only options, such as `connect_timeout`, on `Client`.
 
-Client and protocol options are checked at construction, and proxy options
-during the factory call. Async request options are checked
-when the coroutine is awaited or entered with `async with`; blocking requests
-check them during the method or function call.
+Client and protocol option values are converted at construction, and proxy
+option values during the factory call. Values for supported async request
+keywords are converted when the coroutine is first awaited or entered with
+`async with`; blocking requests convert them during the method or function call.
 
 ## Request bodies
 

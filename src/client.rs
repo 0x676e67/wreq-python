@@ -33,6 +33,7 @@ use crate::{
     http::Method,
     http1::Http1Options,
     http2::Http2Options,
+    macros::reject_unknown_kwargs,
     proxy::Proxy,
     redirect, runtime,
     tls::{Identity, KeyLog, TlsOptions, TlsVerify, TlsVersion},
@@ -206,8 +207,8 @@ struct Builder {
     zstd: Option<bool>,
 }
 
-/// A client for making HTTP requests. Unknown keyword arguments raise `TypeError`.
-/// Request options are checked when the coroutine is awaited or entered with `async with`.
+/// A client for making HTTP requests.
+/// Unknown keyword arguments raise `TypeError` at call time.
 #[derive(Clone)]
 #[pyclass(subclass, frozen, skip_from_py_object)]
 pub struct Client {
@@ -242,6 +243,9 @@ impl Client {
         url: PyBackedStr,
         kwds: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, Coroutine>> {
+        if let Some(kwds) = &kwds {
+            reject_unknown_kwargs(kwds.as_borrowed(), Request::FIELDS)?;
+        }
         let kwds = kwds.map(Bound::unbind);
         coroutine::managed(py, qualname, self.clone().execute(method, url, kwds))
     }
@@ -636,7 +640,7 @@ impl Client {
     }
 
     /// Make a request with the given method and URL.
-    /// Unknown keywords raise `TypeError` when awaited or entered with `async with`.
+    /// Unknown keywords raise `TypeError` when this method is called.
     #[pyo3(signature = (method, url, **kwds))]
     pub fn request<'py>(
         &self,
@@ -649,7 +653,7 @@ impl Client {
     }
 
     /// Make a WebSocket request to the given URL.
-    /// Unknown keywords raise `TypeError` when awaited or entered with `async with`.
+    /// Unknown keywords raise `TypeError` when this method is called.
     #[pyo3(signature = (url, **kwds))]
     pub fn websocket<'py>(
         &self,
@@ -657,6 +661,9 @@ impl Client {
         url: PyBackedStr,
         kwds: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, Coroutine>> {
+        if let Some(kwds) = &kwds {
+            reject_unknown_kwargs(kwds.as_borrowed(), WebSocketRequest::FIELDS)?;
+        }
         let kwds = kwds.map(Bound::unbind);
         coroutine::managed(py, "Client.websocket", self.clone().connect(url, kwds))
     }
