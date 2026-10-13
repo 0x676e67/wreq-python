@@ -1,23 +1,32 @@
 use pyo3::{
+    BoundObject,
     exceptions::PyTypeError,
     prelude::*,
     types::{PyDict, PyString},
 };
 
-pub(crate) fn reject_unknown_kwargs(
-    kwargs: Borrowed<'_, '_, PyDict>,
+/// Validate keyword names and return the original optional Python object.
+pub(crate) fn reject_unknown_kwargs<'py, B>(
+    kwargs: Option<B>,
     allowed: &[&str],
-) -> PyResult<()> {
-    for (key, _) in kwargs.iter() {
-        let key = key.cast::<PyString>()?;
-        if !key.to_str().is_ok_and(|name| allowed.contains(&name)) {
-            return Err(PyTypeError::new_err(format!(
-                "unexpected keyword argument '{}'",
-                key.to_string_lossy()
-            )));
-        }
-    }
-    Ok(())
+) -> PyResult<Option<B>>
+where
+    B: BoundObject<'py, PyDict>,
+{
+    kwargs
+        .map(|kwargs| {
+            for (key, _) in kwargs.as_borrowed().iter() {
+                let key = key.cast::<PyString>()?;
+                if !key.to_str().is_ok_and(|name| allowed.contains(&name)) {
+                    return Err(PyTypeError::new_err(format!(
+                        "unexpected keyword argument '{}'",
+                        key.to_string_lossy()
+                    )));
+                }
+            }
+            Ok(kwargs)
+        })
+        .transpose()
 }
 
 /// Look up an optional keyword; a dict answers a missing key without raising KeyError.
@@ -53,7 +62,7 @@ derive_deftly::define_derive_deftly! {
             use pyo3::prelude::*;
             ${if tmeta(deny_unknown) {
                 if let Ok(kwargs) = ob.cast::<pyo3::types::PyDict>() {
-                    $crate::macros::reject_unknown_kwargs(kwargs, Self::FIELDS)?;
+                    let _ = $crate::macros::reject_unknown_kwargs(Some(kwargs), Self::FIELDS)?;
                 }
             }}
             let mut params = Self::default();
