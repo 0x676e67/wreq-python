@@ -61,9 +61,10 @@ derive_deftly::define_derive_deftly! {
         fn extract(ob: pyo3::Borrowed<'__extract_a, '__extract_py, pyo3::PyAny>) -> pyo3::PyResult<Self> {
             use pyo3::prelude::*;
             ${if tmeta(deny_unknown) {
-                if let Ok(kwargs) = ob.cast::<pyo3::types::PyDict>() {
-                    let _ = $crate::macros::reject_unknown_kwargs(Some(kwargs), Self::FIELDS)?;
-                }
+                let _ = $crate::macros::reject_unknown_kwargs(
+                    ob.cast::<pyo3::types::PyDict>().ok(),
+                    Self::FIELDS,
+                )?;
             }}
             let mut params = Self::default();
             ${for fields {
