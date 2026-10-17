@@ -420,6 +420,16 @@ class Params(TypedDict):
     Overrides the random AES hardware acceleration.
     """
 
+    grease_sigalgs_enabled: NotRequired[bool]
+    """
+    Whether the `signature_algorithms` extension includes a GREASE value.
+    """
+
+    trust_anchors: NotRequired[bytes]
+    """
+    Encoded Trust Anchor IDs sent in a TLS 1.3 ClientHello.
+    """
+
 
 @final
 class TlsOptions:
