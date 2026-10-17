@@ -1,7 +1,10 @@
+use derive_deftly::Deftly;
 use pyo3::prelude::*;
 
 /// A builder for [`Http1Options`].
-#[derive(Default)]
+#[derive(Default, Deftly)]
+#[derive_deftly(ExtractOptions)]
+#[deftly(deny_unknown)]
 struct Builder {
     /// Enable support for HTTP/0.9 responses.
     http09_responses: Option<bool>,
@@ -28,32 +31,11 @@ struct Builder {
     allow_obsolete_multiline_headers_in_responses: Option<bool>,
 }
 
-/// HTTP/1 protocol options for customizing connection behavior.
-///
-/// These options allow you to customize the behavior of HTTP/1 connections,
-/// such as enabling support for HTTP/0.9 responses, header case preservation, etc.
+/// HTTP/1 options for connection behavior and response parsing.
+/// Unknown keyword arguments raise `TypeError`.
 #[derive(Clone)]
 #[pyclass(frozen, str, from_py_object)]
 pub struct Http1Options(pub wreq::http1::Http1Options);
-
-// ===== impl Builder =====
-
-impl FromPyObject<'_, '_> for Builder {
-    type Error = PyErr;
-
-    fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
-        let mut params = Self::default();
-        extract_option!(ob, params, http09_responses);
-        extract_option!(ob, params, writev);
-        extract_option!(ob, params, max_headers);
-        extract_option!(ob, params, read_buf_exact_size);
-        extract_option!(ob, params, max_buf_size);
-        extract_option!(ob, params, allow_spaces_after_header_name_in_responses);
-        extract_option!(ob, params, ignore_invalid_headers_in_responses);
-        extract_option!(ob, params, allow_obsolete_multiline_headers_in_responses);
-        Ok(params)
-    }
-}
 
 // ===== impl Http1Options =====
 

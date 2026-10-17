@@ -1,3 +1,11 @@
+## [unreleased]
+
+### Compatibility Notes
+
+- Unknown keyword arguments now raise `TypeError` when calling async or blocking client constructors, HTTP or WebSocket request methods and functions, `Http1Options`, `Http2Options`, `TlsOptions`, or `Proxy` factories. These arguments were previously ignored.
+- Set client-only options such as `connect_timeout` and `proxies` on `Client`; passing them to a request now raises `TypeError`. Use `proxy` to select a proxy for one request.
+- Async request calls check keyword names before returning a coroutine. Values for supported request keywords are still converted on first `await` or entry with `async with`.
+
 ## [0.11.0](https://github.com/0x676e67/wreq-python/compare/v0.10.2..v0.11.0) - 2026-04-13
 
 ### Features

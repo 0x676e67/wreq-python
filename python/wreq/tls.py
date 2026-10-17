@@ -254,6 +254,8 @@ class KeyLog:
 class Params(TypedDict):
     """
     All parameters for TLS connections.
+
+    Unknown keyword arguments raise `TypeError` when constructing `TlsOptions`.
     """
 
     alpn_protocols: NotRequired[Sequence[AlpnProtocol]]
