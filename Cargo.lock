@@ -2487,7 +2487,7 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 [[package]]
 name = "wreq"
 version = "0.16.1"
-source = "git+https://github.com/0x676e67/wreq?rev=54fdc7c9e0c1290e2f70f38d271ba954e3d86cc2#54fdc7c9e0c1290e2f70f38d271ba954e3d86cc2"
+source = "git+https://github.com/0x676e67/wreq?rev=4b481baa15facf369bda2ae5f31a271e2b853802#4b481baa15facf369bda2ae5f31a271e2b853802"
 dependencies = [
  "btls",
  "btls-sys",
@@ -2557,7 +2557,7 @@ dependencies = [
 [[package]]
 name = "wreq-rt"
 version = "0.2.2-rc.4"
-source = "git+https://github.com/0x676e67/wreq?rev=54fdc7c9e0c1290e2f70f38d271ba954e3d86cc2#54fdc7c9e0c1290e2f70f38d271ba954e3d86cc2"
+source = "git+https://github.com/0x676e67/wreq?rev=4b481baa15facf369bda2ae5f31a271e2b853802#4b481baa15facf369bda2ae5f31a271e2b853802"
 dependencies = [
  "netty",
  "pin-project-lite",
