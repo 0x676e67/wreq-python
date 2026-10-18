@@ -110,6 +110,7 @@ define_enum!(
     NEXT_PROTO_NEG,
     CHANNEL_ID,
     RECORD_SIZE_LIMIT,
+    TRUST_ANCHORS,
 );
 
 /// A builder for [`TlsOptions`].

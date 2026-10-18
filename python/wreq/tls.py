@@ -124,6 +124,7 @@ class ExtensionType(Enum):
     NEXT_PROTO_NEG = auto()
     CHANNEL_ID = auto()
     RECORD_SIZE_LIMIT = auto()
+    TRUST_ANCHORS = auto()
 
 
 @final

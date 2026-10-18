@@ -1,7 +1,7 @@
 import pytest
 import wreq
 from wreq.emulation import Emulation
-from wreq.tls import CertStore, TlsOptions
+from wreq.tls import CertStore, ExtensionType, TlsOptions
 
 
 @pytest.mark.asyncio
@@ -53,4 +53,9 @@ async def test_alps_new_endpoint():
 
 def test_tls_options_trust_anchors_and_grease_sigalgs():
     opts = TlsOptions(grease_sigalgs_enabled=True, trust_anchors=b"")
+    assert opts is not None
+
+
+def test_extension_type_trust_anchors():
+    opts = TlsOptions(extension_permutation=[ExtensionType.TRUST_ANCHORS])
     assert opts is not None
