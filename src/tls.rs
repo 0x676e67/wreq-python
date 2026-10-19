@@ -2,6 +2,7 @@ mod identity;
 mod keylog;
 mod store;
 
+use derive_deftly::Deftly;
 use pyo3::prelude::*;
 use wreq::tls::compress::CertificateCompressor;
 use wreq_util::emulate::compress;
@@ -109,10 +110,13 @@ define_enum!(
     NEXT_PROTO_NEG,
     CHANNEL_ID,
     RECORD_SIZE_LIMIT,
+    TRUST_ANCHORS,
 );
 
 /// A builder for [`TlsOptions`].
-#[derive(Default)]
+#[derive(Default, Deftly)]
+#[derive_deftly(ExtractOptions)]
+#[deftly(deny_unknown)]
 struct Builder {
     /// Application-Layer Protocol Negotiation ([RFC 7301](https://datatracker.ietf.org/doc/html/rfc7301)).
     ///
@@ -190,16 +194,13 @@ struct Builder {
     /// List of supported elliptic curves.
     curves_list: Option<String>,
 
-    /// List of supported signature algorithms.
-    sigalgs_list: Option<String>,
-
     /// Cipher suite configuration string.
     ///
     /// Uses BoringSSL's mini-language to select, enable, and prioritize ciphers.
     cipher_list: Option<String>,
 
-    /// Sets whether to preserve the TLS 1.3 cipher list as configured by [`Self::cipher_list`].
-    preserve_tls13_cipher_list: Option<bool>,
+    /// List of supported signature algorithms.
+    sigalgs_list: Option<String>,
 
     /// Supported certificate compression algorithms ([RFC 8879](https://datatracker.ietf.org/doc/html/rfc8879)).
     certificate_compression_algorithms: Option<Vec<CertificateCompressionAlgorithm>>,
@@ -210,43 +211,17 @@ struct Builder {
     /// Overrides AES hardware acceleration.
     aes_hw_override: Option<bool>,
 
+    /// Sets whether to preserve the TLS 1.3 cipher list as configured by [`Self::cipher_list`].
+    preserve_tls13_cipher_list: Option<bool>,
+
     /// Overrides the random AES hardware acceleration.
     random_aes_hw_override: Option<bool>,
-}
 
-impl FromPyObject<'_, '_> for Builder {
-    type Error = PyErr;
+    /// Whether the `signature_algorithms` extension includes a GREASE value.
+    grease_sigalgs_enabled: Option<bool>,
 
-    fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
-        let mut params = Self::default();
-        extract_option!(ob, params, alpn_protocols);
-        extract_option!(ob, params, alps_protocols);
-        extract_option!(ob, params, alps_use_new_codepoint);
-        extract_option!(ob, params, session_ticket);
-        extract_option!(ob, params, min_tls_version);
-        extract_option!(ob, params, max_tls_version);
-        extract_option!(ob, params, pre_shared_key);
-        extract_option!(ob, params, enable_ech_grease);
-        extract_option!(ob, params, permute_extensions);
-        extract_option!(ob, params, grease_enabled);
-        extract_option!(ob, params, enable_ocsp_stapling);
-        extract_option!(ob, params, enable_signed_cert_timestamps);
-        extract_option!(ob, params, record_size_limit);
-        extract_option!(ob, params, psk_skip_session_ticket);
-        extract_option!(ob, params, key_shares);
-        extract_option!(ob, params, psk_dhe_ke);
-        extract_option!(ob, params, renegotiation);
-        extract_option!(ob, params, delegated_credentials);
-        extract_option!(ob, params, curves_list);
-        extract_option!(ob, params, cipher_list);
-        extract_option!(ob, params, sigalgs_list);
-        extract_option!(ob, params, certificate_compression_algorithms);
-        extract_option!(ob, params, extension_permutation);
-        extract_option!(ob, params, aes_hw_override);
-        extract_option!(ob, params, preserve_tls13_cipher_list);
-        extract_option!(ob, params, random_aes_hw_override);
-        Ok(params)
-    }
+    /// Encoded Trust Anchor IDs sent in a TLS 1.3 ClientHello.
+    trust_anchors: Option<Vec<u8>>,
 }
 
 /// TLS connection configuration options.
@@ -259,6 +234,7 @@ impl FromPyObject<'_, '_> for Builder {
 /// - **Performance tuning** (record size, cipher preferences, hardware overrides)
 ///
 /// All fields are optional or have defaults. See each field for details.
+/// Unknown keyword arguments raise `TypeError`.
 #[derive(Clone)]
 #[pyclass(frozen, from_py_object)]
 pub struct TlsOptions(pub wreq::tls::TlsOptions);
@@ -413,6 +389,13 @@ impl TlsOptions {
                     params.random_aes_hw_override,
                     random_aes_hw_override
                 );
+                apply_option!(
+                    set_if_some,
+                    builder,
+                    params.grease_sigalgs_enabled,
+                    grease_sigalgs_enabled
+                );
+                apply_option!(set_if_some, builder, params.trust_anchors, trust_anchors);
             }
 
             Self(builder.build())

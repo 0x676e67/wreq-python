@@ -8,6 +8,7 @@ from typing import (
     Mapping,
     Generator,
     NotRequired,
+    Self,
     Sequence,
     Mapping,
     Tuple,
@@ -326,7 +327,7 @@ class Streamer:
 
     def __next__(self) -> memoryview | HeaderMap: ...
 
-    def __enter__(self) -> Any: ...
+    def __enter__(self) -> Self: ...
 
     def __exit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
         r"""
@@ -337,7 +338,7 @@ class Streamer:
 
     async def __anext__(self) -> memoryview | HeaderMap: ...
 
-    async def __aenter__(self) -> Any: ...
+    async def __aenter__(self) -> Self: ...
 
     async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
         r"""
@@ -461,7 +462,7 @@ class Response:
         `async with` instead releases the body and keeps a fully read connection reusable.
         """
 
-    async def __aenter__(self) -> Any: ...
+    async def __aenter__(self) -> Self: ...
     async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
         r"""
         Release the body without forbidding reuse: a fully read connection returns
@@ -535,7 +536,7 @@ class WebSocket:
         Close the WebSocket connection.
         """
 
-    async def __aenter__(self) -> Any: ...
+    async def __aenter__(self) -> Self: ...
     async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
         r"""
         Close the WebSocket connection without a close code or reason, unless already closed.
@@ -545,6 +546,11 @@ class WebSocket:
 
 
 class ClientConfig(TypedDict):
+    """Keyword options for constructing async and blocking clients.
+
+    Unknown keys raise `TypeError` when passed to a `Client` constructor.
+    """
+
     runtime: NotRequired[Runtime | None]
     """Runtime for this client and its responses; None uses the shared default.
     Async clients reject a `CURRENT_THREAD` runtime with `ValueError`."""
@@ -825,6 +831,12 @@ class ClientConfig(TypedDict):
 
 
 class Request(TypedDict):
+    """Keyword options for HTTP request methods and module-level functions.
+
+    Unknown keys raise `TypeError` when the method or function is called. Set
+    client-only options, such as `connect_timeout`, on `Client`.
+    """
+
     emulation: NotRequired[emulation.Emulation | emulation.Profile]
     """
     The Emulation settings for the request.
@@ -993,6 +1005,11 @@ class Request(TypedDict):
 
 
 class WebSocketRequest(TypedDict):
+    """Keyword options for WebSocket request methods and module-level functions.
+
+    Unknown keys raise `TypeError` when the method or function is called.
+    """
+
     emulation: NotRequired[emulation.Emulation | emulation.Profile]
     """
     The Emulation settings for the request.
@@ -1149,6 +1166,10 @@ class _RequestCoroutine(Coroutine[Any, Any, _T]):
 class Client:
     r"""
     A client for making HTTP requests.
+
+    Unknown client or request keyword arguments raise `TypeError` during the
+    call. Values for supported request keywords are converted when the coroutine
+    is first awaited or entered with `async with`.
     """
 
     runtime: Runtime
@@ -1467,7 +1488,7 @@ class Client:
         """
         ...
 
-    async def __aenter__(self) -> Any: ...
+    async def __aenter__(self) -> Self: ...
     async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
         r"""
         Close the client like `close()`: cancel pending requests and reject new ones.

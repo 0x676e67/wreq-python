@@ -118,7 +118,8 @@ async def test_upload_errors(failure):
 
 
 @pytest.mark.asyncio
-async def test_invalid_option_does_not_start_the_body():
+@pytest.mark.parametrize("options", [{"zstd": 1}, {"complete_nonsense": 1}])
+async def test_invalid_option_does_not_start_the_body(options):
     started = asyncio.Event()
 
     async def chunks():
@@ -127,12 +128,12 @@ async def test_invalid_option_does_not_start_the_body():
 
     form = wreq.Multipart(wreq.Part("file", iter([b"x"])))
     async with local_server() as (url, _), wreq.Client(proxies=[]) as client:
-        # Every option, `zstd` last, is validated before the body or form is taken.
+        # Unknown keys and invalid values are rejected before taking the body or form.
         with pytest.raises(TypeError):
-            await client.post(url, body=chunks(), zstd=1)
+            await client.post(url, body=chunks(), **options)
         for _ in range(2):
             with pytest.raises(TypeError):
-                await client.post(url, multipart=form, zstd=1)
+                await client.post(url, multipart=form, **options)
         await asyncio.sleep(0.1)
         assert not started.is_set()
 

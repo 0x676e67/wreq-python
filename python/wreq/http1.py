@@ -10,6 +10,8 @@ __all__ = ["Http1Options", "Params"]
 class Params(TypedDict):
     """
     All parameters for HTTP/1 connections.
+
+    Unknown keyword arguments raise `TypeError` when constructing `Http1Options`.
     """
 
     http09_responses: NotRequired[bool]

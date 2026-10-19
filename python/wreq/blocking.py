@@ -1,6 +1,7 @@
 import datetime
 from typing import (
     Any,
+    Self,
     Sequence,
     Unpack,
 )
@@ -117,7 +118,7 @@ class Response:
         `with` instead releases the body and keeps a fully read connection reusable.
         """
 
-    def __enter__(self) -> Any: ...
+    def __enter__(self) -> Self: ...
     def __exit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
         r"""
         Release the body without forbidding reuse: a fully read connection returns
@@ -204,7 +205,7 @@ class WebSocket:
         * `reason` - An optional reason for closing.
         """
 
-    def __enter__(self) -> Any: ...
+    def __enter__(self) -> Self: ...
     def __exit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
         r"""
         Close the WebSocket connection without a close code or reason, unless already closed.
@@ -216,6 +217,9 @@ class WebSocket:
 class Client:
     r"""
     A blocking client for making HTTP requests.
+
+    Unknown configuration or request keyword arguments raise `TypeError`
+    during the call.
     """
 
     runtime: Runtime
@@ -493,7 +497,7 @@ class Client:
         """
         ...
 
-    def __enter__(self) -> Any: ...
+    def __enter__(self) -> Self: ...
     def __exit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
         r"""
         Close the client like `close()`: cancel pending requests and reject new ones.

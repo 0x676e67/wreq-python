@@ -1,5 +1,6 @@
 use std::{fmt::Debug, time::Duration};
 
+use derive_deftly::Deftly;
 use pyo3::prelude::*;
 
 define_enum!(
@@ -109,7 +110,9 @@ pub struct PseudoOrder(wreq::http2::PseudoOrder);
 pub struct SettingsOrder(wreq::http2::SettingsOrder);
 
 /// A builder for [`Http2Options`].
-#[derive(Default)]
+#[derive(Default, Deftly)]
+#[derive_deftly(ExtractOptions)]
+#[deftly(deny_unknown)]
 struct Builder {
     /// The initial window size for HTTP/2 streams.
     initial_window_size: Option<u32>,
@@ -178,10 +181,8 @@ struct Builder {
     priorities: Option<Priorities>,
 }
 
-/// Configuration for an HTTP/2 connection.
-///
-/// This struct defines various parameters to fine-tune the behavior of an HTTP/2 connection,
-/// including stream management, window sizes, frame limits, and header config.
+/// HTTP/2 options for streams, flow control, frame limits and headers.
+/// Unknown keyword arguments raise `TypeError`.
 #[derive(Clone)]
 #[pyclass(frozen, str, from_py_object)]
 pub struct Http2Options(pub wreq::http2::Http2Options);
@@ -293,39 +294,6 @@ impl SettingsOrder {
 }
 
 impl_print_str!(Display, SettingsOrder);
-
-// ===== impl Builder =====
-
-impl FromPyObject<'_, '_> for Builder {
-    type Error = PyErr;
-
-    fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
-        let mut params = Self::default();
-        extract_option!(ob, params, initial_window_size);
-        extract_option!(ob, params, initial_connection_window_size);
-        extract_option!(ob, params, initial_max_send_streams);
-        extract_option!(ob, params, initial_stream_id);
-        extract_option!(ob, params, adaptive_window);
-        extract_option!(ob, params, max_frame_size);
-        extract_option!(ob, params, max_header_list_size);
-        extract_option!(ob, params, header_table_size);
-        extract_option!(ob, params, max_concurrent_streams);
-        extract_option!(ob, params, keep_alive_interval);
-        extract_option!(ob, params, keep_alive_timeout);
-        extract_option!(ob, params, keep_alive_while_idle);
-        extract_option!(ob, params, enable_push);
-        extract_option!(ob, params, enable_connect_protocol);
-        extract_option!(ob, params, no_rfc7540_priorities);
-        extract_option!(ob, params, max_concurrent_reset_streams);
-        extract_option!(ob, params, max_send_buf_size);
-        extract_option!(ob, params, max_pending_accept_reset_streams);
-        extract_option!(ob, params, headers_stream_dependency);
-        extract_option!(ob, params, headers_pseudo_order);
-        extract_option!(ob, params, settings_order);
-        extract_option!(ob, params, priorities);
-        Ok(params)
-    }
-}
 
 // ===== impl Http2Options =====
 

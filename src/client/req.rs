@@ -5,9 +5,10 @@ use std::{
     time::Duration,
 };
 
+use derive_deftly::Deftly;
 use futures_util::TryFutureExt;
 use http::header::COOKIE;
-use pyo3::{PyResult, exceptions::asyncio::CancelledError, prelude::*, pybacked::PyBackedStr};
+use pyo3::{PyResult, exceptions::asyncio::CancelledError, pybacked::PyBackedStr};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
@@ -28,9 +29,41 @@ use crate::{
 };
 
 /// The parameters for a request.
-#[derive(Default)]
+#[derive(Default, Deftly)]
+#[derive_deftly(ExtractOptions)]
+#[deftly(deny_unknown)]
 #[non_exhaustive]
 pub struct Request {
+    /// The JSON body to use for the request.
+    json: Option<Json>,
+
+    /// The form parameters to use for the request.
+    form: Option<Form>,
+
+    /// The query parameters to use for the request.
+    query: Option<Query>,
+
+    /// The headers to use for the request.
+    headers: Option<HeaderMap>,
+
+    /// The timeout to use for the request.
+    timeout: Option<Duration>,
+
+    /// The read timeout to use for the request.
+    read_timeout: Option<Duration>,
+
+    /// The cookies to use for the request.
+    cookies: Option<Cookies>,
+
+    /// The authentication to use for the request.
+    auth: Option<PyBackedStr>,
+
+    /// The bearer authentication to use for the request.
+    bearer_auth: Option<PyBackedStr>,
+
+    /// The basic authentication to use for the request.
+    basic_auth: Option<(PyBackedStr, Option<PyBackedStr>)>,
+
     /// The Emulation settings for the request.
     emulation: Option<EmulationLike>,
 
@@ -46,26 +79,14 @@ pub struct Request {
     /// Bind to an interface by `SO_BINDTODEVICE`.
     interface: Option<String>,
 
-    /// The timeout to use for the request.
-    timeout: Option<Duration>,
-
-    /// The read timeout to use for the request.
-    read_timeout: Option<Duration>,
-
     /// The HTTP version to use for the request.
     version: Option<Version>,
-
-    /// The headers to use for the request.
-    headers: Option<HeaderMap>,
 
     /// The original headers to use for the request.
     orig_headers: Option<OrigHeaderMap>,
 
     /// The option enables default headers.
     default_headers: Option<bool>,
-
-    /// The cookies to use for the request.
-    cookies: Option<Cookies>,
 
     /// The redirect policy to use for the request.
     redirect: Option<redirect::Policy>,
@@ -85,33 +106,19 @@ pub struct Request {
     /// Sets zstd as an accepted encoding.
     zstd: Option<bool>,
 
-    /// The authentication to use for the request.
-    auth: Option<PyBackedStr>,
-
-    /// The bearer authentication to use for the request.
-    bearer_auth: Option<PyBackedStr>,
-
-    /// The basic authentication to use for the request.
-    basic_auth: Option<(PyBackedStr, Option<PyBackedStr>)>,
-
-    /// The query parameters to use for the request.
-    query: Option<Query>,
-
-    /// The form parameters to use for the request.
-    form: Option<Form>,
-
-    /// The JSON body to use for the request.
-    json: Option<Json>,
+    /// The body to use for the request.
+    #[deftly(extract_last)]
+    body: Option<Body>,
 
     /// The multipart form to use for the request.
+    #[deftly(extract_last)]
     multipart: Option<Multipart>,
-
-    /// The body to use for the request.
-    body: Option<Body>,
 }
 
 /// The parameters for a WebSocket request.
-#[derive(Default)]
+#[derive(Default, Deftly)]
+#[derive_deftly(ExtractOptions)]
+#[deftly(deny_unknown)]
 #[non_exhaustive]
 pub struct WebSocketRequest {
     /// The Emulation settings for the request.
@@ -129,6 +136,9 @@ pub struct WebSocketRequest {
     /// Bind to an interface by `SO_BINDTODEVICE`.
     interface: Option<String>,
 
+    /// The HTTP version to use for the request.
+    version: Option<Version>,
+
     /// The headers to use for the request.
     headers: Option<HeaderMap>,
 
@@ -143,9 +153,6 @@ pub struct WebSocketRequest {
 
     /// The protocols to use for the request.
     protocols: Option<Vec<String>>,
-
-    /// The HTTP version to use for the request.
-    version: Option<Version>,
 
     /// The authentication to use for the request.
     auth: Option<PyBackedStr>,
@@ -180,84 +187,6 @@ pub struct WebSocketRequest {
     /// Accept unmasked frames. Only a server checks masking
     /// ([RFC 6455 §5.1](https://www.rfc-editor.org/rfc/rfc6455#section-5.1)).
     accept_unmasked_frames: Option<bool>,
-}
-
-// ===== impl Request =====
-
-impl FromPyObject<'_, '_> for Request {
-    type Error = PyErr;
-
-    fn extract(ob: Borrowed<PyAny>) -> PyResult<Request> {
-        let mut request = Self::default();
-        // Common keys first. A body or multipart form can start a generator or take stream
-        // parts, so they are extracted last, after every other option has been validated.
-        extract_options!(
-            ob,
-            request,
-            [
-                json,
-                form,
-                query,
-                headers,
-                timeout,
-                read_timeout,
-                cookies,
-                auth,
-                bearer_auth,
-                basic_auth,
-                emulation,
-                proxy,
-                local_address,
-                local_addresses,
-                interface,
-                version,
-                orig_headers,
-                default_headers,
-                redirect,
-                cookie_provider,
-                gzip,
-                brotli,
-                deflate,
-                zstd,
-            ],
-            [body, multipart]
-        );
-        Ok(request)
-    }
-}
-
-// ===== impl WebSocketRequest =====
-
-impl FromPyObject<'_, '_> for WebSocketRequest {
-    type Error = PyErr;
-
-    fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
-        let mut params = Self::default();
-        extract_option!(ob, params, emulation);
-        extract_option!(ob, params, proxy);
-        extract_option!(ob, params, local_address);
-        extract_option!(ob, params, local_addresses);
-        extract_option!(ob, params, interface);
-
-        extract_option!(ob, params, version);
-        extract_option!(ob, params, headers);
-        extract_option!(ob, params, orig_headers);
-        extract_option!(ob, params, default_headers);
-        extract_option!(ob, params, cookies);
-        extract_option!(ob, params, protocols);
-        extract_option!(ob, params, auth);
-        extract_option!(ob, params, bearer_auth);
-        extract_option!(ob, params, basic_auth);
-        extract_option!(ob, params, query);
-
-        extract_option!(ob, params, read_buffer_size);
-        extract_option!(ob, params, write_buffer_size);
-        extract_option!(ob, params, max_write_buffer_size);
-        extract_option!(ob, params, max_message_size);
-        extract_option!(ob, params, max_frame_size);
-        extract_option!(ob, params, accept_unmasked_frames);
-        Ok(params)
-    }
 }
 
 /// Build and send a request with `client`, failing with `CancelledError` once the client is
