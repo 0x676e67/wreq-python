@@ -124,6 +124,7 @@ class ExtensionType(Enum):
     NEXT_PROTO_NEG = auto()
     CHANNEL_ID = auto()
     RECORD_SIZE_LIMIT = auto()
+    TRUST_ANCHORS = auto()
 
 
 @final
@@ -418,6 +419,16 @@ class Params(TypedDict):
     random_aes_hw_override: NotRequired[bool]
     """
     Overrides the random AES hardware acceleration.
+    """
+
+    grease_sigalgs_enabled: NotRequired[bool]
+    """
+    Whether the `signature_algorithms` extension includes a GREASE value.
+    """
+
+    trust_anchors: NotRequired[bytes]
+    """
+    Encoded Trust Anchor IDs sent in a TLS 1.3 ClientHello.
     """
 
 

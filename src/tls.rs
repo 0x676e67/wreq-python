@@ -110,6 +110,7 @@ define_enum!(
     NEXT_PROTO_NEG,
     CHANNEL_ID,
     RECORD_SIZE_LIMIT,
+    TRUST_ANCHORS,
 );
 
 /// A builder for [`TlsOptions`].
@@ -215,6 +216,12 @@ struct Builder {
 
     /// Overrides the random AES hardware acceleration.
     random_aes_hw_override: Option<bool>,
+
+    /// Whether the `signature_algorithms` extension includes a GREASE value.
+    grease_sigalgs_enabled: Option<bool>,
+
+    /// Encoded Trust Anchor IDs sent in a TLS 1.3 ClientHello.
+    trust_anchors: Option<Vec<u8>>,
 }
 
 /// TLS connection configuration options.
@@ -382,6 +389,13 @@ impl TlsOptions {
                     params.random_aes_hw_override,
                     random_aes_hw_override
                 );
+                apply_option!(
+                    set_if_some,
+                    builder,
+                    params.grease_sigalgs_enabled,
+                    grease_sigalgs_enabled
+                );
+                apply_option!(set_if_some, builder, params.trust_anchors, trust_anchors);
             }
 
             Self(builder.build())
