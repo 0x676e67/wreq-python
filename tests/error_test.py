@@ -2,6 +2,8 @@ import asyncio
 import builtins
 import pickle
 import socket
+import subprocess
+import sys
 from datetime import timedelta
 
 import pytest
@@ -9,6 +11,10 @@ import wreq
 import wreq.exceptions as exceptions
 
 from cancellation_test import local_server
+
+
+class Teapot(wreq.StatusCode):
+    pass
 
 
 @pytest.mark.asyncio
@@ -87,10 +93,15 @@ async def test_errors_share_one_hierarchy():
                 response.raise_for_status()
             copy = pickle.loads(pickle.dumps(caught.value))
             assert copy.status == 404 and copy.status.is_client_error()
-            assert copy.is_status() and copy.url == url
+            assert copy.status == caught.value.status and copy.status != None
+            assert copy.status in {404} and copy.is_status() and copy.url == url
             for code in (-1, 1000, 70000):
                 with pytest.raises(ValueError):
                     wreq.StatusCode(code)
+
+            teapot = Teapot(418)
+            teapot.note = "short and stout"
+            assert pickle.loads(pickle.dumps(teapot)).note == "short and stout"
 
             # A Python error that fails an upload is the cause of the wreq error.
             def chunks():
@@ -101,3 +112,26 @@ async def test_errors_share_one_hierarchy():
                 await asyncio.wait_for(client.post(url, body=chunks()), 5)
             assert isinstance(caught.value.__cause__, ValueError)
             assert str(caught.value.__cause__) == "upload exploded"
+
+
+def test_mismatched_exceptions_module_fails_import():
+    # A class the extension raises is missing, as with a stale `wreq/exceptions.py`.
+    script = """
+import importlib.util, os, sys
+package = os.path.dirname(importlib.util.find_spec("wreq").origin)
+spec = importlib.util.spec_from_file_location(
+    "wreq.exceptions", os.path.join(package, "exceptions.py")
+)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+del module.UpgradeError
+sys.modules["wreq.exceptions"] = module
+try:
+    import wreq
+except ImportError as error:
+    print(type(error.__cause__).__name__)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, timeout=60
+    )
+    assert result.stdout.strip() == "AttributeError", result.stderr

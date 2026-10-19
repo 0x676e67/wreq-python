@@ -128,7 +128,8 @@ class Error(Exception):
 
     def is_body(self) -> bool:
         r"""
-        Whether streaming a request or response body failed.
+        Whether wreq reports the failure against a request or response body;
+        currently only for a timeout while streaming one.
         """
         return "body" in self._predicates
 
@@ -241,14 +242,20 @@ class TimeoutError(RequestError, builtins.TimeoutError):
 
 class BodyError(Error):
     r"""
-    Streaming a request or response body failed.
+    wreq reported a request or response body failure without a more specific
+    cause.
+
+    wreq currently reports body failures through other classes: a timeout while
+    streaming a body raises `TimeoutError` with `is_body()`, a cut-off or corrupt
+    response raises `DecodingError`, and a failing upload stream raises
+    `RequestError`.
     """
 
 
 class DecodingError(Error):
     r"""
     The response body could not be read in full or decoded as requested,
-    such as an unknown charset, corrupt compression, or invalid JSON.
+    such as a truncated body, corrupt compression, or invalid JSON.
     """
 
 

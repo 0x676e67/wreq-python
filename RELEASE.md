@@ -5,6 +5,11 @@
 - Unknown keyword arguments now raise `TypeError` when calling async or blocking client constructors, HTTP or WebSocket request methods and functions, `Http1Options`, `Http2Options`, `TlsOptions`, or `Proxy` factories. These arguments were previously ignored.
 - Set client-only options such as `connect_timeout` and `proxies` on `Client`; passing them to a request now raises `TypeError`. Use `proxy` to select a proxy for one request.
 - Async request calls check keyword names before returning a coroutine. Values for supported request keywords are still converted on first `await` or entry with `async with`.
+- Every wreq exception now derives from `wreq.exceptions.Error`. `ConnectionError`, `ProxyConnectionError`, `ConnectionResetError` and `TimeoutError` derive from `RequestError`, and `UpgradeError` from `WebSocketError`. `ConnectionError`, `ConnectionResetError` and `TimeoutError` also derive from the builtins of the same name, so `except TimeoutError` and `except OSError` now catch them.
+- A timeout raises `TimeoutError` even while streaming a body, where it raised `BodyError`. A connection reset raises `ConnectionResetError` even while streaming a body or a WebSocket, a WebSocket read failure raises `WebSocketError` rather than `BodyError`, and an error wreq leaves unclassified raises `Error` rather than `UpgradeError`.
+- Invalid header names or values and form or JSON bodies that cannot be encoded raise `BuilderError`, and a disconnected WebSocket raises `WebSocketError`; all raised `RuntimeError`. A multipart file that cannot be opened raises the matching `OSError` subclass, such as `FileNotFoundError`.
+- Error messages no longer include the request URL; read it from `error.url`. Message text is unspecified, so match on exception classes and `is_*` methods instead.
+- `RustPanic`, which was never raised, is removed.
 
 ## [0.11.0](https://github.com/0x676e67/wreq-python/compare/v0.10.2..v0.11.0) - 2026-04-13
 

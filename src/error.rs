@@ -3,7 +3,10 @@ use std::{error::Error as StdError, fmt, io, iter};
 use hickory_resolver::net::NetError;
 use pyo3::{
     PyErrArguments,
-    exceptions::{PyImportError, PyRuntimeError, PyStopAsyncIteration, PyStopIteration},
+    exceptions::{
+        PyImportError, PyRuntimeError, PyStopAsyncIteration, PyStopIteration, PyTypeError,
+        PyValueError,
+    },
     intern,
     prelude::*,
     types::{PyFrozenSet, PyType},
@@ -48,15 +51,39 @@ mod exceptions {
 }
 
 /// Load the exception classes and check that each [`Kind`] reaches the `is_*` method
-/// that reads it, so a broken install or a renamed method fails the import instead of
-/// the first error.
+/// that reads it, so a `wreq/exceptions.py` that does not match this extension fails
+/// the import with `ImportError` instead of the first error.
 pub fn init(py: Python<'_>) -> PyResult<()> {
+    check_exceptions(py).map_err(|err| {
+        let error = PyImportError::new_err("wreq.exceptions does not match the wreq extension");
+        error.set_cause(py, Some(err));
+        error
+    })
+}
+
+fn check_exceptions(py: Python<'_>) -> PyResult<()> {
+    // Resolve every class fallibly first: `import_exception!` panics on a missing one.
+    let module = py.import(intern!(py, "wreq.exceptions"))?;
+    let base = module
+        .getattr(intern!(py, "Error"))?
+        .cast_into::<PyType>()?;
+    for name in Kind::CLASSES {
+        if !module
+            .getattr(name)?
+            .cast_into::<PyType>()?
+            .is_subclass(&base)?
+        {
+            return Err(PyTypeError::new_err(format!(
+                "{name} does not derive from Error"
+            )));
+        }
+    }
     for kind in Kind::ALL {
         let method = format!("is_{}", kind.name());
         let error = Details::new(kind, String::new()).instantiate(py)?;
         if !error.bind(py).call_method0(method.as_str())?.is_truthy()? {
-            return Err(PyImportError::new_err(format!(
-                "wreq.exceptions.Error.{method}() does not read {:?}",
+            return Err(PyValueError::new_err(format!(
+                "Error.{method}() does not read {:?}",
                 kind.name()
             )));
         }
@@ -79,6 +106,9 @@ macro_rules! define_kinds {
         impl Kind {
             /// Every kind, in the order that selects the exception class.
             const ALL: [Kind; [$($name),*].len()] = [$(Kind::$kind),*];
+
+            /// The names of the exception classes the kinds select.
+            const CLASSES: &[&str] = &[$($(stringify!($exception),)?)*];
 
             /// The name the `is_*` method reads.
             const fn name(self) -> &'static str {
@@ -150,10 +180,6 @@ impl Kinds {
             .into_iter()
             .filter(|kind| kind.matches(error))
             .collect()
-    }
-
-    const fn is_empty(self) -> bool {
-        self.0 == 0
     }
 
     /// The kinds in this set, in class selection order.
@@ -230,11 +256,9 @@ impl Details {
             .find_map(|kind| kind.exception(py))
             .unwrap_or_else(|| py.get_type::<exceptions::Error>());
         let error = class.call1((self.message,))?;
+        let names = PyFrozenSet::new(py, self.kinds.iter().map(Kind::name))?;
+        error.setattr(intern!(py, "_predicates"), names)?;
         // The class supplies the defaults for anything left unset.
-        if !self.kinds.is_empty() {
-            let names = PyFrozenSet::new(py, self.kinds.iter().map(Kind::name))?;
-            error.setattr(intern!(py, "_predicates"), names)?;
-        }
         if let Some(url) = self.url {
             error.setattr(intern!(py, "url"), url)?;
         }
