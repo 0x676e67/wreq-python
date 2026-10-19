@@ -55,9 +55,14 @@ async def test_errors_share_one_hierarchy():
         assert copy.is_connect() and copy.url == refused
 
         # An error the binding raises matches the predicate of its class.
-        with pytest.raises(wreq.BuilderError, match="Invalid header name") as caught:
+        with pytest.raises(wreq.BuilderError, match="invalid HTTP header name") as caught:
             await client.get(refused, headers={"bad name": "v"})
         assert caught.value.is_builder() and caught.value.url is None
+
+        # A constructed error holds only its message.
+        error = wreq.TimeoutError("timed out")
+        assert error.args == ("timed out",) and str(error) == "timed out"
+        assert error.url is None and error.status is None and not error.is_timeout()
 
         async with local_server() as (url, connections):
             # A timeout while reading the body is a `TimeoutError` that is also
@@ -83,3 +88,16 @@ async def test_errors_share_one_hierarchy():
             copy = pickle.loads(pickle.dumps(caught.value))
             assert copy.status == 404 and copy.status.is_client_error()
             assert copy.is_status() and copy.url == url
+            for code in (-1, 1000, 70000):
+                with pytest.raises(ValueError):
+                    wreq.StatusCode(code)
+
+            # A Python error that fails an upload is the cause of the wreq error.
+            def chunks():
+                yield b"first"
+                raise ValueError("upload exploded")
+
+            with pytest.raises(wreq.RequestError) as caught:
+                await asyncio.wait_for(client.post(url, body=chunks()), 5)
+            assert isinstance(caught.value.__cause__, ValueError)
+            assert str(caught.value.__cause__) == "upload exploded"

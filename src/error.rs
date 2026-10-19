@@ -1,9 +1,12 @@
-use std::{error::Error as StdError, fmt, io};
+use std::{error::Error as StdError, fmt, io, iter};
 
 use hickory_resolver::net::NetError;
 use pyo3::{
-    PyErr, PyTypeInfo, Python,
-    exceptions::{PyRuntimeError, PyStopAsyncIteration, PyStopIteration},
+    PyErrArguments,
+    exceptions::{PyImportError, PyRuntimeError, PyStopAsyncIteration, PyStopIteration},
+    intern,
+    prelude::*,
+    types::{PyFrozenSet, PyType},
 };
 use tokio::time::error::Elapsed;
 use wreq::header;
@@ -44,90 +47,235 @@ mod exceptions {
     import_exception!(wreq.exceptions, UpgradeError);
 }
 
-/// Arguments of `wreq.exceptions.Error`: the message, the names of the matching
-/// predicates, the request URL and the response status.
-type ErrorArgs = (
-    String,
-    Vec<&'static str>,
-    Option<String>,
-    Option<StatusCode>,
-);
+/// Load the exception classes and check that each [`Kind`] reaches the `is_*` method
+/// that reads it, so a broken install or a renamed method fails the import instead of
+/// the first error.
+pub fn init(py: Python<'_>) -> PyResult<()> {
+    for kind in Kind::ALL {
+        let method = format!("is_{}", kind.name());
+        let error = Details::new(kind, String::new()).instantiate(py)?;
+        if !error.bind(py).call_method0(method.as_str())?.is_truthy()? {
+            return Err(PyImportError::new_err(format!(
+                "wreq.exceptions.Error.{method}() does not read {:?}",
+                kind.name()
+            )));
+        }
+    }
+    Ok(())
+}
 
-/// A [`wreq::Error`] predicate and the name its `is_*` method in
-/// `wreq.exceptions.Error` looks up.
-type Predicate = (&'static str, fn(&wreq::Error) -> bool);
+// ===== impl Kind =====
 
-const PREDICATES: [Predicate; 14] = [
-    ("builder", wreq::Error::is_builder),
-    ("request", wreq::Error::is_request),
-    ("connect", wreq::Error::is_connect),
-    ("proxy_connect", wreq::Error::is_proxy_connect),
-    ("connection_reset", wreq::Error::is_connection_reset),
-    ("dns", wreq::Error::is_dns),
-    ("timeout", wreq::Error::is_timeout),
-    ("body", wreq::Error::is_body),
-    ("tls", wreq::Error::is_tls),
-    ("decode", wreq::Error::is_decode),
-    ("redirect", wreq::Error::is_redirect),
-    ("status", wreq::Error::is_status),
-    ("upgrade", wreq::Error::is_upgrade),
-    ("websocket", wreq::Error::is_websocket),
-];
+/// Defines [`Kind`] from a table of the name an `is_*` method of `wreq.exceptions.Error`
+/// reads, the [`wreq::Error`] predicate behind it, and the exception class it selects.
+macro_rules! define_kinds {
+    ($($kind:ident($name:literal, $predicate:ident) $(=> $exception:ident)?),* $(,)?) => {
+        /// A fact about a failure, one per `is_*` method of `wreq.exceptions.Error`.
+        #[derive(Clone, Copy)]
+        enum Kind {
+            $($kind),*
+        }
 
-/// Map a library error to its exception, keeping every predicate it matches. Causes
-/// found in the source chain come before error kinds, so a body read that timed out
-/// raises `TimeoutError`, not `BodyError`.
-fn library_error(error: wreq::Error) -> PyErr {
-    let predicates = PREDICATES
-        .iter()
-        .filter(|(_, matches)| matches(&error))
-        .map(|&(name, _)| name)
-        .collect();
-    // The URL may hold credentials, so it stays out of the message.
-    let url = error.uri().map(ToString::to_string);
-    let status = error.status().map(StatusCode);
-    let error = error.without_uri();
-    let args: ErrorArgs = (format_library_error(&error), predicates, url, status);
+        impl Kind {
+            /// Every kind, in the order that selects the exception class.
+            const ALL: [Kind; [$($name),*].len()] = [$(Kind::$kind),*];
 
-    macro_rules! classify {
-        ($($variant:ident => $exception:ident),*) => {
-            $(
-                if error.$variant() {
-                    return exceptions::$exception::new_err(args);
+            /// The name the `is_*` method reads.
+            const fn name(self) -> &'static str {
+                match self {
+                    $(Kind::$kind => $name),*
                 }
-            )*
-        };
+            }
+
+            /// Whether wreq reports this kind for `error`.
+            fn matches(self, error: &wreq::Error) -> bool {
+                match self {
+                    $(Kind::$kind => error.$predicate()),*
+                }
+            }
+
+            /// The exception class this kind selects, if any.
+            fn exception(self, py: Python<'_>) -> Option<Bound<'_, PyType>> {
+                match self {
+                    $(Kind::$kind => define_kinds!(@exception py $($exception)?)),*
+                }
+            }
+        }
+    };
+    (@exception $py:ident $exception:ident) => {
+        Some($py.get_type::<exceptions::$exception>())
+    };
+    (@exception $py:ident) => {
+        None
+    };
+}
+
+// Causes found in the source chain come before error kinds, so a body read that timed
+// out raises `TimeoutError`, not `BodyError`.
+define_kinds! {
+    Timeout("timeout", is_timeout) => TimeoutError,
+    ProxyConnect("proxy_connect", is_proxy_connect) => ProxyConnectionError,
+    ConnectionReset("connection_reset", is_connection_reset) => ConnectionResetError,
+    Connect("connect", is_connect) => ConnectionError,
+    Dns("dns", is_dns),
+    Tls("tls", is_tls) => TlsError,
+    Body("body", is_body) => BodyError,
+    Decode("decode", is_decode) => DecodingError,
+    Redirect("redirect", is_redirect) => RedirectError,
+    Status("status", is_status) => StatusError,
+    Upgrade("upgrade", is_upgrade) => UpgradeError,
+    WebSocket("websocket", is_websocket) => WebSocketError,
+    Builder("builder", is_builder) => BuilderError,
+    Request("request", is_request) => RequestError,
+}
+
+const _: () = assert!(Kind::ALL.len() <= u16::BITS as usize);
+
+impl Kind {
+    const fn bit(self) -> u16 {
+        1 << self as u16
+    }
+}
+
+// ===== impl Kinds =====
+
+/// A set of [`Kind`]s.
+#[derive(Clone, Copy)]
+struct Kinds(u16);
+
+impl Kinds {
+    /// Every kind wreq reports for `error`.
+    fn of(error: &wreq::Error) -> Self {
+        Kind::ALL
+            .into_iter()
+            .filter(|kind| kind.matches(error))
+            .collect()
     }
 
-    classify!(
-        is_timeout => TimeoutError,
-        is_proxy_connect => ProxyConnectionError,
-        is_connection_reset => ConnectionResetError,
-        is_connect => ConnectionError,
-        is_tls => TlsError,
-        is_body => BodyError,
-        is_decode => DecodingError,
-        is_redirect => RedirectError,
-        is_status => StatusError,
-        is_upgrade => UpgradeError,
-        is_websocket => WebSocketError,
-        is_builder => BuilderError,
-        is_request => RequestError
-    );
-    exceptions::Error::new_err(args)
+    const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    /// The kinds in this set, in class selection order.
+    fn iter(self) -> impl Iterator<Item = Kind> {
+        Kind::ALL
+            .into_iter()
+            .filter(move |kind| self.0 & kind.bit() != 0)
+    }
 }
 
-/// Raise `T` for a failure detected here rather than by wreq, matching the predicate
-/// its class implies.
-fn binding_error<T: PyTypeInfo>(predicate: &'static str, message: String) -> PyErr {
-    PyErr::new::<T, ErrorArgs>((message, vec![predicate], None, None))
+impl From<Kind> for Kinds {
+    fn from(kind: Kind) -> Self {
+        Kinds(kind.bit())
+    }
 }
 
-/// Error sources can include PyErr, whose formatting attaches to Python.
-fn format_library_error(error: &wreq::Error) -> String {
-    Python::try_attach(|_| SourceChain(error).to_string())
-        .unwrap_or_else(|| "The Python interpreter is not available".to_owned())
+impl<const N: usize> From<[Kind; N]> for Kinds {
+    fn from(kinds: [Kind; N]) -> Self {
+        kinds.into_iter().collect()
+    }
 }
+
+impl FromIterator<Kind> for Kinds {
+    fn from_iter<I: IntoIterator<Item = Kind>>(kinds: I) -> Self {
+        Kinds(kinds.into_iter().fold(0, |bits, kind| bits | kind.bit()))
+    }
+}
+
+// ===== impl Details =====
+
+/// What a wreq exception carries. PyO3 builds it into the exception instance only when
+/// raising it, which keeps these fields out of the exception's constructor.
+struct Details {
+    kinds: Kinds,
+    message: String,
+    url: Option<String>,
+    status: Option<StatusCode>,
+    cause: Option<PyErr>,
+}
+
+impl Details {
+    /// Details for a failure detected here rather than by wreq.
+    fn new(kinds: impl Into<Kinds>, message: String) -> Self {
+        Details {
+            kinds: kinds.into(),
+            message,
+            url: None,
+            status: None,
+            cause: None,
+        }
+    }
+
+    /// Details for a library error. The URL may hold credentials, so it stays out of
+    /// the message.
+    fn library(error: wreq::Error) -> Self {
+        let kinds = Kinds::of(&error);
+        let url = error.uri().map(ToString::to_string);
+        let status = error.status().map(StatusCode);
+        let (message, cause) = describe(&error.without_uri());
+        Details {
+            kinds,
+            message,
+            url,
+            status,
+            cause,
+        }
+    }
+
+    /// Create the exception of the first kind that selects a class.
+    fn instantiate(self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let class = self
+            .kinds
+            .iter()
+            .find_map(|kind| kind.exception(py))
+            .unwrap_or_else(|| py.get_type::<exceptions::Error>());
+        let error = class.call1((self.message,))?;
+        // The class supplies the defaults for anything left unset.
+        if !self.kinds.is_empty() {
+            let names = PyFrozenSet::new(py, self.kinds.iter().map(Kind::name))?;
+            error.setattr(intern!(py, "_predicates"), names)?;
+        }
+        if let Some(url) = self.url {
+            error.setattr(intern!(py, "url"), url)?;
+        }
+        if let Some(status) = self.status {
+            error.setattr(intern!(py, "status"), status)?;
+        }
+        if let Some(cause) = self.cause {
+            error.setattr(intern!(py, "__cause__"), cause.into_value(py))?;
+        }
+        Ok(error.unbind())
+    }
+}
+
+impl PyErrArguments for Details {
+    // PyO3 raises a returned exception instance as it is. Should building it fail, the
+    // base `Error` is raised with that failure as its message.
+    fn arguments(self, py: Python<'_>) -> Py<PyAny> {
+        self.instantiate(py)
+            .unwrap_or_else(|err| err.into_value(py).into_any())
+    }
+}
+
+impl From<Details> for PyErr {
+    fn from(details: Details) -> Self {
+        PyErr::new::<exceptions::Error, _>(details)
+    }
+}
+
+/// Format `error` with its source chain and take the first Python exception in the
+/// chain as its cause. Both need the interpreter, so neither happens without it.
+fn describe(error: &wreq::Error) -> (String, Option<PyErr>) {
+    Python::try_attach(|py| {
+        let cause = iter::successors(error.source(), |&err| err.source())
+            .find_map(|err| err.downcast_ref::<PyErr>())
+            .map(|err| err.clone_ref(py));
+        (SourceChain(error).to_string(), cause)
+    })
+    .unwrap_or_else(|| ("The Python interpreter is not available".to_owned(), None))
+}
+
+// ===== impl SourceChain =====
 
 /// Displays an error followed by every cause in its source chain. Many errors repeat
 /// their cause in their own message, so a cause the previous message already ends with
@@ -158,6 +306,8 @@ impl fmt::Display for SourceChain<'_> {
     }
 }
 
+// ===== impl Error =====
+
 /// Unified error enum
 #[derive(Debug)]
 pub enum Error {
@@ -165,13 +315,11 @@ pub enum Error {
     StopIteration,
     StopAsyncIteration,
     WebSocketDisconnected,
+    WebSocketTimeout(Elapsed),
     InvalidHeaderName(header::InvalidHeaderName),
     InvalidHeaderValue(header::InvalidHeaderValue),
-    Timeout(Elapsed),
-    Builder(http::Error),
     Dns(NetError),
     IO(io::Error),
-    Decode(cookie::ParseError),
     Json(serde_json::Error),
     Form(serde_urlencoded::ser::Error),
     Library(wreq::Error),
@@ -185,43 +333,26 @@ impl From<Error> for PyErr {
             Error::StopAsyncIteration => {
                 PyStopAsyncIteration::new_err("The async iterator is exhausted")
             }
-            Error::WebSocketDisconnected => binding_error::<exceptions::WebSocketError>(
-                "websocket",
+            Error::WebSocketDisconnected => Details::new(
+                Kind::WebSocket,
                 "The WebSocket has been disconnected".to_owned(),
-            ),
-            Error::InvalidHeaderName(err) => binding_error::<exceptions::BuilderError>(
-                "builder",
-                format!("Invalid header name: {err:?}"),
-            ),
-            Error::InvalidHeaderValue(err) => binding_error::<exceptions::BuilderError>(
-                "builder",
-                format!("Invalid header value: {err:?}"),
-            ),
-            Error::Timeout(err) => binding_error::<exceptions::TimeoutError>(
-                "timeout",
-                format!("Timeout error: {err:?}"),
-            ),
+            )
+            .into(),
+            Error::WebSocketTimeout(err) => Details::new(
+                [Kind::Timeout, Kind::WebSocket],
+                format!("WebSocket receive timed out: {err}"),
+            )
+            .into(),
+            Error::InvalidHeaderName(err) => Details::new(Kind::Builder, err.to_string()).into(),
+            Error::InvalidHeaderValue(err) => Details::new(Kind::Builder, err.to_string()).into(),
+            Error::Dns(err) => {
+                Details::new(Kind::Builder, format!("DNS resolver error: {err}")).into()
+            }
             // PyO3 raises the matching `OSError` subclass, such as `FileNotFoundError`.
             Error::IO(err) => err.into(),
-            Error::Decode(err) => binding_error::<exceptions::DecodingError>(
-                "decode",
-                format!("Decode error: {err:?}"),
-            ),
-            Error::Builder(err) => binding_error::<exceptions::BuilderError>(
-                "builder",
-                format!("Builder error: {err:?}"),
-            ),
-            Error::Dns(err) => binding_error::<exceptions::BuilderError>(
-                "builder",
-                format!("DNS resolver error: {err:?}"),
-            ),
-            Error::Json(err) => {
-                binding_error::<exceptions::BuilderError>("builder", format!("JSON error: {err:?}"))
-            }
-            Error::Form(err) => {
-                binding_error::<exceptions::BuilderError>("builder", format!("Form error: {err:?}"))
-            }
-            Error::Library(err) => library_error(err),
+            Error::Json(err) => Details::new(Kind::Builder, format!("JSON error: {err}")).into(),
+            Error::Form(err) => Details::new(Kind::Builder, format!("Form error: {err}")).into(),
+            Error::Library(err) => Details::library(err).into(),
         }
     }
 }
@@ -247,12 +378,6 @@ impl From<io::Error> for Error {
 impl From<wreq::Error> for Error {
     fn from(err: wreq::Error) -> Self {
         Error::Library(err)
-    }
-}
-
-impl From<Elapsed> for Error {
-    fn from(err: Elapsed) -> Self {
-        Error::Timeout(err)
     }
 }
 
@@ -311,10 +436,9 @@ mod tests {
             )]));
         let error = body.frame().now_or_never().unwrap().unwrap().unwrap_err();
         assert!(error.is_request());
-        assert_eq!(
-            format_library_error(&error),
-            "The Python interpreter is not available"
-        );
+        let (message, cause) = describe(&error);
+        assert_eq!(message, "The Python interpreter is not available");
+        assert!(cause.is_none());
         // Constructing and dropping the public exception must also avoid its source.
         drop(PyErr::from(Error::Library(error)));
     }

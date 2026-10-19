@@ -1,6 +1,9 @@
 use pyo3::{
-    class::basic::CompareOp, exceptions::PyValueError, prelude::*, pyclass::PyClassGuardError,
-    types::PyType,
+    class::basic::CompareOp,
+    exceptions::PyValueError,
+    prelude::*,
+    pyclass::PyClassGuardError,
+    types::{PyInt, PyType},
 };
 
 define_enum!(
@@ -46,10 +49,12 @@ impl<'a, 'py> FromPyObject<'a, 'py> for StatusCode {
 impl StatusCode {
     /// Create a status code from an integer in 100-999.
     #[new]
-    fn new(code: u16) -> PyResult<Self> {
-        wreq::StatusCode::from_u16(code)
+    fn new(code: &Bound<'_, PyInt>) -> PyResult<Self> {
+        code.extract::<u16>()
+            .ok()
+            .and_then(|code| wreq::StatusCode::from_u16(code).ok())
             .map(Self)
-            .map_err(|err| PyValueError::new_err(err.to_string()))
+            .ok_or_else(|| PyValueError::new_err(format!("invalid status code: {code}")))
     }
 
     fn __reduce__<'py>(slf: &Bound<'py, Self>) -> (Bound<'py, PyType>, (u16,)) {

@@ -3,7 +3,9 @@ HTTP Client Exceptions
 
 Every exception wreq raises for a failed request, response, or WebSocket derives
 from `Error`, so `except wreq.Error` catches them all. Misuse, such as reading a
-consumed body or awaiting a coroutine twice, raises Python's builtin exceptions.
+consumed body or awaiting a coroutine twice, raises Python's builtin exceptions,
+and a local file that cannot be opened, such as a multipart file, raises the
+matching `OSError` subclass.
 
     Error
     ├── BuilderError
@@ -28,7 +30,7 @@ every detail wreq found, and `url` holds the request URL, which the message omit
 """
 
 import builtins
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .wreq import StatusCode
@@ -63,32 +65,24 @@ class Error(Exception):
     system report, so the ones a given failure matches may change between
     releases; the message text is unspecified as well. Choose handlers by
     exception class, and use predicates to refine them or for diagnostics.
+
+    wreq fills in the predicates, `url` and `status` of the errors it raises.
+    An error constructed directly, for example in a test, holds only its
+    message.
     """
 
-    url: "str | None"
+    url: "str | None" = None
     r"""
     The request URL, if known. The message leaves it out because it may hold
     credentials.
     """
 
-    status: "StatusCode | None"
+    status: "StatusCode | None" = None
     r"""
     The response status of a `StatusError`, otherwise None.
     """
 
-    def __init__(
-        self,
-        message: str = "",
-        predicates: Iterable[str] = (),
-        url: "str | None" = None,
-        status: "StatusCode | None" = None,
-    ) -> None:
-        # Only the message goes to the base, so the `OSError` subclasses keep
-        # `args == (message,)` instead of reading the rest as an errno.
-        super().__init__(message)
-        self._predicates = frozenset(predicates)
-        self.url = url
-        self.status = status
+    _predicates: frozenset[str] = frozenset()
 
     def is_builder(self) -> bool:
         r"""

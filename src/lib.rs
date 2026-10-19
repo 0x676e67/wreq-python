@@ -318,6 +318,7 @@ mod blocking {
 fn wreq(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     use r#async::{delete, get, head, options, patch, post, put, request, trace, websocket};
 
+    error::init(py)?;
     m.add_class::<SocketAddr>()?;
     m.add_class::<Message>()?;
     m.add_class::<StatusCode>()?;
