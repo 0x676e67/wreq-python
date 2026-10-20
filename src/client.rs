@@ -41,7 +41,7 @@ use crate::{
 
 /// An IP socket address.
 #[derive(Clone, Copy, PartialEq, Eq)]
-#[pyclass(eq, str, frozen, skip_from_py_object)]
+#[pyclass(eq, str, frozen)]
 pub struct SocketAddr(pub std::net::SocketAddr);
 
 #[pymethods]
@@ -210,7 +210,7 @@ struct Builder {
 /// A client for making HTTP requests.
 /// Unknown keyword arguments raise `TypeError` at call time.
 #[derive(Clone)]
-#[pyclass(subclass, frozen, skip_from_py_object)]
+#[pyclass(subclass, frozen)]
 pub struct Client {
     inner: wreq::Client,
     /// Runs this client's requests and response reads, keeping the runtime alive.
@@ -228,7 +228,7 @@ pub struct Client {
 /// A blocking client for making HTTP requests.
 /// Unknown keyword arguments raise `TypeError` when the function is called.
 #[derive(Default)]
-#[pyclass(name = "Client", subclass, frozen, skip_from_py_object)]
+#[pyclass(name = "Client", subclass, frozen)]
 pub struct BlockingClient(Client);
 
 // ===== impl Client =====

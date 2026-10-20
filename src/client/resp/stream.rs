@@ -42,7 +42,7 @@ pub enum Frame {
 ///
 /// Sync and async iteration share [`Streamer::next`]; [`Iteration`] picks the ready frames
 /// the caller reads and the error that ends iteration.
-#[pyclass(subclass, frozen, skip_from_py_object)]
+#[pyclass(subclass, frozen)]
 pub struct Streamer {
     reader: Arc<Reader>,
     runtime: Runtime,

@@ -49,7 +49,7 @@ pub enum Scheduler {
 
 /// Shared Tokio runtime, released after its clients and active work are dropped.
 #[derive(Clone)]
-#[pyclass(frozen, skip_from_py_object)]
+#[pyclass(frozen)]
 pub struct Runtime {
     /// Shared owner; `None` only once `Drop` has taken it to shut the runtime down.
     inner: Option<Arc<Inner>>,

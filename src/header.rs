@@ -13,12 +13,12 @@ use crate::{
 
 /// An HTTP header map whose names and values are exposed as read-only memoryviews.
 #[derive(Clone)]
-#[pyclass(subclass, str, skip_from_py_object)]
+#[pyclass(subclass, str)]
 pub struct HeaderMap(pub header::HeaderMap);
 
 /// An HTTP original header map whose iterator exposes read-only memoryviews.
 #[derive(Clone)]
-#[pyclass(subclass, str, skip_from_py_object)]
+#[pyclass(subclass, str)]
 pub struct OrigHeaderMap(pub header::OrigHeaderMap);
 
 // ===== impl HeaderMap =====
