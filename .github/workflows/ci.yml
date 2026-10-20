@@ -304,9 +304,10 @@ jobs:
           python-version: 3.x
           architecture: ${{ matrix.platform.python-architecture || 'x64' }}
       - name: Install NASM
-        run: |
-          choco install nasm -y
-        shell: cmd
+        uses: ilammy/setup-nasm@v1
+        with:
+          version: "2.16.01"
+          from-source: "false"
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
