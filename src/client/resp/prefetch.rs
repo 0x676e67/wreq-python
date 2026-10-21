@@ -17,6 +17,10 @@ use crate::runtime::Runtime;
 /// Bodies of known length up to this size are read with the head when already received.
 const PREFETCH_LIMIT: u64 = 64 * 1024;
 
+/// Yields to the runtime while frames keep arriving, so a body sent in several frames
+/// right after its head, as HTTP/2 does, is read in full.
+const PREFETCH_YIELDS: usize = 4;
+
 /// A body whose leading frames were read with the head, replayed before the rest.
 struct Prefetched {
     data: Option<Bytes>,
@@ -46,12 +50,17 @@ pub(super) async fn prefetch(mut body: wreq::Body, len: Option<u64>) -> (wreq::B
         return (body, false);
     };
     let mut data = Data::default();
-    // One yield lets frames that arrived with the head reach the body.
-    let mut yielded = false;
+    // Yield once, then again only after a yield brought more frames: frames that arrived
+    // with the head reach the body, while a body still in flight is not waited for.
+    let mut yields = 0;
+    let mut progressed = false;
     let next = loop {
         match body.frame().now_or_never() {
             Some(Some(Ok(frame))) => match frame.into_data() {
-                Ok(bytes) => data.push(bytes, len),
+                Ok(bytes) => {
+                    data.push(bytes, len);
+                    progressed = true;
+                }
                 Err(frame) => break Some(Ok(frame)),
             },
             Some(Some(Err(err))) => break Some(Err(err)),
@@ -61,8 +70,9 @@ pub(super) async fn prefetch(mut body: wreq::Body, len: Option<u64>) -> (wreq::B
                     true,
                 );
             }
-            None if !yielded => {
-                yielded = true;
+            None if yields == 0 || (progressed && yields < PREFETCH_YIELDS) => {
+                yields += 1;
+                progressed = false;
                 defer().await;
             }
             None => break None,
