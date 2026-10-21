@@ -25,7 +25,7 @@ use wreq::header::{HeaderCaseName, HeaderName, HeaderValue};
 pub struct PyBuffer(BufferView);
 
 /// The exporter behind each memoryview; views keep it, and so its bytes, alive.
-#[pyclass(frozen, skip_from_py_object)]
+#[pyclass(frozen)]
 struct BufferView(Bytes);
 
 // ===== impl PyBuffer =====

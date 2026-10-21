@@ -32,7 +32,7 @@ use crate::{
 /// Reads take the body with [`Response::take_bytes`]: a buffered body of known length up to
 /// the read's limit finishes on the caller, the event loop or a blocking thread, and any other
 /// body is collected on the runtime by [`Response::collect_later`].
-#[pyclass(subclass, frozen, str, skip_from_py_object)]
+#[pyclass(subclass, frozen, str)]
 pub struct Response {
     uri: Uri,
     /// Response head; rebuilt responses share its extensions, including the connection's
@@ -70,7 +70,7 @@ enum BodyRead {
 }
 
 /// A blocking response from a request.
-#[pyclass(name = "Response", subclass, frozen, str, skip_from_py_object)]
+#[pyclass(name = "Response", subclass, frozen, str)]
 pub struct BlockingResponse(Response);
 
 /// Forbids connection reuse on drop unless disarmed by taking the parts. Held by

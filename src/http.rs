@@ -35,7 +35,7 @@ define_enum!(
 
 /// HTTP status code.
 #[derive(Clone, Copy)]
-#[pyclass(subclass, frozen, str, skip_from_py_object, module = "wreq")]
+#[pyclass(subclass, frozen, str, module = "wreq")]
 pub struct StatusCode(pub wreq::StatusCode);
 
 impl<'a, 'py> FromPyObject<'a, 'py> for StatusCode {

@@ -32,7 +32,7 @@ derive-deftly = { version = "1.14.0", default-features = false, features = ["min
 pingora-runtime = "0.9.0"
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "sync", "time", "net", "macros"] }
 tokio-util = { version = "0.7.18", features = ["rt"] }
-pyo3 = { version = "0.29.3", features = [
+pyo3 = { version = "0.30.1", features = [
     "indexmap",
     "multiple-pymethods",
     "extension-module",
