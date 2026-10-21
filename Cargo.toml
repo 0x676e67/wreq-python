@@ -84,6 +84,7 @@ btls = { git = "https://github.com/0x676e67/btls", branch = "main" }
 btls-sys = { git = "https://github.com/0x676e67/btls", branch = "main" }
 tokio-btls = { git = "https://github.com/0x676e67/btls", branch = "main" }
 netty = { git = "https://github.com/0x676e67/netty", branch = "main" }
+http2 = { git = "https://github.com/0x676e67/http2", rev = "fb5bf8bdbf3e9d9aad7073759a6f06f47373342e" }
 
 [profile.release]
 codegen-units = 1

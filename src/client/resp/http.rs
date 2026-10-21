@@ -13,7 +13,7 @@ use http_body_util::{BodyExt, Collected, combinators::Collect};
 use pyo3::{prelude::*, pybacked::PyBackedStr, sync::PyOnceLock};
 use wreq::Uri;
 
-use super::{READ_ATTACHED, ext::ResponseExt, loop_limit, stream::Streamer};
+use super::{READ_ATTACHED, ext::ResponseExt, loop_polls, prefetch::prefetch, stream::Streamer};
 use crate::{
     buffer::PyBuffer,
     client::{SocketAddr, body::Json},
@@ -44,6 +44,9 @@ pub struct Response {
     runtime: Runtime,
     /// Captured at receipt; `None` for a body without a known length.
     content_length: Option<u64>,
+    /// Whether the unread body is held in full, so the event loop may poll it whatever
+    /// the HTTP version.
+    buffered: bool,
     remote_addr: Option<SocketAddr>,
     local_addr: Option<SocketAddr>,
 }
@@ -81,22 +84,30 @@ struct RecycleGuard(Option<Parts>);
 // ===== impl Response =====
 
 impl Response {
-    /// Create a new [`Response`] instance.
-    pub fn new(response: wreq::Response, runtime: Runtime) -> Self {
+    /// Create a new [`Response`] instance, reading a short body that already arrived.
+    pub async fn new(response: wreq::Response, runtime: Runtime) -> Self {
         let uri = response.uri().clone();
         let content_length = response.content_length();
         let remote_addr = response.remote_addr().map(SocketAddr);
         let local_addr = response.local_addr().map(SocketAddr);
         let (parts, body) = HttpResponse::from(response).into_parts();
+        let (body, buffered) = prefetch(body, content_length).await;
         Response {
             uri,
             parts,
             body: Arc::new(Mutex::new(Body::Unread(body))),
             runtime,
             content_length,
+            buffered,
             remote_addr,
             local_addr,
         }
+    }
+
+    /// The largest unread body the event loop collects, `None` if it must not poll it.
+    #[inline]
+    fn loop_limit(&self, limit: u64) -> Option<u64> {
+        (self.buffered || loop_polls(self.parts.version)).then_some(limit)
     }
 
     #[inline]
@@ -218,7 +229,7 @@ impl Response {
         let slf = slf.unbind();
         coroutine::local(py, qualname, async move {
             let this = slf.get();
-            let (read, inline) = this.read_body(loop_limit(this.parts.version, limit), read)?;
+            let (read, inline) = this.read_body(this.loop_limit(limit), read)?;
             if inline {
                 read.await
             } else {
@@ -362,6 +373,7 @@ impl Response {
         Ok(Streamer::new(
             self.build_response(body),
             self.runtime.clone(),
+            self.buffered,
         ))
     }
 
@@ -378,7 +390,7 @@ impl Response {
 
     /// Get the JSON content of the response.
     pub fn json(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
-        // Buffered HTTP/1 JSON up to 8 KiB is parsed on the event loop; see `loop_limit`.
+        // Buffered JSON up to 8 KiB is parsed on the event loop; see `loop_limit`.
         Self::read(slf, "Response.json", 8 * 1024, ResponseExt::json::<Json>)
     }
 
@@ -388,7 +400,7 @@ impl Response {
         let slf = slf.unbind();
         coroutine::local(py, "Response.bytes", async move {
             let this = slf.get();
-            match this.take_bytes(loop_limit(this.parts.version, READ_ATTACHED))? {
+            match this.take_bytes(this.loop_limit(READ_ATTACHED))? {
                 BodyRead::Ready(bytes) => Ok(PyBuffer::from(bytes)),
                 BodyRead::Pending(collect) => {
                     let read = this

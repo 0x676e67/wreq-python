@@ -6,13 +6,15 @@
 //! A [`Coroutine`] polls its future on the event loop thread, and [`spawn`] moves
 //! the work to Tokio. A wake marks the coroutine ready and queues it on the [`Port`]
 //! of the awaiting loop, ringing a socket the loop watches only when the queue was
-//! empty, so waking Tokio threads never take the GIL. A loop that cannot watch the
-//! socket is woken with `call_soon_threadsafe`, which does attach the waking thread.
-//! The loop thread then resolves every queued asyncio future in one batch.
+//! empty, so waking threads never take the GIL. A loop that cannot watch the socket is
+//! woken with `call_soon_threadsafe` from a blocking-pool thread, as wakers may run under
+//! runtime locks that a GIL holder waits for. The loop thread then resolves every queued
+//! [`Waiter`](waiter::Waiter) in one batch, running the woken tasks' wakeups at once.
 
 mod asyncio;
 mod awaitable;
 mod scope;
+mod waiter;
 
 use std::{
     any::TypeId,

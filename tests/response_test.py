@@ -270,8 +270,9 @@ async def steps(coroutine):
 
 
 @asynccontextmanager
-async def body_server(http2, body):
-    """Answer every request with `body` and its Content-Length, over HTTP/1 or h2c."""
+async def body_server(http2, body, delay=0):
+    """Answer every request with `body` and its Content-Length, over HTTP/1 or h2c,
+    sending the body `delay` seconds after the head."""
     length = str(len(body)).encode()
     handlers, writers = set(), []
 
@@ -286,7 +287,11 @@ async def body_server(http2, body):
             if not http2:
                 await reader.readuntil(b"\r\n\r\n")
                 head = b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: "
-                writer.write(head + length + b"\r\n\r\n" + body)
+                writer.write(head + length + b"\r\n\r\n")
+                if delay:
+                    await writer.drain()
+                    await asyncio.sleep(delay)
+                writer.write(body)
                 await writer.drain()
                 await reader.read()
                 return
@@ -302,7 +307,12 @@ async def body_server(http2, body):
                 elif kind == 1:
                     # `:status: 200` and `content-length`, then the body ending the stream.
                     block = b"\x88\x0f\x0d" + bytes((len(length),)) + length
-                    if body:
+                    if delay:
+                        writer.write(frame(1, 4, stream, block))
+                        await writer.drain()
+                        await asyncio.sleep(delay)
+                        writer.write(frame(0, 1, stream, body))
+                    elif body:
                         writer.write(
                             frame(1, 4, stream, block) + frame(0, 1, stream, body)
                         )
@@ -328,12 +338,15 @@ async def body_server(http2, body):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("read", ["bytes", "stream"])
+@pytest.mark.parametrize("delay", [0, 0.02], ids=["with-head", "later"])
 @pytest.mark.parametrize("body", [b"ok", b""], ids=["body", "empty"])
 @pytest.mark.parametrize("http2", [False, True], ids=["http1", "http2"])
-async def test_only_http1_bodies_are_read_on_the_event_loop(http2, body, read):
-    # A buffered HTTP/1 body is read in the first step of the coroutine. An HTTP/2 body,
-    # even an empty one, is always read on the runtime, so the coroutine suspends first.
-    async with body_server(http2, body) as url:
+async def test_event_loop_reads_only_bodies_it_may_poll(http2, body, delay, read):
+    # A buffered HTTP/1 body, or a short HTTP/2 body that arrived with its head and was
+    # read along with it, is read in the first step of the coroutine. An HTTP/2 body still
+    # tied to its stream, even an empty one, is read on the runtime, so the coroutine
+    # suspends first.
+    async with body_server(http2, body, delay) as url:
         async with wreq.Client(http2_only=http2, proxies=[]) as client:
             response = await asyncio.wait_for(client.get(url), 5)
             assert response.version == (Version.HTTP_2 if http2 else Version.HTTP_11)
@@ -345,7 +358,7 @@ async def test_only_http1_bodies_are_read_on_the_event_loop(http2, body, read):
             else:
                 result, suspended = await steps(response.stream().__anext__())
                 assert (bytes(result) if result is not None else b"") == body
-            assert (suspended > 0) == http2
+            assert (suspended > 0) == (http2 and delay > 0)
 
 
 @pytest.mark.asyncio

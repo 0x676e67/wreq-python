@@ -1,5 +1,6 @@
 mod ext;
 mod http;
+mod prefetch;
 mod stream;
 mod ws;
 
@@ -19,9 +20,4 @@ const READ_ATTACHED: u64 = 64 * 1024;
 /// while it handles frames, so polling one would stall the loop.
 fn loop_polls(version: wreq::Version) -> bool {
     version <= wreq::Version::HTTP_11
-}
-
-/// The largest unread body the event loop collects for a response of `version`.
-fn loop_limit(version: wreq::Version, limit: u64) -> Option<u64> {
-    loop_polls(version).then_some(limit)
 }

@@ -8,7 +8,7 @@ use std::{
 };
 
 use futures_util::{Stream, StreamExt};
-use pyo3::{IntoPyObjectExt, intern, prelude::*, sync::PyOnceLock};
+use pyo3::{IntoPyObjectExt, intern, prelude::*, sync::PyOnceLock, types::PyDict};
 use tokio::sync::TryAcquireError;
 
 use super::{Item, PyBytesLike, lock, queue};
@@ -53,12 +53,9 @@ impl AsyncStream {
             tx: Mutex::new(Some(tx)),
         };
         let coroutine = forward.bind(py).call1((generator, sender))?;
-        // create_task captures the caller's contextvars on the running loop.
-        let task = event_loop
-            .call_method1(intern!(py, "create_task"), (&coroutine,))
-            .inspect_err(|_| {
-                let _ = coroutine.call_method0(intern!(py, "close"));
-            })?;
+        let task = start(&event_loop, &coroutine).inspect_err(|_| {
+            let _ = coroutine.call_method0(intern!(py, "close"));
+        })?;
         Ok(Self {
             rx,
             task: Some((task.unbind(), event_loop.unbind())),
@@ -151,6 +148,32 @@ impl Sender {
         let tx = lock(&self.tx).take();
         drop(tx);
     }
+}
+
+/// Run `coroutine` as a task on `event_loop`, capturing the caller's contextvars.
+///
+/// Without a custom task factory, Python 3.12+ starts it eagerly, so chunks the generator
+/// yields at once are queued before the request is sent and a short body never waits a
+/// loop iteration.
+fn start<'py>(
+    event_loop: &Bound<'py, PyAny>,
+    coroutine: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    static TASK: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+    let py = event_loop.py();
+    if py.version_info() >= (3, 12)
+        && event_loop
+            .call_method0(intern!(py, "get_task_factory"))?
+            .is_none()
+    {
+        let kwargs = PyDict::new(py);
+        kwargs.set_item(intern!(py, "loop"), event_loop)?;
+        kwargs.set_item(intern!(py, "eager_start"), true)?;
+        return TASK
+            .import(py, "asyncio", "Task")?
+            .call((coroutine,), Some(&kwargs));
+    }
+    event_loop.call_method1(intern!(py, "create_task"), (coroutine,))
 }
 
 /// The coroutine that forwards an async generator into its [`Sender`].

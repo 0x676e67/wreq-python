@@ -314,7 +314,7 @@ where
         }
 
         // Send request.
-        builder
+        let response = builder
             .send()
             .await
             .and_then(|r| {
@@ -324,9 +324,8 @@ where
                     Ok(r)
                 }
             })
-            .map(|response| Response::new(response, client.runtime.clone()))
-            .map_err(Error::Library)
-            .map_err(Into::into)
+            .map_err(Error::Library)?;
+        Ok(Response::new(response, client.runtime.clone()).await)
     });
 
     until_closed(&client.cancel, future).await

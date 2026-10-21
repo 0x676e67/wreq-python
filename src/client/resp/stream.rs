@@ -46,6 +46,9 @@ pub enum Frame {
 pub struct Streamer {
     reader: Arc<Reader>,
     runtime: Runtime,
+    /// Whether the body is held in full, so the event loop may poll it whatever the
+    /// HTTP version.
+    buffered: bool,
 }
 
 /// Frames buffered between the read-ahead task and Python readers, which poll the
@@ -97,7 +100,7 @@ impl Streamer {
 
     /// Create a new [`Streamer`] instance.
     #[inline]
-    pub fn new(resp: wreq::Response, runtime: Runtime) -> Streamer {
+    pub fn new(resp: wreq::Response, runtime: Runtime, buffered: bool) -> Streamer {
         let reader = Reader {
             state: Mutex::new(State::Idle(Box::new(resp))),
             arrived: Arc::new(Notify::new()),
@@ -106,6 +109,7 @@ impl Streamer {
         Streamer {
             reader: Arc::new(reader),
             runtime,
+            buffered,
         }
     }
 
@@ -183,7 +187,7 @@ impl Streamer {
         let State::Idle(resp) = &mut *state else {
             return None;
         };
-        if !iteration.takes_ready(resp) {
+        if !iteration.takes_ready(resp, self.buffered) {
             return None;
         }
         let Some(frame) = self.runtime.poll_now(Self::next_frame(resp))? else {
@@ -394,13 +398,15 @@ impl Drop for NotifyOnDrop {
 // ===== impl Iteration =====
 
 impl Iteration {
-    /// Whether the caller takes a frame `resp` already holds. On the event loop only an HTTP/1
-    /// body of known length is read, whatever its size: taking a frame it holds is cheap,
-    /// while a decompressing body is not.
-    fn takes_ready(self, resp: &wreq::Response) -> bool {
+    /// Whether the caller takes a frame `resp` already holds. On the event loop only a body of
+    /// known length is read, over HTTP/1 or held in full, whatever its size: taking a frame
+    /// it holds is cheap, while a decompressing body is not.
+    fn takes_ready(self, resp: &wreq::Response, buffered: bool) -> bool {
         match self {
             Iteration::Sync => true,
-            Iteration::Async => loop_polls(resp.version()) && resp.size_hint().exact().is_some(),
+            Iteration::Async => {
+                (buffered || loop_polls(resp.version())) && resp.size_hint().exact().is_some()
+            }
         }
     }
 
