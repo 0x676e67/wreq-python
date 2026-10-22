@@ -21,6 +21,12 @@ const PREFETCH_LIMIT: u64 = 64 * 1024;
 /// right after its head, as HTTP/2 does, is read in full.
 const PREFETCH_YIELDS: usize = 4;
 
+/// A completed body, or frames still to deliver, safe to poll off-runtime only if held.
+pub(super) enum Prefetch {
+    Complete(Bytes),
+    Remaining { body: wreq::Body, held: bool },
+}
+
 /// A body whose leading frames were read with the head, replayed before the rest.
 struct Prefetched {
     data: Option<Bytes>,
@@ -42,12 +48,12 @@ enum Data {
 /// Read the frames of a body of known length up to [`PREFETCH_LIMIT`] that already arrived,
 /// so readers on the event loop need not wait on the runtime.
 ///
-/// Returns the body and whether it is held in full, which makes it safe to poll from any
-/// thread; an HTTP/2 body still tied to its connection must not be polled on the event loop.
+/// Completed bodies keep their bytes directly. Other bodies report whether all remaining
+/// frames are held; an HTTP/2 body still tied to its connection stays on the runtime.
 /// It never waits for the network: frames still in flight stay with the connection.
-pub(super) async fn prefetch(mut body: wreq::Body, len: Option<u64>) -> (wreq::Body, bool) {
+pub(super) async fn prefetch(mut body: wreq::Body, len: Option<u64>) -> Prefetch {
     let Some(len) = len.filter(|len| *len <= PREFETCH_LIMIT) else {
-        return (body, false);
+        return Prefetch::Remaining { body, held: false };
     };
     let mut data = Data::default();
     // Yield once, then again only after a yield brought more frames: frames that arrived
@@ -65,10 +71,7 @@ pub(super) async fn prefetch(mut body: wreq::Body, len: Option<u64>) -> (wreq::B
             },
             Some(Some(Err(err))) => break Some(Err(err)),
             Some(None) => {
-                return (
-                    wreq::Body::from(data.into_bytes().unwrap_or_default()),
-                    true,
-                );
+                return Prefetch::Complete(data.into_bytes().unwrap_or_default());
             }
             None if yields == 0 || (progressed && yields < PREFETCH_YIELDS) => {
                 yields += 1;
@@ -80,12 +83,15 @@ pub(super) async fn prefetch(mut body: wreq::Body, len: Option<u64>) -> (wreq::B
     };
     let data = data.into_bytes();
     if data.is_none() && next.is_none() {
-        return (body, false);
+        return Prefetch::Remaining { body, held: false };
     }
     // A failed body holds nothing more; the error replays after the data.
     let rest = (!matches!(next, Some(Err(_)))).then_some(body);
     let held = rest.is_none();
-    (wreq::Body::wrap(Prefetched { data, next, rest }), held)
+    Prefetch::Remaining {
+        body: wreq::Body::wrap(Prefetched { data, next, rest }),
+        held,
+    }
 }
 
 /// Return after the runtime polls its IO and other tasks once.

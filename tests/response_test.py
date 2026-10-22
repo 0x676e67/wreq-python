@@ -282,6 +282,52 @@ async def test_empty_body_and_unit_results():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("blocking", [False, True], ids=["async", "blocking"])
+async def test_prefetched_stream_keeps_lazy_reads_and_owned_views(blocking):
+    payload = b"buffered" * 128
+    reply = b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 1024\r\n\r\n" + payload
+
+    def read_blocking(url):
+        with wreq.blocking.Client(proxies=[]) as client:
+            response = client.get(url)
+            with response.stream() as stream:
+                views = list(stream)
+            with pytest.raises(RuntimeError):
+                response.stream()
+            assert response.status.as_int() == 200
+            assert response.content_length == len(payload)
+            response.close()
+            return views
+
+    async def read_async(url):
+        async with wreq.Client(proxies=[]) as client:
+            response = await client.get(url)
+            async with response.stream() as stream:
+                # Creating and discarding a read must not consume a prefetched frame.
+                unread = stream.__anext__()
+                unread.close()
+                views = [view async for view in stream]
+            with pytest.raises(RuntimeError):
+                response.stream()
+            assert response.status.as_int() == 200
+            assert response.content_length == len(payload)
+            await response.close()
+            return views
+
+    async with local_server() as (url, connections):
+        task = asyncio.create_task(
+            asyncio.to_thread(read_blocking, url) if blocking else read_async(url)
+        )
+        _, writer = await asyncio.wait_for(connections.get(), 5)
+        writer.write(reply)
+        views = await asyncio.wait_for(task, 5)
+
+    assert all(isinstance(view, memoryview) and view.readonly for view in views)
+    # Both the stream and response have closed; each view still owns its bytes.
+    assert b"".join(views) == payload
+
+
+@pytest.mark.asyncio
 async def test_pending_read_holds_the_body_until_it_ends():
     head = b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\n"
     async with local_server() as (url, connections), wreq.Client(proxies=[]) as client:

@@ -35,6 +35,8 @@ pub struct Coroutine {
     future: Mutex<Option<BoxFuture<'static, PyResult<Py<PyAny>>>>>,
     slot: Arc<Slot>,
     waker: Waker,
+    /// A poll reached suspension, which may have published a port or waiter.
+    suspended: bool,
     pub(super) scope: Scope,
 }
 
@@ -77,6 +79,7 @@ impl Coroutine {
             future: Mutex::new(Some(future.boxed())),
             waker: Waker::from(slot.clone()),
             slot,
+            suspended: false,
             scope: Scope::Unsupported,
         }
     }
@@ -107,7 +110,9 @@ impl Coroutine {
 
         // A pending waiter means another task is suspended on this coroutine. Once
         // it is taken, wakes from now on resume this poll.
-        if let Some(waiter) = self.slot.take_waiter() {
+        if self.suspended
+            && let Some(waiter) = self.slot.take_waiter()
+        {
             let done = waiter.get().is_done();
             if !matches!(done, Ok(true)) {
                 self.slot.set_waiter(waiter);
@@ -122,6 +127,7 @@ impl Coroutine {
                 .inspect_err(|_| self.abandon());
         }
         // A coroutine that cannot wait ends here, releasing any spawned work.
+        self.suspended = true;
         self.slot
             .suspend(py)
             .map(|waiter| Step::Yield(waiter.map_or_else(|| py.None(), Py::into_any)))
@@ -132,9 +138,11 @@ impl Coroutine {
         *self.future() = None;
         self.slot.state.store(DONE, Ordering::Release);
         // A finished coroutine must not keep its loop's port open.
-        let port = self.slot.lock_port().take();
-        drop(port);
-        drop(self.slot.take_waiter());
+        if self.suspended {
+            let port = self.slot.lock_port().take();
+            drop(port);
+            drop(self.slot.take_waiter());
+        }
     }
 }
 

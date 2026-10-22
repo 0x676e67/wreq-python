@@ -13,7 +13,13 @@ use http_body_util::{BodyExt, Collected, combinators::Collect};
 use pyo3::{prelude::*, pybacked::PyBackedStr, sync::PyOnceLock};
 use wreq::Uri;
 
-use super::{READ_ATTACHED, ext::ResponseExt, loop_polls, prefetch::prefetch, stream::Streamer};
+use super::{
+    READ_ATTACHED,
+    ext::ResponseExt,
+    loop_polls,
+    prefetch::{Prefetch, prefetch},
+    stream::Streamer,
+};
 use crate::{
     buffer::PyBuffer,
     client::{SocketAddr, body::Json},
@@ -54,6 +60,8 @@ pub struct Response {
 enum Body {
     /// Unread; taken by the first read or `stream()`.
     Unread(wreq::Body),
+    /// Read with the head, but not yet consumed by a caller.
+    Buffered(Bytes),
     /// Taken by a read in flight or by `stream()`.
     Taken,
     /// Read in full and shared by later `text`, `json` and `bytes` calls.
@@ -91,15 +99,18 @@ impl Response {
         let local_addr = response.local_addr().map(SocketAddr);
         let (parts, body) = HttpResponse::from(response).into_parts();
         let (body, held) = if prefetch_body {
-            prefetch(body, content_length).await
+            match prefetch(body, content_length).await {
+                Prefetch::Complete(bytes) => (Body::Buffered(bytes), true),
+                Prefetch::Remaining { body, held } => (Body::Unread(body), held),
+            }
         } else {
-            (body, false)
+            (Body::Unread(body), false)
         };
         let loop_polls = held || loop_polls(parts.version);
         Response {
             uri,
             parts,
-            body: Arc::new(Mutex::new(Body::Unread(body))),
+            body: Arc::new(Mutex::new(body)),
             runtime,
             content_length,
             loop_polls,
@@ -126,15 +137,14 @@ impl Response {
         wreq::Response::from(response)
     }
 
-    /// Take the body for reading. Cached bytes are shared at once, and a body of known
-    /// length up to `limit` that is already buffered is read now on the calling thread, none
-    /// without a `limit`; overlapping reads and `stream()` fail with [`Error::Memory`] while
-    /// a read runs.
+    /// Take the body for reading. Prefetched and cached bytes are shared at once; another
+    /// body of known length up to `limit` is polled on the calling thread. Overlapping reads
+    /// and `stream()` fail with [`Error::Memory`] while a read runs.
     fn take_bytes(&self, limit: Option<u64>) -> Result<BodyRead, Error> {
         let mut slot = self.slot();
         let body = match mem::replace(&mut *slot, Body::Taken) {
             Body::Unread(body) => body,
-            Body::Cached(bytes) => {
+            Body::Buffered(bytes) | Body::Cached(bytes) => {
                 *slot = Body::Cached(bytes.clone());
                 return Ok(BodyRead::Ready(bytes));
             }
@@ -368,6 +378,10 @@ impl Response {
         let mut slot = self.slot();
         let body = match mem::replace(&mut *slot, Body::Taken) {
             Body::Unread(body) => body,
+            Body::Buffered(bytes) => {
+                drop(slot);
+                return Ok(Streamer::buffered(bytes, self.runtime.clone()));
+            }
             other => {
                 *slot = other;
                 return Err(Error::Memory.into());

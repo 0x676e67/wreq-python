@@ -65,6 +65,8 @@ struct Reader {
 enum State {
     /// Unread, or read only by [`Streamer::ready_frame`] on the caller.
     Idle(Box<wreq::Response>),
+    /// A successfully prefetched body, taken once without polling a transport body.
+    Buffered(Option<Bytes>),
     /// Held by the read-ahead task, whose frames arrive on `rx`; dropping `_task` aborts it.
     /// Without a task, `rx` holds only a final error.
     Reading {
@@ -110,8 +112,21 @@ impl Streamer {
     /// Create a new [`Streamer`] instance.
     #[inline]
     pub fn new(resp: wreq::Response, runtime: Runtime, loop_polls: bool) -> Streamer {
+        Self::with_state(State::Idle(Box::new(resp)), runtime, loop_polls)
+    }
+
+    /// A body already read to EOF, with no trailers or errors left to deliver.
+    pub fn buffered(bytes: Bytes, runtime: Runtime) -> Streamer {
+        Self::with_state(
+            State::Buffered((!bytes.is_empty()).then_some(bytes)),
+            runtime,
+            true,
+        )
+    }
+
+    fn with_state(state: State, runtime: Runtime, loop_polls: bool) -> Streamer {
         let reader = Reader {
-            state: Mutex::new(State::Idle(Box::new(resp))),
+            state: Mutex::new(state),
             arrived: Arc::new(Notify::new()),
             since_yield: AtomicUsize::new(0),
         };
@@ -249,6 +264,14 @@ impl Streamer {
     /// of a short body never waits on another thread.
     fn ready_frame(&self, iteration: Iteration) -> Option<PyResult<Frame>> {
         let mut state = self.reader.lock();
+        if let State::Buffered(bytes) = &mut *state {
+            return Some(
+                bytes
+                    .take()
+                    .map(|bytes| Frame::Bytes(PyBuffer::from(bytes)))
+                    .ok_or_else(|| iteration.end().into()),
+            );
+        }
         let State::Idle(resp) = &mut *state else {
             return None;
         };
