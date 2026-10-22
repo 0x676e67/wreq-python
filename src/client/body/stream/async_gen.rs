@@ -157,45 +157,49 @@ impl Sender {
 
 /// Run `coroutine` as a task on `event_loop`, capturing the caller's contextvars.
 ///
-/// On Python 3.12+, a standard loop without a task factory starts it eagerly, so chunks the
-/// generator yields at once are queued before the request is sent and a short body never
-/// waits a loop iteration. Other loops keep their own `create_task`.
+/// On Python 3.14+, a compatible standard loop receives an eager-start hint so chunks can
+/// be queued before the request is sent. Task creation always goes through the loop,
+/// including wrappers that capture context or instrument tasks.
 fn start<'py>(
     event_loop: &Bound<'py, PyAny>,
     coroutine: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    static TASK: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
     let py = event_loop.py();
-    if eager(event_loop) {
+    let create_task = event_loop.getattr(intern!(py, "create_task"))?;
+    if eager(event_loop, &create_task) {
         let kwargs = PyDict::new(py);
-        kwargs.set_item(intern!(py, "loop"), event_loop)?;
         kwargs.set_item(intern!(py, "eager_start"), true)?;
-        return TASK
-            .import(py, "asyncio", "Task")?
-            .call((coroutine,), Some(&kwargs));
+        return create_task.call((coroutine,), Some(&kwargs));
     }
-    event_loop.call_method1(intern!(py, "create_task"), (coroutine,))
+    create_task.call1((coroutine,))
 }
 
-/// Whether a task can start eagerly on `event_loop` without bypassing what its `create_task`
-/// would do: a `BaseEventLoop` that keeps the standard `create_task` and has no task factory.
-fn eager(event_loop: &Bound<'_, PyAny>) -> bool {
+/// Only pass the hint where the standard loop API supports it. Older wrappers and custom
+/// factories keep their usual arguments; the actual loop method still controls scheduling.
+fn eager(event_loop: &Bound<'_, PyAny>, create_task: &Bound<'_, PyAny>) -> bool {
     static BASE: PyOnceLock<Py<PyType>> = PyOnceLock::new();
     let py = event_loop.py();
-    if py.version_info() < (3, 12) {
+    if py.version_info() < (3, 14) {
         return false;
     }
     let standard = || -> PyResult<bool> {
         let base = BASE.import(py, "asyncio", "BaseEventLoop")?;
-        let create_task = intern!(py, "create_task");
+        let name = intern!(py, "create_task");
         Ok(event_loop.is_instance(base)?
             && event_loop
                 .get_type()
-                .getattr(create_task)?
-                .is(&base.getattr(create_task)?)
+                .getattr(name)?
+                .is(&base.getattr(name)?)
             && event_loop
                 .call_method0(intern!(py, "get_task_factory"))?
-                .is_none())
+                .is_none()
+            // inspect.CO_VARKEYWORDS: don't send a new keyword to an old-signature wrapper.
+            && create_task
+                .getattr(intern!(py, "__code__"))?
+                .getattr(intern!(py, "co_flags"))?
+                .extract::<u32>()?
+                & 0x08
+                != 0)
     };
     standard().unwrap_or(false)
 }

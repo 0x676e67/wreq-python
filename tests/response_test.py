@@ -196,6 +196,63 @@ async def test_reads_decode_buffered_and_cached_bodies(count):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("blocking", [False, True], ids=["async", "blocking"])
+@pytest.mark.parametrize("scope", ["client", "request"])
+@pytest.mark.parametrize("reader", ["bytes", "stream"])
+@pytest.mark.parametrize("prefix", [0, 5], ids=["head-only", "partial-body"])
+async def test_read_timeout_starts_when_the_caller_reads(blocking, scope, reader, prefix):
+    body = b"0123456789"
+    timeout = {"read_timeout": timedelta(milliseconds=150)}
+    client_options = timeout if scope == "client" else {}
+    request_options = timeout if scope == "request" else {}
+    received = asyncio.Event()
+    release = threading.Event()
+    loop = asyncio.get_running_loop()
+
+    def read_blocking(url):
+        with wreq.blocking.Client(proxies=[], **client_options) as client:
+            with client.get(url, **request_options) as response:
+                loop.call_soon_threadsafe(received.set)
+                assert release.wait(5)
+                if reader == "bytes":
+                    return bytes(response.bytes())
+                with response.stream() as stream:
+                    return b"".join(stream)
+
+    async def read_async(url):
+        async with wreq.Client(proxies=[], **client_options) as client:
+            async with await client.get(url, **request_options) as response:
+                received.set()
+                assert await asyncio.to_thread(release.wait, 5)
+                if reader == "bytes":
+                    return bytes(await response.bytes())
+                async with response.stream() as stream:
+                    return b"".join([chunk async for chunk in stream])
+
+    async with local_server() as (url, connections):
+        task = asyncio.create_task(
+            asyncio.to_thread(read_blocking, url) if blocking else read_async(url)
+        )
+        try:
+            _, writer = await asyncio.wait_for(connections.get(), 5)
+            writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\n" + body[:prefix])
+            await writer.drain()
+            await asyncio.wait_for(received.wait(), 5)
+            # The rest arrives within the timeout, while application code waits longer.
+            await asyncio.sleep(0.05)
+            writer.write(body[prefix:])
+            await writer.drain()
+            await asyncio.sleep(0.3)
+            release.set()
+            assert await asyncio.wait_for(task, 5) == body
+        finally:
+            release.set()
+            if not task.done():
+                task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
 async def test_empty_body_and_unit_results():
     async with local_server() as (url, connections):
         client = wreq.Client(proxies=[])

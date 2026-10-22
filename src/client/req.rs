@@ -205,6 +205,10 @@ where
     let mut future = Box::pin(async {
         // Create the request builder.
         let mut builder = client.inner.request(method.into_ffi(), url.as_ref());
+        let prefetch_body = !client.has_read_timeout
+            && request
+                .as_ref()
+                .is_none_or(|request| request.read_timeout.is_none());
 
         if let Some(mut request) = request {
             // Emulation options.
@@ -327,7 +331,7 @@ where
                 }
             })
             .map_err(Error::Library)?;
-        Ok(Response::new(response, client.runtime.clone()).await)
+        Ok(Response::new(response, client.runtime.clone(), prefetch_body).await)
     });
 
     until_closed(&client.cancel, future.as_mut()).await

@@ -83,14 +83,18 @@ struct RecycleGuard(Option<Parts>);
 // ===== impl Response =====
 
 impl Response {
-    /// Create a new [`Response`] instance, reading a short body that already arrived.
-    pub async fn new(response: wreq::Response, runtime: Runtime) -> Self {
+    /// Create a response, prefetching only when polling cannot start a read timeout.
+    pub async fn new(response: wreq::Response, runtime: Runtime, prefetch_body: bool) -> Self {
         let uri = response.uri().clone();
         let content_length = response.content_length();
         let remote_addr = response.remote_addr().map(SocketAddr);
         let local_addr = response.local_addr().map(SocketAddr);
         let (parts, body) = HttpResponse::from(response).into_parts();
-        let (body, held) = prefetch(body, content_length).await;
+        let (body, held) = if prefetch_body {
+            prefetch(body, content_length).await
+        } else {
+            (body, false)
+        };
         let loop_polls = held || loop_polls(parts.version);
         Response {
             uri,
