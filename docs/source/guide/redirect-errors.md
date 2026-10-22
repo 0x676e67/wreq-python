@@ -41,6 +41,7 @@ effect when you pass the policy to the client or request.
 A callback receives the next URL, the redirect response, and the previous
 URLs. Return `attempt.follow()`, `attempt.stop()`, or `attempt.error(message)`.
 Stopping returns the redirect response; returning an error raises
+`wreq.exceptions.RequestError`. Exceeding a built-in redirect limit raises
 `wreq.exceptions.RedirectError`.
 
 ```python
@@ -136,8 +137,8 @@ async def main():
 asyncio.run(main())
 ```
 
-Every wreq exception derives from `exceptions.Error`, so catch the failures
-your application can handle and let `Error` cover the rest. `RequestError`
+The exception classes defined by wreq derive from `exceptions.Error`.
+File operations raise Python's `OSError` subclasses. `RequestError`
 groups transport failures: `ConnectionError` (including a failed TLS handshake,
 `ProxyConnectionError` and `ConnectionResetError`) and `TimeoutError`.
 `ConnectionError`, `ConnectionResetError` and `TimeoutError` also derive from

@@ -17,6 +17,25 @@ class Teapot(wreq.StatusCode):
     pass
 
 
+def test_status_code_comparison_and_hash():
+    class IndexCode:
+        def __index__(self):
+            return 404
+
+    status = wreq.StatusCode(404)
+    assert status == 404 and 404 == status
+    assert status == wreq.StatusCode(404)
+    assert hash(status) == hash(404)
+    assert {status: "found"}[404] == {404: "found"}[status] == "found"
+    assert len({status, wreq.StatusCode(404), 404}) == 1
+
+    other = IndexCode()
+    assert status.__eq__(other) is NotImplemented
+    assert status != other and other != status
+    with pytest.raises(TypeError):
+        status < other
+
+
 @pytest.mark.asyncio
 @pytest.mark.flaky(reruns=3, reruns_delay=2)
 async def test_proxy_connection_error():

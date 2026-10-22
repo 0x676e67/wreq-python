@@ -101,9 +101,13 @@ impl StatusCode {
         let py = other.py();
         let other = match other.extract::<StatusCode>() {
             Ok(code) => code.as_int(),
-            Err(_) => match other.extract::<u16>() {
-                Ok(code) => code,
-                Err(_) => return py.NotImplemented(),
+            Err(_) => match other
+                .cast::<PyInt>()
+                .ok()
+                .and_then(|code| code.extract::<u16>().ok())
+            {
+                Some(code) => code,
+                None => return py.NotImplemented(),
             },
         };
         PyBool::new(py, op.matches(self.as_int().cmp(&other)))

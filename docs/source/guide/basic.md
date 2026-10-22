@@ -188,8 +188,9 @@ except (ConnectionError, TimeoutError) as exc:
 ```
 
 Other failures, including TLS and decoding errors, have their own
-[exception classes](../api/exceptions.md). All of them derive from
-`wreq.exceptions.Error`, so catch it to handle any other failure.
+[exception classes](../api/exceptions.md). These library exceptions derive from
+`wreq.exceptions.Error`. File operations raise `OSError` subclasses, while
+cancellation uses `asyncio.CancelledError`.
 
 ## Read response metadata and bodies
 

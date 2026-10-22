@@ -8,7 +8,7 @@ async def fetch(label, url, **kwargs):
     try:
         await wreq.get(url, **kwargs)
     except wreq.Error as e:
-        # Every wreq error derives from `wreq.Error`.
+        # Catch wreq's library exceptions.
         print(f"Caught: {type(e).__name__}: {e}")
 
 

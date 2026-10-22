@@ -1,11 +1,10 @@
 """
 HTTP Client Exceptions
 
-Every exception wreq raises for a failed request, response, or WebSocket derives
-from `Error`, so `except wreq.Error` catches them all. Misuse, such as reading a
-consumed body or awaiting a coroutine twice, raises Python's builtin exceptions,
-and a local file that cannot be opened, such as a multipart file, raises the
-matching `OSError` subclass.
+The exception classes defined here derive from `Error` and are also available
+from `wreq`. Misuse, such as reading a consumed body or awaiting a coroutine
+twice, raises Python's builtin exceptions. File operations raise `OSError`
+subclasses, and cancellation uses `asyncio.CancelledError`.
 
     Error
     ├── BuilderError
@@ -148,7 +147,7 @@ class Error(Exception):
 
     def is_redirect(self) -> bool:
         r"""
-        Whether the redirect policy stopped the request.
+        Whether following redirects failed, such as exceeding the redirect limit.
         """
         return "redirect" in self._predicates
 
@@ -261,8 +260,7 @@ class DecodingError(Error):
 
 class RedirectError(Error):
     r"""
-    The redirect policy stopped the request, for example after too many
-    redirects.
+    Following redirects failed, for example because the redirect limit was exceeded.
     """
 
 
