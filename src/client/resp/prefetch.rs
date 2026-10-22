@@ -105,6 +105,10 @@ async fn defer() {
 
 impl Data {
     fn push(&mut self, bytes: Bytes, len: u64) {
+        // An empty frame, such as HTTP/2's trailing END_STREAM, adds nothing worth a copy.
+        if bytes.is_empty() {
+            return;
+        }
         match self {
             Data::Empty => *self = Data::One(bytes),
             Data::One(first) => {

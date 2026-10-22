@@ -22,7 +22,6 @@ use tokio::sync::{
 };
 use tokio_util::task::AbortOnDropHandle;
 
-use super::loop_polls;
 use crate::{
     buffer::PyBuffer,
     coroutine::{self, Coroutine},
@@ -49,9 +48,8 @@ type RawFrame = wreq::Result<http_body::Frame<Bytes>>;
 pub struct Streamer {
     reader: Arc<Reader>,
     runtime: Runtime,
-    /// Whether the body is held in full, so the event loop may poll it whatever the
-    /// HTTP version.
-    buffered: bool,
+    /// Whether the event loop may poll the body: an HTTP/1 body, or one held in full.
+    loop_polls: bool,
 }
 
 /// Frames buffered between the read-ahead task and Python readers, which poll the
@@ -111,7 +109,7 @@ impl Streamer {
 
     /// Create a new [`Streamer`] instance.
     #[inline]
-    pub fn new(resp: wreq::Response, runtime: Runtime, buffered: bool) -> Streamer {
+    pub fn new(resp: wreq::Response, runtime: Runtime, loop_polls: bool) -> Streamer {
         let reader = Reader {
             state: Mutex::new(State::Idle(Box::new(resp))),
             arrived: Arc::new(Notify::new()),
@@ -120,7 +118,7 @@ impl Streamer {
         Streamer {
             reader: Arc::new(reader),
             runtime,
-            buffered,
+            loop_polls,
         }
     }
 
@@ -184,9 +182,11 @@ impl Streamer {
             Ok(Err(frame)) => return (Ok(frame), None),
             Err(err) => return (Err(err), None),
         };
-        let mut merged: Option<BytesMut> = None;
+        // Frames are gathered first and copied once into a buffer of their exact size, so a
+        // chunk holds no spare capacity; a single frame is sent without a copy.
+        let mut rest = Vec::new();
+        let mut len = first.len();
         let next = loop {
-            let len = merged.as_ref().map_or(first.len(), BytesMut::len);
             if len >= Self::MERGE_LIMIT {
                 break None;
             }
@@ -203,23 +203,19 @@ impl Streamer {
             if more.len() >= Self::MERGE_FRAME || len + more.len() > Self::MERGE_LIMIT {
                 break Some(Some(Ok(http_body::Frame::data(more))));
             }
-            merged
-                .get_or_insert_with(|| {
-                    // Sized for what remains of the body, so a short merge holds no spare
-                    // capacity; a body of unknown length grows as frames arrive.
-                    let hint = resp.size_hint();
-                    let rest =
-                        usize::try_from(hint.upper().unwrap_or(hint.lower())).unwrap_or(usize::MAX);
-                    let capacity = (first.len() + more.len())
-                        .saturating_add(rest)
-                        .min(Self::MERGE_LIMIT);
-                    let mut buf = BytesMut::with_capacity(capacity);
-                    buf.extend_from_slice(&first);
-                    buf
-                })
-                .extend_from_slice(&more);
+            if !more.is_empty() {
+                len += more.len();
+                rest.push(more);
+            }
         };
-        let data = merged.map_or(first, BytesMut::freeze);
+        let data = if rest.is_empty() {
+            first
+        } else {
+            let mut buf = BytesMut::with_capacity(len);
+            buf.extend_from_slice(&first);
+            rest.iter().for_each(|frame| buf.extend_from_slice(frame));
+            buf.freeze()
+        };
         (Ok(http_body::Frame::data(data)), next)
     }
 
@@ -256,7 +252,7 @@ impl Streamer {
         let State::Idle(resp) = &mut *state else {
             return None;
         };
-        if !iteration.takes_ready(resp, self.buffered) {
+        if !iteration.takes_ready(resp, self.loop_polls) {
             return None;
         }
         let Some(frame) = self.runtime.poll_now(Self::next_frame(resp))? else {
@@ -467,15 +463,13 @@ impl Drop for NotifyOnDrop {
 // ===== impl Iteration =====
 
 impl Iteration {
-    /// Whether the caller takes a frame `resp` already holds. On the event loop only a body of
-    /// known length is read, over HTTP/1 or held in full, whatever its size: taking a frame
-    /// it holds is cheap, while a decompressing body is not.
-    fn takes_ready(self, resp: &wreq::Response, buffered: bool) -> bool {
+    /// Whether the caller takes a frame `resp` already holds. On the event loop only a body the
+    /// loop may poll and of known length is read, whatever its size: taking a frame it holds
+    /// is cheap, while a decompressing body is not.
+    fn takes_ready(self, resp: &wreq::Response, loop_polls: bool) -> bool {
         match self {
             Iteration::Sync => true,
-            Iteration::Async => {
-                (buffered || loop_polls(resp.version())) && resp.size_hint().exact().is_some()
-            }
+            Iteration::Async => loop_polls && resp.size_hint().exact().is_some(),
         }
     }
 

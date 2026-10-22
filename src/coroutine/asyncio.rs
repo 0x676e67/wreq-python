@@ -4,17 +4,18 @@
 use std::{
     cell::RefCell,
     io::{self, ErrorKind, Read, Write},
-    mem,
+    iter, mem,
     sync::{
-        Arc, Mutex, MutexGuard, PoisonError, Weak,
+        Arc, Mutex, MutexGuard, OnceLock, PoisonError, Weak,
         atomic::{AtomicBool, Ordering},
+        mpsc::{self, Sender},
     },
+    thread,
 };
 
 use pyo3::{PyTraverseError, PyVisit, intern, prelude::*, sync::PyOnceLock};
 
 use super::{awaitable::Slot, waiter::Waiter};
-use crate::runtime::Runtime;
 
 /// Wakes queued for one event loop, delivered by a single bell per batch.
 pub(crate) struct Port {
@@ -29,7 +30,7 @@ enum Bell {
     /// A socket pair whose read end the loop watches. The read end is `None`
     /// when Python owns it, as with a proactor loop.
     Socket { tx: Socket, rx: Option<Socket> },
-    /// A loop that cannot watch the socket: a blocking-pool thread schedules the drain,
+    /// A loop that cannot watch the socket: a dedicated thread schedules the drain,
     /// and a [`Keeper`] holds the port until the loop closes.
     Loop(Py<PyAny>),
 }
@@ -172,13 +173,32 @@ impl Port {
                     _ => break,
                 }
             },
-            // Wakers may run under a runtime's internal locks, such as a semaphore's while
-            // it closes, which a thread holding the GIL may be waiting for. Attaching here
-            // could deadlock, so the drain is scheduled from the blocking pool.
-            Bell::Loop(_) => {
-                let port = self.clone();
-                drop(Runtime::spawn_blocking(move || port.schedule_drain()));
+            Bell::Loop(_) => self.clone().schedule_off_thread(),
+        }
+    }
+
+    /// Schedule a drain from a thread that only waits for the GIL, started on first use.
+    ///
+    /// Wakers may run under a runtime's internal locks, such as a semaphore's while it closes,
+    /// that a GIL holder may be waiting for, so they never attach themselves. Without the
+    /// thread, the waking thread schedules the drain.
+    fn schedule_off_thread(self: Arc<Self>) {
+        static SCHEDULER: OnceLock<Option<Sender<Arc<Port>>>> = OnceLock::new();
+        let scheduler = SCHEDULER.get_or_init(|| {
+            let (tx, rx) = mpsc::channel::<Arc<Port>>();
+            thread::Builder::new()
+                .name("wreq-loop-wake".into())
+                .spawn(move || rx.into_iter().for_each(|port| port.schedule_drain()))
+                .ok()
+                .map(|_| tx)
+        });
+        match scheduler {
+            Some(tx) => {
+                if let Err(mpsc::SendError(port)) = tx.send(self) {
+                    port.schedule_drain();
+                }
             }
+            None => self.schedule_drain(),
         }
     }
 
@@ -237,15 +257,11 @@ impl Drain {
             };
             // Resume the task awaiting the waiter now, unless it was already cancelled.
             if let Err(err) = Waiter::resolve(waiter.bind(py)) {
-                // A `KeyboardInterrupt` or `SystemExit` ends this drain; requeue the rest.
-                let mut queue = port.lock();
-                let before = queue.len();
-                queue.splice(..0, slots);
-                let requeued = queue.len() > before;
-                drop(queue);
-                if requeued {
-                    port.ring();
-                }
+                // A `KeyboardInterrupt`, `SystemExit` or busy waiter ends this drain. Requeue
+                // this wake and the rest; the next drain skips a waiter already resolved.
+                slot.set_waiter(waiter);
+                port.lock().splice(..0, iter::once(slot).chain(slots));
+                port.ring();
                 return Err(err);
             }
         }

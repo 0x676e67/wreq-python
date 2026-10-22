@@ -44,9 +44,8 @@ pub struct Response {
     runtime: Runtime,
     /// Captured at receipt; `None` for a body without a known length.
     content_length: Option<u64>,
-    /// Whether the unread body is held in full, so the event loop may poll it whatever
-    /// the HTTP version.
-    buffered: bool,
+    /// Whether the event loop may poll the unread body: an HTTP/1 body, or one held in full.
+    loop_polls: bool,
     remote_addr: Option<SocketAddr>,
     local_addr: Option<SocketAddr>,
 }
@@ -91,14 +90,15 @@ impl Response {
         let remote_addr = response.remote_addr().map(SocketAddr);
         let local_addr = response.local_addr().map(SocketAddr);
         let (parts, body) = HttpResponse::from(response).into_parts();
-        let (body, buffered) = prefetch(body, content_length).await;
+        let (body, held) = prefetch(body, content_length).await;
+        let loop_polls = held || loop_polls(parts.version);
         Response {
             uri,
             parts,
             body: Arc::new(Mutex::new(Body::Unread(body))),
             runtime,
             content_length,
-            buffered,
+            loop_polls,
             remote_addr,
             local_addr,
         }
@@ -107,7 +107,7 @@ impl Response {
     /// The largest unread body the event loop collects, `None` if it must not poll it.
     #[inline]
     fn loop_limit(&self, limit: u64) -> Option<u64> {
-        (self.buffered || loop_polls(self.parts.version)).then_some(limit)
+        self.loop_polls.then_some(limit)
     }
 
     #[inline]
@@ -373,7 +373,7 @@ impl Response {
         Ok(Streamer::new(
             self.build_response(body),
             self.runtime.clone(),
-            self.buffered,
+            self.loop_polls,
         ))
     }
 

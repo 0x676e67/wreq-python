@@ -7,7 +7,7 @@
 //! the work to Tokio. A wake marks the coroutine ready and queues it on the [`Port`]
 //! of the awaiting loop, ringing a socket the loop watches only when the queue was
 //! empty, so waking threads never take the GIL. A loop that cannot watch the socket is
-//! woken with `call_soon_threadsafe` from a blocking-pool thread, as wakers may run under
+//! woken with `call_soon_threadsafe` from a dedicated thread, as wakers may run under
 //! runtime locks that a GIL holder waits for. The loop thread then resolves every queued
 //! [`Waiter`](waiter::Waiter) in one batch, running the woken tasks' wakeups at once.
 

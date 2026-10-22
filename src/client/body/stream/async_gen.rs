@@ -8,7 +8,12 @@ use std::{
 };
 
 use futures_util::{Stream, StreamExt};
-use pyo3::{IntoPyObjectExt, intern, prelude::*, sync::PyOnceLock, types::PyDict};
+use pyo3::{
+    IntoPyObjectExt, intern,
+    prelude::*,
+    sync::PyOnceLock,
+    types::{PyDict, PyType},
+};
 use tokio::sync::TryAcquireError;
 
 use super::{Item, PyBytesLike, lock, queue};
@@ -152,20 +157,16 @@ impl Sender {
 
 /// Run `coroutine` as a task on `event_loop`, capturing the caller's contextvars.
 ///
-/// Without a custom task factory, Python 3.12+ starts it eagerly, so chunks the generator
-/// yields at once are queued before the request is sent and a short body never waits a
-/// loop iteration.
+/// On Python 3.12+, a standard loop without a task factory starts it eagerly, so chunks the
+/// generator yields at once are queued before the request is sent and a short body never
+/// waits a loop iteration. Other loops keep their own `create_task`.
 fn start<'py>(
     event_loop: &Bound<'py, PyAny>,
     coroutine: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
     static TASK: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
     let py = event_loop.py();
-    if py.version_info() >= (3, 12)
-        && event_loop
-            .call_method0(intern!(py, "get_task_factory"))?
-            .is_none()
-    {
+    if eager(event_loop) {
         let kwargs = PyDict::new(py);
         kwargs.set_item(intern!(py, "loop"), event_loop)?;
         kwargs.set_item(intern!(py, "eager_start"), true)?;
@@ -174,6 +175,29 @@ fn start<'py>(
             .call((coroutine,), Some(&kwargs));
     }
     event_loop.call_method1(intern!(py, "create_task"), (coroutine,))
+}
+
+/// Whether a task can start eagerly on `event_loop` without bypassing what its `create_task`
+/// would do: a `BaseEventLoop` that keeps the standard `create_task` and has no task factory.
+fn eager(event_loop: &Bound<'_, PyAny>) -> bool {
+    static BASE: PyOnceLock<Py<PyType>> = PyOnceLock::new();
+    let py = event_loop.py();
+    if py.version_info() < (3, 12) {
+        return false;
+    }
+    let standard = || -> PyResult<bool> {
+        let base = BASE.import(py, "asyncio", "BaseEventLoop")?;
+        let create_task = intern!(py, "create_task");
+        Ok(event_loop.is_instance(base)?
+            && event_loop
+                .get_type()
+                .getattr(create_task)?
+                .is(&base.getattr(create_task)?)
+            && event_loop
+                .call_method0(intern!(py, "get_task_factory"))?
+                .is_none())
+    };
+    standard().unwrap_or(false)
 }
 
 /// The coroutine that forwards an async generator into its [`Sender`].
