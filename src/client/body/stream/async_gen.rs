@@ -157,9 +157,10 @@ impl Sender {
 
 /// Run `coroutine` as a task on `event_loop`, capturing the caller's contextvars.
 ///
-/// On Python 3.14+, a compatible standard loop receives an eager-start hint so chunks can
-/// be queued before the request is sent. Task creation always goes through the loop,
-/// including wrappers that capture context or instrument tasks.
+/// A standard loop whose `create_task` passes extra keywords to `Task`, as on Python 3.14 and
+/// later 3.13 releases, receives an eager-start hint so chunks can be queued before the
+/// request is sent. Task creation always goes through the loop, including wrappers that
+/// capture context or instrument tasks.
 fn start<'py>(
     event_loop: &Bound<'py, PyAny>,
     coroutine: &Bound<'py, PyAny>,
@@ -179,29 +180,39 @@ fn start<'py>(
 fn eager(event_loop: &Bound<'_, PyAny>, create_task: &Bound<'_, PyAny>) -> bool {
     static BASE: PyOnceLock<Py<PyType>> = PyOnceLock::new();
     let py = event_loop.py();
-    if py.version_info() < (3, 14) {
+    if py.version_info() < (3, 12) {
         return false;
     }
     let standard = || -> PyResult<bool> {
         let base = BASE.import(py, "asyncio", "BaseEventLoop")?;
         let name = intern!(py, "create_task");
-        Ok(event_loop.is_instance(base)?
-            && event_loop
-                .get_type()
-                .getattr(name)?
-                .is(&base.getattr(name)?)
+        let method = base.getattr(name)?;
+        // Python 3.14 always passes extra keywords to `Task`, 3.12 never does, and 3.13 only
+        // in later releases; there only the unwrapped standard method shows whether it does.
+        let forwards = py.version_info() >= (3, 14)
+            || (method
+                .getattr(intern!(py, "__module__"))?
+                .eq("asyncio.base_events")?
+                && takes_keywords(&method)?);
+        Ok(forwards
+            && event_loop.is_instance(base)?
+            && event_loop.get_type().getattr(name)?.is(&method)
             && event_loop
                 .call_method0(intern!(py, "get_task_factory"))?
                 .is_none()
-            // inspect.CO_VARKEYWORDS: don't send a new keyword to an old-signature wrapper.
-            && create_task
-                .getattr(intern!(py, "__code__"))?
-                .getattr(intern!(py, "co_flags"))?
-                .extract::<u32>()?
-                & 0x08
-                != 0)
+            // Don't send a new keyword to an old-signature wrapper.
+            && takes_keywords(create_task)?)
     };
     standard().unwrap_or(false)
+}
+
+/// Whether the Python function `func` accepts `**kwargs` (`inspect.CO_VARKEYWORDS`).
+fn takes_keywords(func: &Bound<'_, PyAny>) -> PyResult<bool> {
+    let flags = func
+        .getattr(intern!(func.py(), "__code__"))?
+        .getattr(intern!(func.py(), "co_flags"))?
+        .extract::<u32>()?;
+    Ok(flags & 0x08 != 0)
 }
 
 /// The coroutine that forwards an async generator into its [`Sender`].

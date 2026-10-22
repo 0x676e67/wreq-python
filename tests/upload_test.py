@@ -1,7 +1,7 @@
 import asyncio
 import contextvars
 import gc
-import sys
+import inspect
 import threading
 
 import pytest
@@ -133,7 +133,10 @@ async def test_upload_task_creation_hooks(hook, keywords, monkeypatch):
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(sys.version_info < (3, 14), reason="loop eager_start needs Python 3.14")
+@pytest.mark.skipif(
+    inspect.getfullargspec(asyncio.BaseEventLoop.create_task).varkw is None,
+    reason="loop create_task does not pass eager_start",
+)
 async def test_upload_starts_eagerly_on_standard_loop():
     started = False
 
