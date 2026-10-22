@@ -77,7 +77,8 @@ async def test_upload_task_creation_hooks(hook, keywords, monkeypatch):
     created = []
 
     def tracked(coro, **kwargs):
-        if coro.__qualname__ == "forward":
+        # The loop also closes collected async generators here, which PyPy does late.
+        if getattr(coro, "__qualname__", None) == "forward":
             created.append(coro)
             task_context = contextvars.copy_context()
             task_context.run(context.set, "wrapped")
