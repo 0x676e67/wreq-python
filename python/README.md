@@ -10,7 +10,7 @@ This directory contains Python type hints (Type Stubs) files for the `wreq` pack
   - `cookie.py` - Cookie management
   - `dns.py` - DNS resolver options
   - `emulation.py` - Browser emulation
-  - `exceptions.py` - Exception types
+  - `exceptions.py` - Exception hierarchy; unlike the stubs, the runtime classes live here
   - `header.py` - HTTP header handling
   - `http1.py` - HTTP/1.x options
   - `http2.py` - HTTP/2 options

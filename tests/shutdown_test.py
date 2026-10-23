@@ -11,7 +11,7 @@ import asyncio
 import os
 import socket
 import sys
-import threading
+import time
 from types import FunctionType
 
 import wreq
@@ -23,19 +23,16 @@ listener.settimeout(5)
 url = f"http://127.0.0.1:{listener.getsockname()[1]}/"
 
 
-wait_lock = threading.Lock()
-wait_lock.acquire()
-
-
 class HoldTeardown:
     def __init__(self, peer, task):
         self.peer = peer
         self.task = task
 
-    def __del__(self, write=os.write, wait=wait_lock.acquire):
+    # Python 3.15 refuses lock waits during finalization, so sleep instead.
+    def __del__(self, write=os.write, sleep=time.sleep):
         self.peer.close()
         write(2, b"teardown: connection closed\\n")
-        wait(timeout=1)
+        sleep(1)
         write(2, b"teardown: wait complete\\n")
 
 

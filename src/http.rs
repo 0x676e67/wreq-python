@@ -1,4 +1,11 @@
-use pyo3::{class::basic::CompareOp, prelude::*, pyclass::PyClassGuardError};
+use pyo3::{
+    class::basic::CompareOp,
+    exceptions::PyValueError,
+    intern,
+    prelude::*,
+    pyclass::PyClassGuardError,
+    types::{PyBool, PyInt, PyType},
+};
 
 define_enum!(
     /// An HTTP version.
@@ -28,7 +35,7 @@ define_enum!(
 
 /// HTTP status code.
 #[derive(Clone, Copy)]
-#[pyclass(subclass, frozen, str)]
+#[pyclass(subclass, frozen, str, module = "wreq")]
 pub struct StatusCode(pub wreq::StatusCode);
 
 impl<'a, 'py> FromPyObject<'a, 'py> for StatusCode {
@@ -41,6 +48,24 @@ impl<'a, 'py> FromPyObject<'a, 'py> for StatusCode {
 
 #[pymethods]
 impl StatusCode {
+    /// Create a status code from an integer in 100-999.
+    #[new]
+    fn new(code: &Bound<'_, PyInt>) -> PyResult<Self> {
+        code.extract::<u16>()
+            .ok()
+            .and_then(|code| wreq::StatusCode::from_u16(code).ok())
+            .map(Self)
+            .ok_or_else(|| PyValueError::new_err(format!("invalid status code: {code}")))
+    }
+
+    fn __reduce__<'py>(
+        slf: &Bound<'py, Self>,
+    ) -> (Bound<'py, PyType>, (u16,), Option<Bound<'py, PyAny>>) {
+        // Instances of a Python subclass keep their attributes in `__dict__`.
+        let state = slf.getattr(intern!(slf.py(), "__dict__")).ok();
+        (slf.get_type(), (slf.get().as_int(),), state)
+    }
+
     /// Return the status code as an integer.
     pub const fn as_int(&self) -> u16 {
         self.0.as_u16()
@@ -71,20 +96,29 @@ impl StatusCode {
         self.0.is_server_error()
     }
 
-    /// Rich comparison with integers.
-    fn __richcmp__(&self, other: &Bound<PyAny>, op: CompareOp) -> PyResult<bool> {
-        // Try to extract an integer from other
-        let other_int: u16 = other.extract()?;
-        let self_int = self.as_int();
+    /// Compare with another status code or an integer.
+    fn __richcmp__(&self, other: &Bound<'_, PyAny>, op: CompareOp) -> Py<PyAny> {
+        let py = other.py();
+        let other = match other.extract::<StatusCode>() {
+            Ok(code) => code.as_int(),
+            Err(_) => match other
+                .cast::<PyInt>()
+                .ok()
+                .and_then(|code| code.extract::<u16>().ok())
+            {
+                Some(code) => code,
+                None => return py.NotImplemented(),
+            },
+        };
+        PyBool::new(py, op.matches(self.as_int().cmp(&other)))
+            .to_owned()
+            .into_any()
+            .unbind()
+    }
 
-        Ok(match op {
-            CompareOp::Lt => self_int < other_int,
-            CompareOp::Le => self_int <= other_int,
-            CompareOp::Eq => self_int == other_int,
-            CompareOp::Ne => self_int != other_int,
-            CompareOp::Gt => self_int > other_int,
-            CompareOp::Ge => self_int >= other_int,
-        })
+    // Equal to the integer of the same value, so it hashes like one.
+    fn __hash__(&self) -> u64 {
+        u64::from(self.as_int())
     }
 }
 

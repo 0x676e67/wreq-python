@@ -107,9 +107,9 @@ async def test_file_parts_open_when_the_request_is_built(tmp_path):
 
     # A missing file fails the request rather than building the form.
     form = Multipart(Part(name="f", value=tmp_path / "missing.txt"))
-    with pytest.raises(RuntimeError, match="IO error"):
+    with pytest.raises(FileNotFoundError):
         blocking.post(url, multipart=form)
-    with pytest.raises(RuntimeError, match="IO error"):
+    with pytest.raises(FileNotFoundError):
         await client.post(url, multipart=form)
 
     # A closed client rejects the request before building the form, so it never opens.
