@@ -339,3 +339,49 @@ async def test_entering_rejects_a_second_driver():
         for writer in writers:
             writer.close()
         await server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_short_bodies_keep_their_frames():
+    # A short body may be read with its head; data still arriving and a body cut short must
+    # read as before, on the event loop and on a blocking caller.
+    async def serve(reader, writer):
+        try:
+            request = await reader.readuntil(b"\r\n\r\n")
+            writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nhello")
+            await writer.drain()
+            if request.startswith(b"GET /delayed"):
+                await asyncio.sleep(0.05)
+                writer.write(b"world")
+                await writer.drain()
+        finally:
+            writer.close()
+
+    def read_blocking(url):
+        with wreq.blocking.Client(proxies=[]) as client:
+            chunks = []
+            with pytest.raises(wreq.exceptions.DecodingError):
+                with client.get(url).stream() as stream:
+                    chunks.extend(bytes(chunk) for chunk in stream)
+            return chunks
+
+    server = await asyncio.start_server(serve, "127.0.0.1", 0)
+    url = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}"
+    try:
+        async with wreq.Client(proxies=[]) as client:
+            async with (await client.get(f"{url}/delayed")).stream() as stream:
+                assert b"".join([bytes(chunk) async for chunk in stream]) == b"helloworld"
+
+            chunks = []
+            with pytest.raises(wreq.exceptions.DecodingError):
+                async with (await client.get(f"{url}/cut")).stream() as stream:
+                    async for chunk in stream:
+                        chunks.append(bytes(chunk))
+            assert chunks == [b"hello"]
+            with pytest.raises(wreq.exceptions.DecodingError):
+                await (await client.get(f"{url}/cut")).text()
+
+        assert await asyncio.to_thread(read_blocking, f"{url}/cut") == [b"hello"]
+    finally:
+        server.close()
+        await server.wait_closed()

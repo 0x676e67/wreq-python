@@ -107,6 +107,9 @@ reading its response body. `connect_timeout` limits connection establishment;
 `read_timeout` limits the wait for a read and resets after successful reads.
 Requests can override `timeout` and `read_timeout`.
 
+Waiting before the first response body read does not use up its `read_timeout`.
+An overall `timeout` still runs during that wait.
+
 ```python
 import asyncio
 from datetime import timedelta

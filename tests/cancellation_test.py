@@ -221,7 +221,7 @@ async def test_cancellation_after_rust_completion(operation):
 
         try:
             # Complete the Rust work without resuming its Python coroutine.
-            assert isinstance(waiter, asyncio.Future)
+            assert asyncio.isfuture(waiter)
             if operation == "request_error":
                 writer.write(b"invalid HTTP response\r\n\r\n")
                 writer.close()
@@ -284,7 +284,7 @@ async def test_pending_stream_cancellation(action):
         coroutine = anext(stream)
 
         if action == "close_coroutine":
-            assert isinstance(coroutine.send(None), asyncio.Future)
+            assert asyncio.isfuture(coroutine.send(None))
             coroutine.close()
         else:
             started = asyncio.Event()

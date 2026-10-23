@@ -11,7 +11,7 @@ use std::{
     },
 };
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use futures_util::FutureExt;
 use http_body::Body as _;
 use http_body_util::BodyExt;
@@ -22,7 +22,6 @@ use tokio::sync::{
 };
 use tokio_util::task::AbortOnDropHandle;
 
-use super::loop_polls;
 use crate::{
     buffer::PyBuffer,
     coroutine::{self, Coroutine},
@@ -38,6 +37,9 @@ pub enum Frame {
     Trailers(HeaderMap),
 }
 
+/// A body frame as read from the response.
+type RawFrame = wreq::Result<http_body::Frame<Bytes>>;
+
 /// A response stream yielding read-only memoryviews and any trailing headers.
 ///
 /// Sync and async iteration share [`Streamer::next`]; [`Iteration`] picks the ready frames
@@ -46,6 +48,8 @@ pub enum Frame {
 pub struct Streamer {
     reader: Arc<Reader>,
     runtime: Runtime,
+    /// Whether the event loop may poll the body: an HTTP/1 body, or one held in full.
+    loop_polls: bool,
 }
 
 /// Frames buffered between the read-ahead task and Python readers, which poll the
@@ -61,6 +65,8 @@ struct Reader {
 enum State {
     /// Unread, or read only by [`Streamer::ready_frame`] on the caller.
     Idle(Box<wreq::Response>),
+    /// A successfully prefetched body, taken once without polling a transport body.
+    Buffered(Option<Bytes>),
     /// Held by the read-ahead task, whose frames arrive on `rx`; dropping `_task` aborts it.
     /// Without a task, `rx` holds only a final error.
     Reading {
@@ -87,25 +93,47 @@ enum Iteration {
 // ===== impl Streamer =====
 
 impl Streamer {
-    /// Frames buffered ahead of Python. A frame holds at most one transport read, up to
-    /// 408 KiB on HTTP/1 by default, so the 8 queued frames plus the one being sent stay
-    /// under about 3.6 MiB.
+    /// Frames buffered ahead of Python. A frame holds one transport read, up to 408 KiB on
+    /// HTTP/1 by default, or data frames merged up to [`Self::MERGE_LIMIT`], so the 8 queued
+    /// frames plus the one being sent stay under about 3.6 MiB.
     const READ_AHEAD: usize = 8;
+
+    /// Data frames that already arrived are merged up to this size, so a body sent in small
+    /// frames, such as 16 KiB HTTP/2 DATA frames, reaches Python in fewer chunks without
+    /// waiting for more data.
+    const MERGE_LIMIT: usize = 256 * 1024;
+
+    /// Only frames smaller than this are merged; larger ones are sent without a copy.
+    const MERGE_FRAME: usize = 64 * 1024;
 
     /// Buffered frames returned before `__anext__` yields to the event loop once.
     const YIELD_EVERY: usize = 8;
 
     /// Create a new [`Streamer`] instance.
     #[inline]
-    pub fn new(resp: wreq::Response, runtime: Runtime) -> Streamer {
+    pub fn new(resp: wreq::Response, runtime: Runtime, loop_polls: bool) -> Streamer {
+        Self::with_state(State::Idle(Box::new(resp)), runtime, loop_polls)
+    }
+
+    /// A body already read to EOF, with no trailers or errors left to deliver.
+    pub fn buffered(bytes: Bytes, runtime: Runtime) -> Streamer {
+        Self::with_state(
+            State::Buffered((!bytes.is_empty()).then_some(bytes)),
+            runtime,
+            true,
+        )
+    }
+
+    fn with_state(state: State, runtime: Runtime, loop_polls: bool) -> Streamer {
         let reader = Reader {
-            state: Mutex::new(State::Idle(Box::new(resp))),
+            state: Mutex::new(state),
             arrived: Arc::new(Notify::new()),
             since_yield: AtomicUsize::new(0),
         };
         Streamer {
             reader: Arc::new(reader),
             runtime,
+            loop_polls,
         }
     }
 
@@ -133,8 +161,21 @@ impl Streamer {
     /// Send frames until the body ends, a frame fails or the reader is gone.
     async fn pump(mut resp: wreq::Response, tx: &mpsc::Sender<PyResult<Frame>>, arrived: &Notify) {
         let mut unannounced = false;
-        while let Some(frame) = burst(Self::next_frame(&mut resp), arrived, &mut unannounced).await
-        {
+        // A frame read past merged data, sent next; `Some(None)` is the end of the body.
+        let mut pending = None;
+        loop {
+            let frame = match pending.take() {
+                Some(frame) => frame,
+                None => burst(resp.frame(), arrived, &mut unannounced).await,
+            };
+            let Some(frame) = frame else {
+                break;
+            };
+            let (frame, next) = Self::merge(frame, &mut resp);
+            pending = next;
+            let Some(frame) = Self::convert(frame, &mut resp) else {
+                continue;
+            };
             let failed = frame.is_err();
             if burst(tx.send(frame), arrived, &mut unannounced)
                 .await
@@ -145,6 +186,52 @@ impl Streamer {
             }
             unannounced = true;
         }
+    }
+
+    /// Merge the data frames `resp` already holds into a data `frame`, up to
+    /// [`Self::MERGE_LIMIT`]. Returns the merged frame and the frame read past it, if any.
+    fn merge(frame: RawFrame, resp: &mut wreq::Response) -> (RawFrame, Option<Option<RawFrame>>) {
+        let first = match frame.map(http_body::Frame::into_data) {
+            Ok(Ok(data)) if data.len() < Self::MERGE_FRAME => data,
+            Ok(Ok(data)) => return (Ok(http_body::Frame::data(data)), None),
+            Ok(Err(frame)) => return (Ok(frame), None),
+            Err(err) => return (Err(err), None),
+        };
+        // Frames are gathered first and copied once into a buffer of their exact size, so a
+        // chunk holds no spare capacity; a single frame is sent without a copy.
+        let mut rest = Vec::new();
+        let mut len = first.len();
+        let next = loop {
+            if len >= Self::MERGE_LIMIT {
+                break None;
+            }
+            let more = match resp.frame().now_or_never() {
+                Some(Some(Ok(frame))) => match frame.into_data() {
+                    Ok(more) => more,
+                    Err(frame) => break Some(Some(Ok(frame))),
+                },
+                Some(other) => break Some(other),
+                None => break None,
+            };
+            // A large frame, or one that would pass the limit, starts the next chunk, so no
+            // chunk grows beyond the limit or a single frame.
+            if more.len() >= Self::MERGE_FRAME || len + more.len() > Self::MERGE_LIMIT {
+                break Some(Some(Ok(http_body::Frame::data(more))));
+            }
+            if !more.is_empty() {
+                len += more.len();
+                rest.push(more);
+            }
+        };
+        let data = if rest.is_empty() {
+            first
+        } else {
+            let mut buf = BytesMut::with_capacity(len);
+            buf.extend_from_slice(&first);
+            rest.iter().for_each(|frame| buf.extend_from_slice(frame));
+            buf.freeze()
+        };
+        (Ok(http_body::Frame::data(data)), next)
     }
 
     /// Read the next frame, skipping unknown kinds; `None` at the end of the body.
@@ -158,10 +245,7 @@ impl Streamer {
     }
 
     /// Convert a body frame, skipping unknown kinds.
-    fn convert(
-        frame: wreq::Result<http_body::Frame<Bytes>>,
-        resp: &mut wreq::Response,
-    ) -> Option<PyResult<Frame>> {
+    fn convert(frame: RawFrame, resp: &mut wreq::Response) -> Option<PyResult<Frame>> {
         match frame.map(|frame| frame.into_data()) {
             Ok(Ok(bytes)) => Some(Ok(Frame::Bytes(PyBuffer::from(bytes)))),
             Ok(Err(frame)) => frame
@@ -180,10 +264,18 @@ impl Streamer {
     /// of a short body never waits on another thread.
     fn ready_frame(&self, iteration: Iteration) -> Option<PyResult<Frame>> {
         let mut state = self.reader.lock();
+        if let State::Buffered(bytes) = &mut *state {
+            return Some(
+                bytes
+                    .take()
+                    .map(|bytes| Frame::Bytes(PyBuffer::from(bytes)))
+                    .ok_or_else(|| iteration.end().into()),
+            );
+        }
         let State::Idle(resp) = &mut *state else {
             return None;
         };
-        if !iteration.takes_ready(resp) {
+        if !iteration.takes_ready(resp, self.loop_polls) {
             return None;
         }
         let Some(frame) = self.runtime.poll_now(Self::next_frame(resp))? else {
@@ -394,13 +486,13 @@ impl Drop for NotifyOnDrop {
 // ===== impl Iteration =====
 
 impl Iteration {
-    /// Whether the caller takes a frame `resp` already holds. On the event loop only an HTTP/1
-    /// body of known length is read, whatever its size: taking a frame it holds is cheap,
-    /// while a decompressing body is not.
-    fn takes_ready(self, resp: &wreq::Response) -> bool {
+    /// Whether the caller takes a frame `resp` already holds. On the event loop only a body the
+    /// loop may poll and of known length is read, whatever its size: taking a frame it holds
+    /// is cheap, while a decompressing body is not.
+    fn takes_ready(self, resp: &wreq::Response, loop_polls: bool) -> bool {
         match self {
             Iteration::Sync => true,
-            Iteration::Async => loop_polls(resp.version()) && resp.size_hint().exact().is_some(),
+            Iteration::Async => loop_polls && resp.size_hint().exact().is_some(),
         }
     }
 

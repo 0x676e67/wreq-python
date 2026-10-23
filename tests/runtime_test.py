@@ -444,14 +444,15 @@ async def test_current_thread_skips_connections_closed_while_idle():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("scheduler", [Scheduler.WORK_STEALING, Scheduler.PER_WORKER])
 @pytest.mark.parametrize(
     ("blocking", "operation"),
     [(True, "get"), (False, "websocket"), (True, "websocket")],
 )
-async def test_client_close_cancels_requests(blocking, operation):
+async def test_client_close_cancels_requests(blocking, operation, scheduler):
     factory = wreq.blocking.Client if blocking else wreq.Client
     client = factory(
-        runtime=custom_runtime(Scheduler.PER_WORKER),
+        runtime=custom_runtime(scheduler),
         proxies=[],
         timeout=timedelta(seconds=10),
     )

@@ -1,7 +1,7 @@
 use std::{
     future::Future,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
-    pin::{Pin, pin},
+    pin::Pin,
     time::Duration,
 };
 
@@ -200,9 +200,15 @@ pub async fn execute_request<U>(
 where
     U: AsRef<str>,
 {
-    let future = pin!(async {
+    // Boxed so this future stays small: it is moved into a task on the event loop, while
+    // the send state below is large and only allocated once the task first runs.
+    let mut future = Box::pin(async {
         // Create the request builder.
         let mut builder = client.inner.request(method.into_ffi(), url.as_ref());
+        let prefetch_body = !client.has_read_timeout
+            && request
+                .as_ref()
+                .is_none_or(|request| request.read_timeout.is_none());
 
         if let Some(mut request) = request {
             // Emulation options.
@@ -314,7 +320,7 @@ where
         }
 
         // Send request.
-        builder
+        let response = builder
             .send()
             .await
             .and_then(|r| {
@@ -324,12 +330,11 @@ where
                     Ok(r)
                 }
             })
-            .map(|response| Response::new(response, client.runtime.clone()))
-            .map_err(Error::Library)
-            .map_err(Into::into)
+            .map_err(Error::Library)?;
+        Ok(Response::new(response, client.runtime.clone(), prefetch_body).await)
     });
 
-    until_closed(&client.cancel, future).await
+    until_closed(&client.cancel, future.as_mut()).await
 }
 
 /// Like [`execute_request`], opening a WebSocket.
@@ -341,7 +346,8 @@ pub async fn execute_websocket_request<U>(
 where
     U: AsRef<str>,
 {
-    let future = pin!(async {
+    // Boxed for the same reason as in `execute_request`.
+    let mut future = Box::pin(async {
         // Create the WebSocket builder.
         let mut builder = client.inner.websocket(url.as_ref());
 
@@ -463,7 +469,7 @@ where
             .map_err(Into::into)
     });
 
-    until_closed(&client.cancel, future).await
+    until_closed(&client.cancel, future.as_mut()).await
 }
 
 /// Run `future` unless the client is closed first; a closed client never polls it. Taking

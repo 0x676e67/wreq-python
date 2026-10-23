@@ -1,10 +1,11 @@
 //! The Tokio runtime behind clients, and how calls wait on it.
 //!
-//! Requests, and async reads that must wait, run as tasks on the client's selected worker
-//! ([`Runtime::block_on_task`], [`Runtime::run_task`]); blocking reads are polled by the
-//! caller ([`Runtime::block_on`], [`Runtime::block_on_eager`]). These blocking calls release
-//! the GIL while they wait; on a current-thread runtime they drive it and run the request
-//! themselves instead of spawning it.
+//! Async requests and reads that must wait run as tasks on the client's selected worker
+//! ([`Runtime::run_task`]). Blocking requests run on the caller with work stealing, or on
+//! the selected worker with per-worker scheduling ([`Runtime::block_on_task`]); blocking
+//! reads are polled by the caller ([`Runtime::block_on`], [`Runtime::block_on_eager`]).
+//! Blocking calls release the GIL while waiting. A current-thread runtime also drives its
+//! connection tasks and IO on the caller, with no background IO workers.
 //!
 //! Every other runtime operation goes through [`Runtime`] too; `clippy.toml` rejects direct
 //! Tokio handles, spawns and yields elsewhere.
@@ -127,8 +128,9 @@ impl Runtime {
         }
     }
 
-    /// Run `future` as a task on the selected worker while the caller waits detached. A
-    /// current-thread runtime's only worker is its caller, which drives the future itself.
+    /// Run a request detached from Python: on the caller with work stealing, or on the
+    /// selected worker with per-worker scheduling. A current-thread runtime also drives
+    /// its connection tasks and IO on the caller.
     pub fn block_on_task<F, T>(&self, py: Python<'_>, future: F) -> PyResult<T>
     where
         F: Future<Output = PyResult<T>> + Send + 'static,
@@ -173,7 +175,7 @@ impl Runtime {
     }
 
     /// [`block_on_task`](Self::block_on_task) for a caller already detached; refused before
-    /// the spawn, so a nested request starts nothing.
+    /// polling or spawning, so a nested request starts nothing.
     fn wait_task<F, T>(&self, future: F) -> PyResult<T>
     where
         F: Future<Output = PyResult<T>> + Send + 'static,
@@ -189,6 +191,7 @@ impl Runtime {
                 task::yield_now().await;
                 future.await
             }),
+            Some(Inner::Workers(PingoraRuntime::Steal { .. })) => self.handle.block_on(future),
             _ => self
                 .handle
                 .block_on(self.handle.spawn(future))
@@ -436,6 +439,35 @@ fn current() -> Handle {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn work_stealing_polls_requests_on_callers_and_keeps_background_workers() {
+        let runtime = Runtime::from(RuntimeBuilder::new(2, "wreq-caller").build());
+        let caller = thread::current().id();
+        let (release, released) = tokio::sync::oneshot::channel();
+        let (completed, completion) = std::sync::mpsc::channel();
+        let child = runtime
+            .wait_task(async move {
+                assert!(!Runtime::driving());
+                assert_eq!(thread::current().id(), caller);
+                task::yield_now().await;
+                assert_eq!(thread::current().id(), caller);
+                Ok(task::spawn(async move {
+                    released.await.unwrap();
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                    completed.send(thread::current().id()).unwrap();
+                }))
+            })
+            .unwrap();
+        // Only release the child after the blocking call returns. Its timer must keep
+        // progressing without the caller entering the runtime again.
+        release.send(()).unwrap();
+        assert_ne!(
+            completion.recv_timeout(Duration::from_secs(5)).unwrap(),
+            caller,
+        );
+        runtime.handle.block_on(child).unwrap();
+    }
 
     #[test]
     fn fixed_worker() {

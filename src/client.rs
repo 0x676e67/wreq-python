@@ -219,6 +219,8 @@ pub struct Client {
     cancel: CancellationToken,
     /// Turn error statuses into exceptions for every request.
     raise_for_status: bool,
+    /// Prefetching must not start a configured read timeout before the caller reads.
+    has_read_timeout: bool,
 
     /// Get the cookie jar of the client.
     #[pyo3(get)]
@@ -284,6 +286,7 @@ impl Default for Client {
             runtime: runtime.clone(),
             cancel: CancellationToken::new(),
             raise_for_status: false,
+            has_read_timeout: false,
             cookie_jar: None,
         }
     }
@@ -297,6 +300,9 @@ impl Client {
                 Some(runtime) => runtime.select()?,
                 None => runtime::Runtime::shared().clone(),
             };
+            let has_read_timeout = kwds
+                .as_ref()
+                .is_some_and(|config| config.read_timeout.is_some());
             // Create the client builder.
             let mut builder = wreq::Client::builder();
             let mut cookie_jar: Option<Jar> = None;
@@ -510,6 +516,7 @@ impl Client {
                     cancel: CancellationToken::new(),
                     cookie_jar,
                     raise_for_status,
+                    has_read_timeout,
                 })
                 .map_err(Error::Library)
                 .map_err(Into::into)

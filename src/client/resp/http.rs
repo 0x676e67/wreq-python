@@ -13,7 +13,13 @@ use http_body_util::{BodyExt, Collected, combinators::Collect};
 use pyo3::{prelude::*, pybacked::PyBackedStr, sync::PyOnceLock};
 use wreq::Uri;
 
-use super::{READ_ATTACHED, ext::ResponseExt, loop_limit, stream::Streamer};
+use super::{
+    READ_ATTACHED,
+    ext::ResponseExt,
+    loop_polls,
+    prefetch::{Prefetch, prefetch},
+    stream::Streamer,
+};
 use crate::{
     buffer::PyBuffer,
     client::{SocketAddr, body::Json},
@@ -44,6 +50,8 @@ pub struct Response {
     runtime: Runtime,
     /// Captured at receipt; `None` for a body without a known length.
     content_length: Option<u64>,
+    /// Whether the event loop may poll the unread body: an HTTP/1 body, or one held in full.
+    loop_polls: bool,
     remote_addr: Option<SocketAddr>,
     local_addr: Option<SocketAddr>,
 }
@@ -52,6 +60,8 @@ pub struct Response {
 enum Body {
     /// Unread; taken by the first read or `stream()`.
     Unread(wreq::Body),
+    /// Read with the head, but not yet consumed by a caller.
+    Buffered(Bytes),
     /// Taken by a read in flight or by `stream()`.
     Taken,
     /// Read in full and shared by later `text`, `json` and `bytes` calls.
@@ -81,22 +91,38 @@ struct RecycleGuard(Option<Parts>);
 // ===== impl Response =====
 
 impl Response {
-    /// Create a new [`Response`] instance.
-    pub fn new(response: wreq::Response, runtime: Runtime) -> Self {
+    /// Create a response, prefetching only when polling cannot start a read timeout.
+    pub async fn new(response: wreq::Response, runtime: Runtime, prefetch_body: bool) -> Self {
         let uri = response.uri().clone();
         let content_length = response.content_length();
         let remote_addr = response.remote_addr().map(SocketAddr);
         let local_addr = response.local_addr().map(SocketAddr);
         let (parts, body) = HttpResponse::from(response).into_parts();
+        let (body, held) = if prefetch_body {
+            match prefetch(body, content_length).await {
+                Prefetch::Complete(bytes) => (Body::Buffered(bytes), true),
+                Prefetch::Remaining { body, held } => (Body::Unread(body), held),
+            }
+        } else {
+            (Body::Unread(body), false)
+        };
+        let loop_polls = held || loop_polls(parts.version);
         Response {
             uri,
             parts,
-            body: Arc::new(Mutex::new(Body::Unread(body))),
+            body: Arc::new(Mutex::new(body)),
             runtime,
             content_length,
+            loop_polls,
             remote_addr,
             local_addr,
         }
+    }
+
+    /// The largest unread body the event loop collects, `None` if it must not poll it.
+    #[inline]
+    fn loop_limit(&self, limit: u64) -> Option<u64> {
+        self.loop_polls.then_some(limit)
     }
 
     #[inline]
@@ -111,15 +137,14 @@ impl Response {
         wreq::Response::from(response)
     }
 
-    /// Take the body for reading. Cached bytes are shared at once, and a body of known
-    /// length up to `limit` that is already buffered is read now on the calling thread, none
-    /// without a `limit`; overlapping reads and `stream()` fail with [`Error::Memory`] while
-    /// a read runs.
+    /// Take the body for reading. Prefetched and cached bytes are shared at once; another
+    /// body of known length up to `limit` is polled on the calling thread. Overlapping reads
+    /// and `stream()` fail with [`Error::Memory`] while a read runs.
     fn take_bytes(&self, limit: Option<u64>) -> Result<BodyRead, Error> {
         let mut slot = self.slot();
         let body = match mem::replace(&mut *slot, Body::Taken) {
             Body::Unread(body) => body,
-            Body::Cached(bytes) => {
+            Body::Buffered(bytes) | Body::Cached(bytes) => {
                 *slot = Body::Cached(bytes.clone());
                 return Ok(BodyRead::Ready(bytes));
             }
@@ -218,7 +243,7 @@ impl Response {
         let slf = slf.unbind();
         coroutine::local(py, qualname, async move {
             let this = slf.get();
-            let (read, inline) = this.read_body(loop_limit(this.parts.version, limit), read)?;
+            let (read, inline) = this.read_body(this.loop_limit(limit), read)?;
             if inline {
                 read.await
             } else {
@@ -353,6 +378,10 @@ impl Response {
         let mut slot = self.slot();
         let body = match mem::replace(&mut *slot, Body::Taken) {
             Body::Unread(body) => body,
+            Body::Buffered(bytes) => {
+                drop(slot);
+                return Ok(Streamer::buffered(bytes, self.runtime.clone()));
+            }
             other => {
                 *slot = other;
                 return Err(Error::Memory.into());
@@ -362,6 +391,7 @@ impl Response {
         Ok(Streamer::new(
             self.build_response(body),
             self.runtime.clone(),
+            self.loop_polls,
         ))
     }
 
@@ -378,7 +408,7 @@ impl Response {
 
     /// Get the JSON content of the response.
     pub fn json(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
-        // Buffered HTTP/1 JSON up to 8 KiB is parsed on the event loop; see `loop_limit`.
+        // Buffered JSON up to 8 KiB is parsed on the event loop; see `loop_limit`.
         Self::read(slf, "Response.json", 8 * 1024, ResponseExt::json::<Json>)
     }
 
@@ -388,7 +418,7 @@ impl Response {
         let slf = slf.unbind();
         coroutine::local(py, "Response.bytes", async move {
             let this = slf.get();
-            match this.take_bytes(loop_limit(this.parts.version, READ_ATTACHED))? {
+            match this.take_bytes(this.loop_limit(READ_ATTACHED))? {
                 BodyRead::Ready(bytes) => Ok(PyBuffer::from(bytes)),
                 BodyRead::Pending(collect) => {
                     let read = this
