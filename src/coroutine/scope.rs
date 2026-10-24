@@ -207,7 +207,7 @@ impl Coroutine {
 impl Coroutine {
     /// Enter by awaiting the coroutine itself, which also awaits the result's `__aenter__`.
     fn __aenter__(mut slf: PyRefMut<'_, Self>) -> PyResult<PyRefMut<'_, Self>> {
-        let pending = slf.future().is_some();
+        let pending = slf.is_pending();
         match slf.scope {
             Scope::Unsupported => Err(PyTypeError::new_err(
                 "coroutine does not support the asynchronous context manager protocol",

@@ -29,6 +29,20 @@ where
         .transpose()
 }
 
+/// Take one exact-string keyword without invoking key or value callbacks.
+pub(crate) fn single_keyword<'py>(
+    ob: &Bound<'py, PyAny>,
+) -> Option<(Bound<'py, PyString>, Bound<'py, PyAny>)> {
+    let dict = ob.cast_exact::<PyDict>().ok()?;
+    pyo3::sync::critical_section::with_critical_section(dict.as_any(), || {
+        if dict.len() != 1 {
+            return None;
+        }
+        let (key, value) = dict.iter().next()?;
+        Some((key.cast_into_exact::<PyString>().ok()?, value))
+    })
+}
+
 /// Look up an optional keyword; a dict answers a missing key without raising KeyError.
 pub(crate) fn lookup<'py>(
     ob: &Bound<'py, PyAny>,
@@ -60,6 +74,22 @@ derive_deftly::define_derive_deftly! {
 
         fn extract(ob: pyo3::Borrowed<'__extract_a, '__extract_py, pyo3::PyAny>) -> pyo3::PyResult<Self> {
             use pyo3::prelude::*;
+            ${if tmeta(single_keyword) {
+                if let Some((key, value)) = $crate::macros::single_keyword(&ob) {
+                    if let Ok(name) = key.to_str() {
+                        match name {
+                            ${for fields {
+                                ${concat $fname} => {
+                                    let mut params = Self::default();
+                                    params.$fname = value.extract()?;
+                                    return Ok(params);
+                                }
+                            }}
+                            _ => {}
+                        }
+                    }
+                }
+            }}
             ${if tmeta(deny_unknown) {
                 let _ = $crate::macros::reject_unknown_kwargs(
                     ob.cast::<pyo3::types::PyDict>().ok(),

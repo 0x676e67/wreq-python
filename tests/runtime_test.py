@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import gc
 import hashlib
 import threading
 import time
@@ -143,6 +144,25 @@ async def test_response_and_stream_keep_runtime_alive(scheduler):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("scheduler", [Scheduler.PER_WORKER, Scheduler.WORK_STEALING])
+async def test_pending_request_keeps_runtime_alive(scheduler):
+    runtime = custom_runtime(scheduler)
+    async with local_server() as (url, connections):
+        client = wreq.Client(runtime=runtime, proxies=[])
+        task = asyncio.create_task(client.get(url))
+        _, writer = await asyncio.wait_for(connections.get(), 5)
+        # Only the pending request now owns the runtime.
+        del client, runtime
+        gc.collect()
+        writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nbody")
+        await writer.drain()
+        response = await asyncio.wait_for(task, 5)
+        del task
+        assert await response.bytes() == b"body"
+        del response
+
+
+@pytest.mark.asyncio
 async def test_shared_runtime_cancellation_and_upload():
     runtime = Runtime(scheduler=Scheduler.PER_WORKER, workers=2, max_blocking_threads=2)
     async with local_server() as (url, connections):
@@ -243,7 +263,8 @@ async def run_blocking(func, *args, timeout=5):
 @asynccontextmanager
 async def path_server():
     """Answer each request with its path, sending the body after the head so reading it
-    must drive the runtime. `/hold` waits for `release`; `arrived` records paths."""
+    must drive the runtime, except `/buffered`, which can be prefetched. `/hold` waits for
+    `release`; `arrived` records paths."""
     arrived, release, uploads, writers = asyncio.Queue(), asyncio.Event(), [], []
 
     async def accept(reader, writer):
@@ -260,8 +281,9 @@ async def path_server():
                 b"HTTP/1.1 200 OK\r\nConnection: close\r\n"
                 b"Content-Length: %d\r\n\r\n" % len(path)
             )
-            await writer.drain()
-            await asyncio.sleep(0.05)
+            if path != b"/buffered":
+                await writer.drain()
+                await asyncio.sleep(0.05)
             writer.write(path)
             await writer.drain()
         except (asyncio.IncompleteReadError, ConnectionError, ValueError):
@@ -307,6 +329,9 @@ async def test_current_thread_runtime():
         caller, readers = threading.get_ident(), []
         pending = client.get(url + "/pending")
         streamed = client.get(url + "/streamed").stream()
+        buffered = client.get(url + "/buffered").stream()
+        drained = client.get(url + "/buffered").stream()
+        assert b"".join(drained) == b"/buffered"
 
         def chunks():
             # Read on the thread driving the runtime, which refuses blocking calls
@@ -316,8 +341,10 @@ async def test_current_thread_runtime():
             for read in (lambda: fetch("/nested"), pending.text, pending.bytes):
                 with pytest.raises(RuntimeError, match="CURRENT_THREAD"):
                     read()
-            with pytest.raises(RuntimeError, match="CURRENT_THREAD"):
-                next(streamed)
+            # Refused before a ready frame or the end of a drained body is returned.
+            for stream in (streamed, buffered, drained):
+                with pytest.raises(RuntimeError, match="CURRENT_THREAD"):
+                    next(stream)
             yield b" upload"
 
         with client.post(url + "/upload", body=chunks()) as response:
@@ -331,7 +358,13 @@ async def test_current_thread_runtime():
         # itself.
         with pytest.raises(Interrupt):
             upload_interrupted()
-        return readers == [caller], uploaded, pending.text(), b"".join(streamed)
+        return (
+            readers == [caller],
+            uploaded,
+            pending.text(),
+            b"".join(streamed),
+            b"".join(buffered),
+        )
 
     try:
         async with path_server() as (url, arrived, release, uploads):
@@ -340,6 +373,7 @@ async def test_current_thread_runtime():
                 "/upload",
                 "/pending",
                 b"/streamed",
+                b"/buffered",
             )
             assert uploads == [b"sync upload"]
             seen = []
@@ -447,7 +481,7 @@ async def test_current_thread_skips_connections_closed_while_idle():
 @pytest.mark.parametrize("scheduler", [Scheduler.WORK_STEALING, Scheduler.PER_WORKER])
 @pytest.mark.parametrize(
     ("blocking", "operation"),
-    [(True, "get"), (False, "websocket"), (True, "websocket")],
+    [(False, "get"), (True, "get"), (False, "websocket"), (True, "websocket")],
 )
 async def test_client_close_cancels_requests(blocking, operation, scheduler):
     factory = wreq.blocking.Client if blocking else wreq.Client

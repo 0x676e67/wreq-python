@@ -2,18 +2,24 @@ use std::{
     future::Future,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     pin::Pin,
+    sync::Arc,
     time::Duration,
 };
 
 use derive_deftly::Deftly;
 use futures_util::TryFutureExt;
 use http::header::COOKIE;
-use pyo3::{PyResult, exceptions::asyncio::CancelledError, pybacked::PyBackedStr};
+use pyo3::{
+    Borrowed, FromPyObject, PyAny, PyResult,
+    exceptions::asyncio::CancelledError,
+    pybacked::PyBackedStr,
+    types::{PyAnyMethods, PyStringMethods},
+};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
     client::{
-        Client,
+        ClientInner,
         body::{Body, Form, Json, multipart::Multipart},
         query::Query,
         resp::{Response, WebSocket},
@@ -28,12 +34,19 @@ use crate::{
     redirect,
 };
 
-/// The parameters for a request.
-#[derive(Default, Deftly)]
-#[derive_deftly(ExtractOptions)]
-#[deftly(deny_unknown)]
+/// Extracted request parameters. A lone raw body needs no full options object.
+#[derive(Default)]
 #[non_exhaustive]
 pub struct Request {
+    body: Option<Body>,
+    options: Option<Box<Options>>,
+}
+
+/// Full request options, used for combinations and non-body parameters.
+#[derive(Default, Deftly)]
+#[derive_deftly(ExtractOptions)]
+#[deftly(deny_unknown, single_keyword)]
+struct Options {
     /// The JSON body to use for the request.
     json: Option<Json>,
 
@@ -115,6 +128,35 @@ pub struct Request {
     multipart: Option<Multipart>,
 }
 
+impl Request {
+    pub(crate) const FIELDS: &'static [&'static str] = Options::FIELDS;
+
+    fn read_timeout(&self) -> Option<Duration> {
+        self.options
+            .as_ref()
+            .and_then(|options| options.read_timeout)
+    }
+}
+
+impl FromPyObject<'_, '_> for Request {
+    type Error = pyo3::PyErr;
+
+    fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
+        if let Some((key, value)) = crate::macros::single_keyword(&ob)
+            && key.to_str().is_ok_and(|name| name == "body")
+        {
+            return value.extract().map(|body| Self {
+                body,
+                options: None,
+            });
+        }
+        Options::extract(ob).map(|options| Self {
+            body: None,
+            options: Some(Box::new(options)),
+        })
+    }
+}
+
 /// The parameters for a WebSocket request.
 #[derive(Default, Deftly)]
 #[derive_deftly(ExtractOptions)]
@@ -192,7 +234,7 @@ pub struct WebSocketRequest {
 /// Build and send a request with `client`, failing with `CancelledError` once the client is
 /// closed. Callers run it on the client's runtime.
 pub async fn execute_request<U>(
-    client: Client,
+    client: Arc<ClientInner>,
     method: Method,
     url: U,
     request: Option<Request>,
@@ -208,115 +250,120 @@ where
         let prefetch_body = !client.has_read_timeout
             && request
                 .as_ref()
-                .is_none_or(|request| request.read_timeout.is_none());
+                .is_none_or(|request| request.read_timeout().is_none());
 
-        if let Some(mut request) = request {
-            // Emulation options.
-            apply_option!(set_if_some, builder, request.emulation, emulation);
-
-            // Version options.
-            apply_option!(
-                set_if_some_map,
-                builder,
-                request.version,
-                version,
-                Version::into_ffi
-            );
-
-            // Timeout options.
-            apply_option!(set_if_some, builder, request.timeout, timeout);
-            apply_option!(set_if_some, builder, request.read_timeout, read_timeout);
-
-            // Network options.
-            apply_option!(set_if_some_inner, builder, request.proxy, proxy);
-            apply_option!(set_if_some, builder, request.local_address, local_address);
-            apply_option!(
-                set_if_some_tuple_inner,
-                builder,
-                request.local_addresses,
-                local_addresses
-            );
-
-            #[cfg(any(
-                target_os = "android",
-                target_os = "fuchsia",
-                target_os = "illumos",
-                target_os = "ios",
-                target_os = "linux",
-                target_os = "macos",
-                target_os = "solaris",
-                target_os = "tvos",
-                target_os = "visionos",
-                target_os = "watchos",
-            ))]
-            apply_option!(set_if_some, builder, request.interface, interface);
-
-            // Headers options.
-            apply_option!(set_if_some_inner, builder, request.headers, headers);
-            apply_option!(
-                set_if_some_inner,
-                builder,
-                request.orig_headers,
-                orig_headers
-            );
-            apply_option!(
-                set_if_some,
-                builder,
-                request.default_headers,
-                default_headers
-            );
-
-            // Cookies options.
-            apply_option!(
-                set_if_some_iter_inner_with_key,
-                builder,
-                request.cookies,
-                header,
-                COOKIE
-            );
-            apply_option!(
-                set_if_some_inner,
-                builder,
-                request.cookie_provider,
-                cookie_provider
-            );
-
-            // Authentication options.
-            apply_option!(
-                set_if_some_map_ref,
-                builder,
-                request.auth,
-                auth,
-                AsRef::<str>::as_ref
-            );
-            apply_option!(set_if_some, builder, request.bearer_auth, bearer_auth);
-            apply_option!(set_if_some_tuple, builder, request.basic_auth, basic_auth);
-
-            // Allow redirects options.
-            apply_option!(set_if_some_inner, builder, request.redirect, redirect);
-
-            // Compression options.
-            apply_option!(set_if_some, builder, request.gzip, gzip);
-            apply_option!(set_if_some, builder, request.brotli, brotli);
-            apply_option!(set_if_some, builder, request.deflate, deflate);
-            apply_option!(set_if_some, builder, request.zstd, zstd);
-
-            // Query options.
-            apply_option!(set_if_some_ref, builder, request.query, query);
-
-            // Body options.
-            apply_option!(set_if_some_ref, builder, request.form, form);
-            apply_option!(set_if_some_ref, builder, request.json, json);
-            if let Some(multipart) = request.multipart {
-                builder = builder.multipart(multipart.into_form().await?);
+        if let Some(request) = request {
+            if let Some(body) = request.body {
+                builder = builder.body(wreq::Body::try_from(body)?);
             }
-            apply_option!(
-                set_if_some_map_try,
-                builder,
-                request.body,
-                body,
-                wreq::Body::try_from
-            );
+            if let Some(mut request) = request.options {
+                // Emulation options.
+                apply_option!(set_if_some, builder, request.emulation, emulation);
+
+                // Version options.
+                apply_option!(
+                    set_if_some_map,
+                    builder,
+                    request.version,
+                    version,
+                    Version::into_ffi
+                );
+
+                // Timeout options.
+                apply_option!(set_if_some, builder, request.timeout, timeout);
+                apply_option!(set_if_some, builder, request.read_timeout, read_timeout);
+
+                // Network options.
+                apply_option!(set_if_some_inner, builder, request.proxy, proxy);
+                apply_option!(set_if_some, builder, request.local_address, local_address);
+                apply_option!(
+                    set_if_some_tuple_inner,
+                    builder,
+                    request.local_addresses,
+                    local_addresses
+                );
+
+                #[cfg(any(
+                    target_os = "android",
+                    target_os = "fuchsia",
+                    target_os = "illumos",
+                    target_os = "ios",
+                    target_os = "linux",
+                    target_os = "macos",
+                    target_os = "solaris",
+                    target_os = "tvos",
+                    target_os = "visionos",
+                    target_os = "watchos",
+                ))]
+                apply_option!(set_if_some, builder, request.interface, interface);
+
+                // Headers options.
+                apply_option!(set_if_some_inner, builder, request.headers, headers);
+                apply_option!(
+                    set_if_some_inner,
+                    builder,
+                    request.orig_headers,
+                    orig_headers
+                );
+                apply_option!(
+                    set_if_some,
+                    builder,
+                    request.default_headers,
+                    default_headers
+                );
+
+                // Cookies options.
+                apply_option!(
+                    set_if_some_iter_inner_with_key,
+                    builder,
+                    request.cookies,
+                    header,
+                    COOKIE
+                );
+                apply_option!(
+                    set_if_some_inner,
+                    builder,
+                    request.cookie_provider,
+                    cookie_provider
+                );
+
+                // Authentication options.
+                apply_option!(
+                    set_if_some_map_ref,
+                    builder,
+                    request.auth,
+                    auth,
+                    AsRef::<str>::as_ref
+                );
+                apply_option!(set_if_some, builder, request.bearer_auth, bearer_auth);
+                apply_option!(set_if_some_tuple, builder, request.basic_auth, basic_auth);
+
+                // Allow redirects options.
+                apply_option!(set_if_some_inner, builder, request.redirect, redirect);
+
+                // Compression options.
+                apply_option!(set_if_some, builder, request.gzip, gzip);
+                apply_option!(set_if_some, builder, request.brotli, brotli);
+                apply_option!(set_if_some, builder, request.deflate, deflate);
+                apply_option!(set_if_some, builder, request.zstd, zstd);
+
+                // Query options.
+                apply_option!(set_if_some_ref, builder, request.query, query);
+
+                // Body options.
+                apply_option!(set_if_some_ref, builder, request.form, form);
+                apply_option!(set_if_some_ref, builder, request.json, json);
+                if let Some(multipart) = request.multipart {
+                    builder = builder.multipart(multipart.into_form().await?);
+                }
+                apply_option!(
+                    set_if_some_map_try,
+                    builder,
+                    request.body,
+                    body,
+                    wreq::Body::try_from
+                );
+            }
         }
 
         // Send request.
@@ -339,7 +386,7 @@ where
 
 /// Like [`execute_request`], opening a WebSocket.
 pub async fn execute_websocket_request<U>(
-    client: Client,
+    client: Arc<ClientInner>,
     url: U,
     request: Option<WebSocketRequest>,
 ) -> PyResult<WebSocket>

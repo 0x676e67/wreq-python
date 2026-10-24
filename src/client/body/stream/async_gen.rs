@@ -3,7 +3,7 @@
 use std::{
     ffi::CStr,
     pin::Pin,
-    sync::Mutex,
+    sync::{Mutex, OnceLock},
     task::{Context, Poll, ready},
 };
 
@@ -179,8 +179,13 @@ fn start<'py>(
 /// factories keep their usual arguments; the actual loop method still controls scheduling.
 fn eager(event_loop: &Bound<'_, PyAny>, create_task: &Bound<'_, PyAny>) -> bool {
     static BASE: PyOnceLock<Py<PyType>> = PyOnceLock::new();
+    static VERSION: OnceLock<(bool, bool)> = OnceLock::new();
     let py = event_loop.py();
-    if py.version_info() < (3, 12) {
+    let (supported, forwards_keywords) = *VERSION.get_or_init(|| {
+        let version = py.version_info();
+        (version >= (3, 12), version >= (3, 14))
+    });
+    if !supported {
         return false;
     }
     let standard = || -> PyResult<bool> {
@@ -189,7 +194,7 @@ fn eager(event_loop: &Bound<'_, PyAny>, create_task: &Bound<'_, PyAny>) -> bool 
         let method = base.getattr(name)?;
         // Python 3.14 always passes extra keywords to `Task`, 3.12 never does, and 3.13 only
         // in later releases; there only the unwrapped standard method shows whether it does.
-        let forwards = py.version_info() >= (3, 14)
+        let forwards = forwards_keywords
             || (method
                 .getattr(intern!(py, "__module__"))?
                 .eq("asyncio.base_events")?

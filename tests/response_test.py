@@ -1,6 +1,8 @@
 import asyncio
+import gc
 import json
 import socket
+import sys
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -282,6 +284,66 @@ async def test_empty_body_and_unit_results():
 
 
 @pytest.mark.asyncio
+async def test_ready_awaits_finish_on_first_step_and_stay_lazy():
+    payload = b'{"ready": 1}'
+    head = b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: %d\r\n\r\n"
+    # Only CPython's GC sees what an extension object holds.
+    cpython = sys.implementation.name == "cpython"
+    async with local_server() as (url, connections), wreq.Client(proxies=[]) as client:
+
+        async def get():
+            task = asyncio.create_task(client.get(url))
+            _, writer = await asyncio.wait_for(connections.get(), 5)
+            writer.write(head % len(payload) + payload)
+            return await asyncio.wait_for(task, 5)
+
+        def finish(coroutine):
+            with pytest.raises(StopIteration) as stop:
+                coroutine.send(None)
+            with pytest.raises(RuntimeError, match="already awaited"):
+                coroutine.send(None)
+            return stop.value.value
+
+        response = await get()
+        # Nothing runs before the first step: an unstarted close or exit leaves the body
+        # readable.
+        response.close().close()
+        response.__aexit__(None, None, None).close()
+        # A buffered body finishes on the first step.
+        assert bytes(finish(response.bytes())) == payload
+        assert finish(response.json()) == {"ready": 1}
+        assert finish(response.text()) == payload.decode()
+        assert finish(response.text(encoding="utf-8")) == payload.decode()
+        assert finish(response.__aenter__()) is response
+        assert finish(response.__aexit__(None, None, None)) is None
+        with pytest.raises(RuntimeError):
+            await response.bytes()
+
+        # Nor does an unstarted read take the body: a read caches it, and a cached body
+        # cannot be streamed. Until it ends, the read holds the response.
+        response = await get()
+        read = response.bytes()
+        if cpython:
+            assert response in gc.get_referents(read)
+        with pytest.raises(ValueError):
+            read.throw(ValueError("unread"))
+        if cpython:
+            assert response not in gc.get_referents(read)
+        response.json().close()
+        response.text().close()
+        streamer = response.stream()
+        unread = streamer.__anext__()
+        if cpython:
+            assert streamer in gc.get_referents(unread)
+        unread.close()
+        streamer.__aexit__(None, None, None).close()
+        assert bytes(finish(streamer.__anext__())) == payload
+        with pytest.raises(StopAsyncIteration):
+            streamer.__anext__().send(None)
+        assert finish(streamer.__aexit__(None, None, None)) is None
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("blocking", [False, True], ids=["async", "blocking"])
 async def test_prefetched_stream_keeps_lazy_reads_and_owned_views(blocking):
     payload = b"buffered" * 128
@@ -292,6 +354,11 @@ async def test_prefetched_stream_keeps_lazy_reads_and_owned_views(blocking):
             response = client.get(url)
             with response.stream() as stream:
                 views = list(stream)
+                # Every later read reports the end the same way.
+                for _ in range(2):
+                    with pytest.raises(StopIteration) as stop:
+                        next(stream)
+                    assert stop.value.args == ("The iterator is exhausted",)
             with pytest.raises(RuntimeError):
                 response.stream()
             assert response.status.as_int() == 200

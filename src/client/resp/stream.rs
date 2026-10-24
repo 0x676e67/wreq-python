@@ -24,7 +24,7 @@ use tokio_util::task::AbortOnDropHandle;
 
 use crate::{
     buffer::PyBuffer,
-    coroutine::{self, Coroutine},
+    coroutine::{self, Coroutine, Start},
     error::Error,
     header::HeaderMap,
     runtime::Runtime,
@@ -264,13 +264,8 @@ impl Streamer {
     /// of a short body never waits on another thread.
     fn ready_frame(&self, iteration: Iteration) -> Option<PyResult<Frame>> {
         let mut state = self.reader.lock();
-        if let State::Buffered(bytes) = &mut *state {
-            return Some(
-                bytes
-                    .take()
-                    .map(|bytes| Frame::Bytes(PyBuffer::from(bytes)))
-                    .ok_or_else(|| iteration.end().into()),
-            );
+        if let Some(frame) = state.take_buffered(iteration) {
+            return Some(frame);
         }
         let State::Idle(resp) = &mut *state else {
             return None;
@@ -379,8 +374,13 @@ impl Streamer {
     }
 
     fn __next__(&self, py: Python) -> PyResult<Frame> {
-        // Refused before the first poll, which returns frames already received without
+        // Refused before the first read, which returns frames already received without
         // releasing the GIL, so a nested read never leaves the stream half consumed.
+        Runtime::refuse_nested()?;
+        // A prefetched body is read without entering the runtime.
+        if let Some(frame) = self.reader.lock().take_buffered(Iteration::Sync) {
+            return frame;
+        }
         self.runtime.block_on_eager(py, self.next(Iteration::Sync))
     }
 
@@ -409,17 +409,28 @@ impl Streamer {
     /// Read the next frame when awaited.
     fn __anext__(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
         slf.get().refuse_async()?;
-        let py = slf.py();
-        let slf = slf.unbind();
-        coroutine::local(py, "Streamer.__anext__", async move {
+        coroutine::eager("Streamer.__anext__", slf, |slf| {
+            let slf = slf.cast_into::<Self>()?;
             let this = slf.get();
             // Buffered frames complete without suspending; yield to the event loop
             // periodically so timeouts, cancellation and other tasks run.
-            if this.reader.since_yield.fetch_add(1, Ordering::Relaxed) >= Self::YIELD_EVERY {
+            let yields =
+                this.reader.since_yield.fetch_add(1, Ordering::Relaxed) >= Self::YIELD_EVERY;
+            if yields {
                 this.reader.since_yield.store(0, Ordering::Relaxed);
-                coroutine::yield_now().await;
+            } else if let Some(frame) = this
+                .ready_frame(Iteration::Async)
+                .or_else(|| this.try_next(Iteration::Async))
+            {
+                return Start::ready(slf.py(), frame?);
             }
-            this.next(Iteration::Async).await
+            let slf = slf.unbind();
+            Ok(Start::pending(async move {
+                if yields {
+                    coroutine::yield_now().await;
+                }
+                slf.get().next(Iteration::Async).await
+            }))
         })
     }
 
@@ -429,17 +440,15 @@ impl Streamer {
     }
 
     /// Release the body and end any pending read; returned views stay valid.
-    fn __aexit__<'py>(
-        &self,
-        py: Python<'py>,
+    fn __aexit__(
+        slf: Bound<'_, Self>,
         _exc_type: Py<PyAny>,
         _exc_val: Py<PyAny>,
         _traceback: Py<PyAny>,
-    ) -> PyResult<Bound<'py, Coroutine>> {
-        let reader = self.reader.clone();
-        coroutine::local(py, "Streamer.__aexit__", async move {
-            reader.close();
-            Ok(())
+    ) -> PyResult<Bound<'_, Coroutine>> {
+        coroutine::eager("Streamer.__aexit__", slf, |slf| {
+            slf.cast::<Self>()?.get().reader.close();
+            Start::ready(slf.py(), ())
         })
     }
 }
@@ -472,6 +481,23 @@ impl Reader {
         let state = mem::replace(&mut *self.lock(), State::Closed);
         drop(state);
         self.arrived.notify_waiters();
+    }
+}
+
+// ===== impl State =====
+
+impl State {
+    /// Take a prefetched body's frame, then the end of `iteration`; `None` for any other body.
+    fn take_buffered(&mut self, iteration: Iteration) -> Option<PyResult<Frame>> {
+        let State::Buffered(bytes) = self else {
+            return None;
+        };
+        Some(
+            bytes
+                .take()
+                .map(|bytes| Frame::Bytes(PyBuffer::from(bytes)))
+                .ok_or_else(|| iteration.end().into()),
+        )
     }
 }
 

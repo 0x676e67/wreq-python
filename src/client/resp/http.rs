@@ -6,7 +6,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use futures_util::{TryFutureExt, future::Either};
+use futures_util::{FutureExt, TryFutureExt, future::Either};
 use http::response::{Parts, Response as HttpResponse};
 use http_body::Body as _;
 use http_body_util::{BodyExt, Collected, combinators::Collect};
@@ -24,7 +24,7 @@ use crate::{
     buffer::PyBuffer,
     client::{SocketAddr, body::Json},
     cookie::Cookie,
-    coroutine::{self, Coroutine, EntersSelf},
+    coroutine::{self, Coroutine, EntersSelf, Start},
     error::Error,
     header::HeaderMap,
     http::{StatusCode, Version},
@@ -226,29 +226,55 @@ impl Response {
         Ok((decode.map_err(Into::into), inline))
     }
 
-    /// Read and decode the body once awaited; the body is taken on first await. Bytes that
+    /// Read and decode the body; the body is taken on first poll. Bytes that
     /// [`read_body`](Self::read_body) can decode at once are decoded on the event loop.
-    fn read<'py, F, Fut, T>(
-        slf: Bound<'py, Self>,
-        qualname: &'static str,
-        limit: u64,
-        read: F,
-    ) -> PyResult<Bound<'py, Coroutine>>
+    async fn read<F, Fut, T>(slf: Py<Self>, limit: u64, read: F) -> PyResult<T>
     where
         F: FnOnce(wreq::Response) -> Fut + Send + 'static,
         Fut: Future<Output = Result<T, Error>> + Send + 'static,
+        T: Send + 'static,
+    {
+        let this = slf.get();
+        let (read, inline) = this.read_body(this.loop_limit(limit), read)?;
+        if inline {
+            read.await
+        } else {
+            this.runtime.clone().run_task(read).await
+        }
+    }
+
+    /// The first step of an awaited [`read`](Self::read): bytes it decodes at once are
+    /// returned without suspending.
+    fn start_read<F, Fut, T>(slf: Bound<'_, PyAny>, limit: u64, read: F) -> PyResult<Start>
+    where
+        F: FnOnce(wreq::Response) -> Fut + Copy + Send + 'static,
+        Fut: Future<Output = Result<T, Error>> + Send + 'static,
         T: for<'a> IntoPyObject<'a> + Send + 'static,
     {
-        let py = slf.py();
+        let slf = slf.cast_into::<Self>()?;
+        let this = slf.get();
+        let (decode, inline) = this.read_body(this.loop_limit(limit), read)?;
+        if inline {
+            // Buffered bytes decode in one poll; otherwise the read decodes the cached bytes.
+            return match decode.now_or_never() {
+                Some(value) => Start::ready(slf.py(), value?),
+                None => Ok(Start::pending(Self::read(slf.unbind(), limit, read))),
+            };
+        }
+        Ok(Self::continue_on(slf, decode))
+    }
+
+    /// Finish a read on the runtime, holding the response until it ends.
+    fn continue_on<F, T>(slf: Bound<'_, Self>, read: F) -> Start
+    where
+        F: Future<Output = PyResult<T>> + Send + 'static,
+        T: for<'a> IntoPyObject<'a> + Send + 'static,
+    {
+        let runtime = slf.get().runtime.clone();
         let slf = slf.unbind();
-        coroutine::local(py, qualname, async move {
-            let this = slf.get();
-            let (read, inline) = this.read_body(this.loop_limit(limit), read)?;
-            if inline {
-                read.await
-            } else {
-                this.runtime.clone().run_task(read).await
-            }
+        Start::pending(async move {
+            let _response = slf;
+            runtime.run_task(read).await
         })
     }
 
@@ -401,33 +427,41 @@ impl Response {
         slf: Bound<'_, Self>,
         encoding: Option<PyBackedStr>,
     ) -> PyResult<Bound<'_, Coroutine>> {
-        Self::read(slf, "Response.text", READ_ATTACHED, |resp| {
-            ResponseExt::text(resp, encoding)
-        })
+        const QUALNAME: &str = "Response.text";
+        let Some(encoding) = encoding else {
+            return coroutine::eager(QUALNAME, slf, |slf| {
+                Self::start_read(slf, READ_ATTACHED, |resp| ResponseExt::text(resp, None))
+            });
+        };
+        let py = slf.py();
+        let read = Self::read(slf.unbind(), READ_ATTACHED, |resp| {
+            ResponseExt::text(resp, Some(encoding))
+        });
+        coroutine::local(py, QUALNAME, read)
     }
 
     /// Get the JSON content of the response.
     pub fn json(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
         // Buffered JSON up to 8 KiB is parsed on the event loop; see `loop_limit`.
-        Self::read(slf, "Response.json", 8 * 1024, ResponseExt::json::<Json>)
+        coroutine::eager("Response.json", slf, |slf| {
+            Self::start_read(slf, 8 * 1024, ResponseExt::json::<Json>)
+        })
     }
 
     /// Read the body as a read-only memoryview, retaining its data after the response closes.
     pub fn bytes(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
-        let py = slf.py();
-        let slf = slf.unbind();
-        coroutine::local(py, "Response.bytes", async move {
+        coroutine::eager("Response.bytes", slf, |slf| {
+            let slf = slf.cast_into::<Self>()?;
             let this = slf.get();
-            match this.take_bytes(this.loop_limit(READ_ATTACHED))? {
-                BodyRead::Ready(bytes) => Ok(PyBuffer::from(bytes)),
-                BodyRead::Pending(collect) => {
-                    let read = this
-                        .collect_later(collect)
-                        .map_ok(|(_, bytes)| PyBuffer::from(bytes))
-                        .map_err(Into::into);
-                    this.runtime.clone().run_task(read).await
-                }
-            }
+            let collect = match this.take_bytes(this.loop_limit(READ_ATTACHED))? {
+                BodyRead::Ready(bytes) => return Start::ready(slf.py(), PyBuffer::from(bytes)),
+                BodyRead::Pending(collect) => collect,
+            };
+            let read = this
+                .collect_later(collect)
+                .map_ok(|(_, bytes)| PyBuffer::from(bytes))
+                .map_err(Into::into);
+            Ok(Self::continue_on(slf, read))
         })
     }
 
@@ -437,11 +471,9 @@ impl Response {
     /// Streamer is managed separately; previously returned memoryviews remain valid.
     /// `async with` instead releases the body and keeps a fully read connection reusable.
     pub fn close(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
-        let py = slf.py();
-        let slf = slf.unbind();
-        coroutine::local(py, "Response.close", async move {
-            slf.get().discard();
-            Ok(())
+        coroutine::eager("Response.close", slf, |slf| {
+            slf.cast::<Self>()?.get().discard();
+            Start::ready(slf.py(), ())
         })
     }
 }
@@ -460,11 +492,9 @@ impl Response {
         _exc_val: Py<PyAny>,
         _traceback: Py<PyAny>,
     ) -> PyResult<Bound<'py, Coroutine>> {
-        let py = slf.py();
-        let slf = slf.unbind();
-        coroutine::local(py, "Response.__aexit__", async move {
-            slf.get().destroy();
-            Ok(())
+        coroutine::eager("Response.__aexit__", slf, |slf| {
+            slf.cast::<Self>()?.get().destroy();
+            Start::ready(slf.py(), ())
         })
     }
 }

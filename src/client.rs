@@ -7,6 +7,7 @@ mod query;
 
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    sync::Arc,
     time::Duration,
 };
 
@@ -211,7 +212,11 @@ struct Builder {
 /// Unknown keyword arguments raise `TypeError` at call time.
 #[derive(Clone)]
 #[pyclass(subclass, frozen)]
-pub struct Client {
+pub struct Client(Arc<ClientInner>);
+
+/// The state a [`Client`] shares with its requests. Each request task owns one clone, which
+/// keeps the runtime alive, so starting a request clones nothing else.
+pub struct ClientInner {
     inner: wreq::Client,
     /// Runs this client's requests and response reads, keeping the runtime alive.
     runtime: runtime::Runtime,
@@ -221,9 +226,6 @@ pub struct Client {
     raise_for_status: bool,
     /// Prefetching must not start a configured read timeout before the caller reads.
     has_read_timeout: bool,
-
-    /// Get the cookie jar of the client.
-    #[pyo3(get)]
     cookie_jar: Option<Jar>,
 }
 
@@ -258,10 +260,13 @@ impl Client {
         kwds: Option<Py<PyDict>>,
     ) -> PyResult<Response> {
         let kwds = Python::attach(|py| kwds.map(|kwds| kwds.bind(py).extract()).transpose())?;
-        self.runtime
-            .clone()
-            .run_task(execute_request(self, method, url, kwds))
-            .await
+        let Self(client) = self;
+        let task = client
+            .runtime
+            .spawn(execute_request(client.clone(), method, url, kwds));
+        // Release ours before waiting, leaving the task's clone as the only extra count.
+        drop(client);
+        runtime::Runtime::join(task).await
     }
 
     /// Open a WebSocket on the client's runtime, extracting options on first await.
@@ -271,24 +276,27 @@ impl Client {
         kwds: Option<Py<PyDict>>,
     ) -> PyResult<WebSocket> {
         let kwds = Python::attach(|py| kwds.map(|kwds| kwds.bind(py).extract()).transpose())?;
-        self.runtime
-            .clone()
-            .run_task(execute_websocket_request(self, url, kwds))
-            .await
+        let Self(client) = self;
+        let task = client
+            .runtime
+            .spawn(execute_websocket_request(client.clone(), url, kwds));
+        // Released before waiting, as in `execute`.
+        drop(client);
+        runtime::Runtime::join(task).await
     }
 }
 
 impl Default for Client {
     fn default() -> Self {
         let runtime = runtime::Runtime::shared();
-        Self {
+        Self(Arc::new(ClientInner {
             inner: wreq::Client::default(),
             runtime: runtime.clone(),
             cancel: CancellationToken::new(),
             raise_for_status: false,
             has_read_timeout: false,
             cookie_jar: None,
-        }
+        }))
     }
 }
 
@@ -510,13 +518,15 @@ impl Client {
 
             builder
                 .build()
-                .map(|inner| Client {
-                    inner,
-                    runtime,
-                    cancel: CancellationToken::new(),
-                    cookie_jar,
-                    raise_for_status,
-                    has_read_timeout,
+                .map(|inner| {
+                    Client(Arc::new(ClientInner {
+                        inner,
+                        runtime,
+                        cancel: CancellationToken::new(),
+                        cookie_jar,
+                        raise_for_status,
+                        has_read_timeout,
+                    }))
                 })
                 .map_err(Error::Library)
                 .map_err(Into::into)
@@ -546,13 +556,19 @@ impl Client {
     /// Cancel pending requests and reject new ones with asyncio.CancelledError.
     /// Existing responses, WebSockets and the shared runtime remain usable.
     pub fn close(&self) {
-        self.cancel.cancel();
+        self.0.cancel.cancel();
     }
 
     /// The runtime used by this client and its responses.
     #[getter]
     pub fn runtime(&self) -> runtime::Runtime {
-        self.runtime.clone()
+        self.0.runtime.clone()
+    }
+
+    /// Get the cookie jar of the client.
+    #[getter]
+    pub fn cookie_jar(&self) -> Option<Jar> {
+        self.0.cookie_jar.clone()
     }
 
     /// Make a GET request to the given URL.
@@ -684,7 +700,7 @@ impl Client {
         _exc_val: Py<PyAny>,
         _traceback: Py<PyAny>,
     ) -> PyResult<Bound<'py, Coroutine>> {
-        let cancel = self.cancel.clone();
+        let cancel = self.0.cancel.clone();
         coroutine::local(py, "Client.__aexit__", async move {
             cancel.cancel();
             Ok(())
@@ -712,7 +728,7 @@ impl BlockingClient {
     /// Get the cookie jar of the client.
     #[getter]
     pub fn cookie_jar(&self) -> Option<Jar> {
-        self.0.cookie_jar.clone()
+        self.0.cookie_jar()
     }
 
     /// Cancel pending requests and reject new ones with asyncio.CancelledError.
@@ -819,9 +835,10 @@ impl BlockingClient {
         url: PyBackedStr,
         kwds: Option<Request>,
     ) -> PyResult<BlockingResponse> {
-        self.0
+        let Client(client) = &self.0;
+        client
             .runtime
-            .block_on_task(py, execute_request(self.0.clone(), method, url, kwds))
+            .block_on_task(py, execute_request(client.clone(), method, url, kwds))
             .map(Into::into)
     }
 
@@ -834,9 +851,10 @@ impl BlockingClient {
         url: PyBackedStr,
         kwds: Option<WebSocketRequest>,
     ) -> PyResult<BlockingWebSocket> {
-        self.0
+        let Client(client) = &self.0;
+        client
             .runtime
-            .block_on_task(py, execute_websocket_request(self.0.clone(), url, kwds))
+            .block_on_task(py, execute_websocket_request(client.clone(), url, kwds))
             .map(Into::into)
     }
 }
