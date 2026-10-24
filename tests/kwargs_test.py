@@ -85,6 +85,10 @@ async def test_single_kwargs_conversion_and_error_timing(closed_clients):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(
+    sys.implementation.name != "cpython",
+    reason="gc.get_referrers cannot see a dict held only by the extension",
+)
 async def test_kwargs_callback_mutation_keeps_extraction_order(closed_clients):
     client, _ = closed_clients
     for multiple in (False, True):
@@ -107,6 +111,10 @@ async def test_kwargs_callback_mutation_keeps_extraction_order(closed_clients):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(
+    sys.implementation.name != "cpython",
+    reason="gc.get_referrers cannot see a dict held only by the extension",
+)
 async def test_captured_kwargs_are_rechecked_on_first_await(closed_clients):
     client, _ = closed_clients
     value = IndexValue()
