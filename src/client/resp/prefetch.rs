@@ -1,8 +1,6 @@
 //! Short response bodies read along with the head.
 
 use std::{
-    future::poll_fn,
-    mem,
     pin::Pin,
     task::{Context, Poll},
 };
@@ -12,14 +10,8 @@ use futures_util::FutureExt;
 use http_body::{Frame, SizeHint};
 use http_body_util::BodyExt;
 
-use crate::runtime::Runtime;
-
 /// Bodies of known length up to this size are read with the head when already received.
 const PREFETCH_LIMIT: u64 = 64 * 1024;
-
-/// Yields to the runtime while frames keep arriving, so a body sent in several frames
-/// right after its head, as HTTP/2 does, is read in full.
-const PREFETCH_YIELDS: usize = 4;
 
 /// A completed body, or frames still to deliver, safe to poll off-runtime only if held.
 pub(super) enum Prefetch {
@@ -51,32 +43,22 @@ enum Data {
 /// Completed bodies keep their bytes directly. Other bodies report whether all remaining
 /// frames are held; an HTTP/2 body still tied to its connection stays on the runtime.
 /// It never waits for the network: frames still in flight stay with the connection.
-pub(super) async fn prefetch(mut body: wreq::Body, len: Option<u64>) -> Prefetch {
+pub(super) fn prefetch(mut body: wreq::Body, len: Option<u64>) -> Prefetch {
     let Some(len) = len.filter(|len| *len <= PREFETCH_LIMIT) else {
         return Prefetch::Remaining { body, held: false };
     };
     let mut data = Data::default();
-    // Yield once, then again only after a yield brought more frames: frames that arrived
-    // with the head reach the body, while a body still in flight is not waited for.
-    let mut yields = 0;
-    let mut progressed = false;
     let next = loop {
         match body.frame().now_or_never() {
             Some(Some(Ok(frame))) => match frame.into_data() {
                 Ok(bytes) => {
                     data.push(bytes, len);
-                    progressed = true;
                 }
                 Err(frame) => break Some(Ok(frame)),
             },
             Some(Some(Err(err))) => break Some(Err(err)),
             Some(None) => {
                 return Prefetch::Complete(data.into_bytes().unwrap_or_default());
-            }
-            None if yields == 0 || (progressed && yields < PREFETCH_YIELDS) => {
-                yields += 1;
-                progressed = false;
-                defer().await;
             }
             None => break None,
         }
@@ -92,19 +74,6 @@ pub(super) async fn prefetch(mut body: wreq::Body, len: Option<u64>) -> Prefetch
         body: wreq::Body::wrap(Prefetched { data, next, rest }),
         held,
     }
-}
-
-/// Return after the runtime polls its IO and other tasks once.
-async fn defer() {
-    let mut deferred = false;
-    poll_fn(|cx| {
-        if mem::replace(&mut deferred, true) {
-            return Poll::Ready(());
-        }
-        Runtime::defer_wake(cx);
-        Poll::Pending
-    })
-    .await;
 }
 
 // ===== impl Data =====

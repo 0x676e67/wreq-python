@@ -1,4 +1,3 @@
-mod ext;
 mod prefetch;
 mod stream;
 
@@ -17,11 +16,8 @@ use http_body_util::{BodyExt, Collected, combinators::Collect};
 use pyo3::{prelude::*, pybacked::PyBackedStr, sync::PyOnceLock};
 use wreq::Uri;
 
+use self::prefetch::{Prefetch, prefetch};
 pub use self::stream::Streamer;
-use self::{
-    ext::ResponseExt,
-    prefetch::{Prefetch, prefetch},
-};
 use crate::{
     buffer::PyBuffer,
     client::{SocketAddr, body::Json},
@@ -106,14 +102,14 @@ struct RecycleGuard(Option<Parts>);
 
 impl Response {
     /// Create a response, prefetching only when polling cannot start a read timeout.
-    pub async fn new(response: wreq::Response, runtime: Runtime, prefetch_body: bool) -> Self {
+    pub fn new(response: wreq::Response, runtime: Runtime, prefetch_body: bool) -> Self {
         let uri = response.uri().clone();
         let content_length = response.content_length();
         let remote_addr = response.remote_addr().map(SocketAddr);
         let local_addr = response.local_addr().map(SocketAddr);
         let (parts, body) = HttpResponse::from(response).into_parts();
         let (body, held) = if prefetch_body {
-            match prefetch(body, content_length).await {
+            match prefetch(body, content_length) {
                 Prefetch::Complete(bytes) => (Body::Buffered(bytes), true),
                 Prefetch::Remaining { body, held } => (Body::Unread(body), held),
             }
@@ -328,6 +324,23 @@ fn cache(body: &Mutex<Body>, bytes: &Bytes) {
     }
 }
 
+/// Decode text using the requested encoding or the response charset.
+async fn decode_text(
+    response: wreq::Response,
+    encoding: Option<PyBackedStr>,
+) -> Result<String, Error> {
+    match encoding {
+        Some(encoding) => response.text_with_charset(encoding).await,
+        None => response.text().await,
+    }
+    .map_err(Error::Library)
+}
+
+/// Decode a JSON body using the same conversion as request JSON values.
+async fn decode_json(response: wreq::Response) -> Result<Json, Error> {
+    response.json::<Json>().await.map_err(Error::Library)
+}
+
 #[pymethods]
 impl Response {
     /// Get the URL of the response.
@@ -444,12 +457,12 @@ impl Response {
         const QUALNAME: &str = "Response.text";
         let Some(encoding) = encoding else {
             return coroutine::eager(QUALNAME, slf, |slf| {
-                Self::start_read(slf, READ_ATTACHED, |resp| ResponseExt::text(resp, None))
+                Self::start_read(slf, READ_ATTACHED, |resp| decode_text(resp, None))
             });
         };
         let py = slf.py();
         let read = Self::read(slf.unbind(), READ_ATTACHED, |resp| {
-            ResponseExt::text(resp, Some(encoding))
+            decode_text(resp, Some(encoding))
         });
         coroutine::local(py, QUALNAME, read)
     }
@@ -458,7 +471,7 @@ impl Response {
     pub fn json(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
         // Buffered JSON up to 8 KiB is parsed on the event loop; see `loop_limit`.
         coroutine::eager("Response.json", slf, |slf| {
-            Self::start_read(slf, 8 * 1024, ResponseExt::json::<Json>)
+            Self::start_read(slf, 8 * 1024, decode_json)
         })
     }
 
@@ -647,12 +660,12 @@ impl BlockingResponse {
     /// Get the text content with the response encoding, defaulting to utf-8 when unspecified.
     #[pyo3(signature = (encoding = None))]
     pub fn text(&self, py: Python, encoding: Option<PyBackedStr>) -> PyResult<String> {
-        self.read(py, |resp| ResponseExt::text(resp, encoding))
+        self.read(py, |resp| decode_text(resp, encoding))
     }
 
     /// Get the JSON content of the response.
     pub fn json(&self, py: Python) -> PyResult<Json> {
-        self.read(py, ResponseExt::json::<Json>)
+        self.read(py, decode_json)
     }
 
     /// Read the body as a read-only memoryview, retaining its data after the response closes.

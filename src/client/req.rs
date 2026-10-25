@@ -348,7 +348,11 @@ where
                 }
             })
             .map_err(Error::Library)?;
-        Ok(Response::new(response, client.runtime.clone(), prefetch_body).await)
+        Ok(Response::new(
+            response,
+            client.runtime.clone(),
+            prefetch_body,
+        ))
     });
 
     until_closed(&client.cancel, future.as_mut()).await
