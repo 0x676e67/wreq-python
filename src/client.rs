@@ -1,6 +1,7 @@
 pub mod body;
 pub mod req;
 pub mod resp;
+pub mod ws;
 
 mod param;
 mod query;
@@ -21,7 +22,8 @@ use wreq::tls::trust::CertStore;
 
 use self::{
     req::{execute_request, execute_websocket_request},
-    resp::{BlockingResponse, BlockingWebSocket, Response, WebSocket},
+    resp::{BlockingResponse, Response},
+    ws::{BlockingWebSocket, WebSocket},
 };
 use crate::{
     cookie::Jar,
