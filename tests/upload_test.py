@@ -339,3 +339,38 @@ async def test_cancelled_forwarding_fails_the_upload():
     finally:
         server.close()
         await server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_upload_task_code_replacement_keeps_hook_arguments(monkeypatch):
+    loop = asyncio.get_running_loop()
+    original = loop.create_task
+    calls = []
+
+    def create(coro, **kwargs):
+        if getattr(coro, "__qualname__", None) == "forward":
+            calls.append(dict(kwargs))
+        return original(coro, **kwargs)
+
+    def legacy(coro, *, name=None, context=None):
+        if getattr(coro, "__qualname__", None) == "forward":
+            calls.append({})
+        return original(coro, name=name, context=context)
+
+    monkeypatch.setattr(loop, "create_task", create)
+    async with local_server() as (url, connections), wreq.Client(proxies=[]) as client:
+        for code in (create.__code__, legacy.__code__):
+            create.__code__ = code
+            create.__kwdefaults__ = legacy.__kwdefaults__
+
+            async def chunks():
+                yield b"body"
+
+            task = original(client.post(url, body=chunks()))
+            reader, writer = await asyncio.wait_for(connections.get(), 5)
+            assert await asyncio.wait_for(read_chunked(reader), 5) == b"body"
+            writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+            await writer.drain()
+            await (await asyncio.wait_for(task, 5)).close()
+    assert len(calls) == 2
+    assert calls[-1] == {}

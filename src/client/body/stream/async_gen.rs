@@ -12,7 +12,7 @@ use pyo3::{
     IntoPyObjectExt, intern,
     prelude::*,
     sync::PyOnceLock,
-    types::{PyDict, PyType},
+    types::{PyCode, PyDict, PyType},
 };
 use tokio::sync::TryAcquireError;
 
@@ -213,11 +213,21 @@ fn eager(event_loop: &Bound<'_, PyAny>, create_task: &Bound<'_, PyAny>) -> bool 
 
 /// Whether the Python function `func` accepts `**kwargs` (`inspect.CO_VARKEYWORDS`).
 fn takes_keywords(func: &Bound<'_, PyAny>) -> PyResult<bool> {
-    let flags = func
-        .getattr(intern!(func.py(), "__code__"))?
-        .getattr(intern!(func.py(), "co_flags"))?
-        .extract::<u32>()?;
-    Ok(flags & 0x08 != 0)
+    static CODE: PyOnceLock<(Py<PyAny>, bool)> = PyOnceLock::new();
+    let py = func.py();
+    let code = func.getattr(intern!(py, "__code__"))?;
+    if let Some((cached, keywords)) = CODE.get(py)
+        && code.is(cached)
+    {
+        return Ok(*keywords);
+    }
+    let keywords = code.getattr(intern!(py, "co_flags"))?.extract::<u32>()? & 0x08 != 0;
+    // Code objects are immutable; replacing a function or its code misses this cache.
+    // A custom callable can expose a mutable __code__ proxy, so never cache that.
+    if code.is_exact_instance_of::<PyCode>() {
+        let _ = CODE.set(py, (code.unbind(), keywords));
+    }
+    Ok(keywords)
 }
 
 /// The coroutine that forwards an async generator into its [`Sender`].
