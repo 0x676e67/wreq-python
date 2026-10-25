@@ -125,14 +125,6 @@ struct Options {
     multipart: Option<Multipart>,
 }
 
-impl Request {
-    fn read_timeout(&self) -> Option<Duration> {
-        self.options
-            .as_ref()
-            .and_then(|options| options.read_timeout)
-    }
-}
-
 /// The parameters for a WebSocket request.
 #[derive(Default, Deftly)]
 #[derive_deftly(ExtractOptions)]
@@ -226,7 +218,8 @@ where
         let prefetch_body = !client.has_read_timeout
             && request
                 .as_ref()
-                .is_none_or(|request| request.read_timeout().is_none());
+                .and_then(|request| request.options.as_deref())
+                .is_none_or(|options| options.read_timeout.is_none());
 
         if let Some(request) = request {
             if let Some(body) = request.body {
