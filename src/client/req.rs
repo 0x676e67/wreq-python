@@ -142,18 +142,30 @@ impl FromPyObject<'_, '_> for Request {
     type Error = pyo3::PyErr;
 
     fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
+        // Keep raw bodies unboxed; reuse the generated dispatch for other lone keywords.
         if let Some((key, value)) = crate::macros::single_keyword(&ob)
-            && key.to_str().is_ok_and(|name| name == "body")
+            && let Ok(name) = key.to_str()
         {
-            return value.extract().map(|body| Self {
-                body,
-                options: None,
-            });
+            if name == "body" {
+                return value.extract().map(|body| Self {
+                    body,
+                    options: None,
+                });
+            }
+            if let Some(options) = Options::from_single_keyword(name, &value) {
+                return options.map(Self::from);
+            }
         }
-        Options::extract(ob).map(|options| Self {
+        Options::extract(ob).map(Self::from)
+    }
+}
+
+impl From<Options> for Request {
+    fn from(options: Options) -> Self {
+        Self {
             body: None,
             options: Some(Box::new(options)),
-        })
+        }
     }
 }
 

@@ -56,7 +56,9 @@ pub(crate) fn lookup<'py>(
 
 derive_deftly::define_derive_deftly! {
     /// Derive keyword names and extraction from the parameter fields.
-    /// Reject unknown keys when the type specifies `deny_unknown`.
+    /// Reject unknown keys when the type specifies `deny_unknown`. With `single_keyword`, a
+    /// lone exact-string keyword is converted directly, and `from_single_keyword` exposes that
+    /// dispatch to wrapping types.
     /// Marked fields are converted last, after other parameters are validated.
     ExtractOptions for struct:
 
@@ -64,6 +66,31 @@ derive_deftly::define_derive_deftly! {
         pub(crate) const FIELDS: &'static [&'static str] = &[
             ${for fields { ${concat $fname}, }}
         ];
+
+        ${if tmeta(single_keyword) {
+            /// The parameters for a lone keyword `name` set to `value`; `None` for an unknown
+            /// name. Converting the value fails the same way as a full extraction.
+            pub(crate) fn from_single_keyword(
+                name: &str,
+                value: &pyo3::Bound<'_, pyo3::PyAny>,
+            ) -> Option<pyo3::PyResult<Self>> {
+                use pyo3::prelude::*;
+                match name {
+                    ${for fields {
+                        ${concat $fname} => Some(
+                            value
+                                .extract()
+                                .map(|$fname| Self {
+                                    $fname,
+                                    ..Self::default()
+                                })
+                                .map_err(pyo3::PyErr::from),
+                        ),
+                    }}
+                    _ => None,
+                }
+            }
+        }}
     }
 
     impl<'__extract_a, '__extract_py, $tgens>
@@ -75,17 +102,11 @@ derive_deftly::define_derive_deftly! {
         fn extract(ob: pyo3::Borrowed<'__extract_a, '__extract_py, pyo3::PyAny>) -> pyo3::PyResult<Self> {
             use pyo3::prelude::*;
             ${if tmeta(single_keyword) {
+                // Nested: the template expands under the proc-macro crate's edition.
                 if let Some((key, value)) = $crate::macros::single_keyword(&ob) {
                     if let Ok(name) = key.to_str() {
-                        match name {
-                            ${for fields {
-                                ${concat $fname} => {
-                                    let mut params = Self::default();
-                                    params.$fname = value.extract()?;
-                                    return Ok(params);
-                                }
-                            }}
-                            _ => {}
+                        if let Some(params) = Self::from_single_keyword(name, &value) {
+                            return params;
                         }
                     }
                 }
