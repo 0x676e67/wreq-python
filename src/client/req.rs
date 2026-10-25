@@ -9,12 +9,7 @@ use std::{
 use derive_deftly::Deftly;
 use futures_util::TryFutureExt;
 use http::header::COOKIE;
-use pyo3::{
-    Borrowed, FromPyObject, PyAny, PyResult,
-    exceptions::asyncio::CancelledError,
-    pybacked::PyBackedStr,
-    types::{PyAnyMethods, PyStringMethods},
-};
+use pyo3::{PyResult, exceptions::asyncio::CancelledError, pybacked::PyBackedStr};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
@@ -35,10 +30,12 @@ use crate::{
 };
 
 /// Extracted request parameters. A lone raw body needs no full options object.
-#[derive(Default)]
+#[derive(Default, Deftly)]
+#[derive_deftly(ExtractOptionsWrapper)]
 #[non_exhaustive]
 pub struct Request {
     body: Option<Body>,
+    #[deftly(flatten = "Options")]
     options: Option<Box<Options>>,
 }
 
@@ -129,43 +126,10 @@ struct Options {
 }
 
 impl Request {
-    pub(crate) const FIELDS: &'static [&'static str] = Options::FIELDS;
-
     fn read_timeout(&self) -> Option<Duration> {
         self.options
             .as_ref()
             .and_then(|options| options.read_timeout)
-    }
-}
-
-impl FromPyObject<'_, '_> for Request {
-    type Error = pyo3::PyErr;
-
-    fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
-        // Keep raw bodies unboxed; reuse the generated dispatch for other lone keywords.
-        if let Some((key, value)) = crate::macros::single_keyword(&ob)
-            && let Ok(name) = key.to_str()
-        {
-            if name == "body" {
-                return value.extract().map(|body| Self {
-                    body,
-                    options: None,
-                });
-            }
-            if let Some(options) = Options::from_single_keyword(name, &value) {
-                return options.map(Self::from);
-            }
-        }
-        Options::extract(ob).map(Self::from)
-    }
-}
-
-impl From<Options> for Request {
-    fn from(options: Options) -> Self {
-        Self {
-            body: None,
-            options: Some(Box::new(options)),
-        }
     }
 }
 

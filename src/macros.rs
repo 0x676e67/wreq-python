@@ -152,6 +152,64 @@ derive_deftly::define_derive_deftly! {
     }
 }
 
+derive_deftly::define_derive_deftly! {
+    /// Extract inline fields directly and delegate other parameters to boxed options.
+    /// The field marked `flatten` names the full options type.
+    ExtractOptionsWrapper for struct:
+
+    impl<$tgens> $ttype where $twheres {
+        ${for fields {
+            ${when fmeta(flatten)}
+            pub(crate) const FIELDS: &'static [&'static str] =
+                ${fmeta(flatten) as ty}::FIELDS;
+        }}
+    }
+
+    impl<'__extract_a, '__extract_py, $tgens>
+        pyo3::FromPyObject<'__extract_a, '__extract_py> for $ttype
+        where $twheres
+    {
+        type Error = pyo3::PyErr;
+
+        fn extract(ob: pyo3::Borrowed<'__extract_a, '__extract_py, pyo3::PyAny>) -> pyo3::PyResult<Self> {
+            use pyo3::prelude::*;
+            let wrap = |options| Self {
+                ${for fields {
+                    ${when fmeta(flatten)}
+                    $fname: Some(Box::new(options)),
+                }}
+                ..Self::default()
+            };
+            if let Some((key, value)) = $crate::macros::single_keyword(&ob) {
+                if let Ok(name) = key.to_str() {
+                    match name {
+                        ${for fields {
+                            ${when not(fmeta(flatten))}
+                            ${concat $fname} => return value.extract().map(|value| Self {
+                                $fname: value,
+                                ..Self::default()
+                            }),
+                        }}
+                        _ => {}
+                    }
+                    ${for fields {
+                        ${when fmeta(flatten)}
+                        if let Some(options) =
+                            ${fmeta(flatten) as ty}::from_single_keyword(name, &value)
+                        {
+                            return options.map(wrap);
+                        }
+                    }}
+                }
+            }
+            ${for fields {
+                ${when fmeta(flatten)}
+                ${fmeta(flatten) as ty}::extract(ob).map(wrap)
+            }}
+        }
+    }
+}
+
 macro_rules! apply_option {
     (set_if_some, $builder:expr, $option:expr, $method:ident) => {
         if let Some(value) = $option.take() {
