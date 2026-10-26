@@ -82,7 +82,7 @@ async fn read(
             match timeout {
                 Some(timeout) => time::timeout(timeout, reader.try_next())
                     .await
-                    .map_err(Error::Timeout),
+                    .map_err(Error::WebSocketTimeout),
                 None => Ok(reader.try_next().await),
             }
         };

@@ -1,6 +1,39 @@
+import asyncio
+import builtins
+import pickle
+import socket
+import subprocess
+import sys
+from datetime import timedelta
+
 import pytest
 import wreq
 import wreq.exceptions as exceptions
+
+from cancellation_test import local_server
+
+
+class Teapot(wreq.StatusCode):
+    pass
+
+
+def test_status_code_comparison_and_hash():
+    class IndexCode:
+        def __index__(self):
+            return 404
+
+    status = wreq.StatusCode(404)
+    assert status == 404 and 404 == status
+    assert status == wreq.StatusCode(404)
+    assert hash(status) == hash(404)
+    assert {status: "found"}[404] == {404: "found"}[status] == "found"
+    assert len({status, wreq.StatusCode(404), 404}) == 1
+
+    other = IndexCode()
+    assert status.__eq__(other) is NotImplemented
+    assert status != other and other != status
+    with pytest.raises(TypeError):
+        status < other
 
 
 @pytest.mark.asyncio
@@ -19,3 +52,105 @@ async def test_proxy_connection_error():
         for url in target_urls:
             with pytest.raises(exceptions.ProxyConnectionError):
                 await wreq.get(url, proxy=wreq.Proxy.all(proxy))
+
+
+@pytest.mark.asyncio
+async def test_errors_share_one_hierarchy():
+    # Every exception is exported from the package root and derives from `Error`.
+    for name in exceptions.__all__:
+        assert getattr(wreq, name) is getattr(exceptions, name)
+        assert issubclass(getattr(exceptions, name), wreq.Error)
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        refused = f"http://127.0.0.1:{sock.getsockname()[1]}/"
+
+    async with wreq.Client(proxies=[]) as client:
+        # A refused connection is also a builtin `ConnectionError`. Its URL stays out
+        # of the message, and the predicates and URL survive pickling.
+        with pytest.raises(wreq.ConnectionError) as caught:
+            await client.get(refused)
+        error = caught.value
+        assert isinstance(error, wreq.RequestError)
+        assert isinstance(error, builtins.ConnectionError)
+        assert error.is_connect() and error.is_request() and not error.is_timeout()
+        assert error.url == refused and refused not in str(error)
+        copy = pickle.loads(pickle.dumps(error))
+        assert type(copy) is type(error) and str(copy) == str(error)
+        assert copy.is_connect() and copy.url == refused
+
+        # An error the binding raises matches the predicate of its class.
+        with pytest.raises(wreq.BuilderError, match="invalid HTTP header name") as caught:
+            await client.get(refused, headers={"bad name": "v"})
+        assert caught.value.is_builder() and caught.value.url is None
+
+        # A constructed error holds only its message.
+        error = wreq.TimeoutError("timed out")
+        assert error.args == ("timed out",) and str(error) == "timed out"
+        assert error.url is None and error.status is None and not error.is_timeout()
+
+        async with local_server() as (url, connections):
+            # A timeout while reading the body is a `TimeoutError` that is also
+            # `is_body()`.
+            task = asyncio.create_task(
+                client.get(url, read_timeout=timedelta(seconds=0.2))
+            )
+            _, writer = await asyncio.wait_for(connections.get(), 5)
+            writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nhello")
+            response = await asyncio.wait_for(task, 5)
+            with pytest.raises(wreq.TimeoutError) as caught:
+                await asyncio.wait_for(response.bytes(), 5)
+            assert isinstance(caught.value, builtins.TimeoutError)
+            assert caught.value.is_timeout() and caught.value.is_body()
+
+            # A `StatusError` carries the response status, which pickles too.
+            task = asyncio.create_task(client.get(url))
+            _, writer = await asyncio.wait_for(connections.get(), 5)
+            writer.write(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n")
+            response = await asyncio.wait_for(task, 5)
+            with pytest.raises(wreq.StatusError) as caught:
+                response.raise_for_status()
+            copy = pickle.loads(pickle.dumps(caught.value))
+            assert copy.status == 404 and copy.status.is_client_error()
+            assert copy.status == caught.value.status and copy.status != None
+            assert copy.status in {404} and copy.is_status() and copy.url == url
+            for code in (-1, 1000, 70000):
+                with pytest.raises(ValueError):
+                    wreq.StatusCode(code)
+
+            teapot = Teapot(418)
+            teapot.note = "short and stout"
+            assert pickle.loads(pickle.dumps(teapot)).note == "short and stout"
+
+            # A Python error that fails an upload is the cause of the wreq error.
+            def chunks():
+                yield b"first"
+                raise ValueError("upload exploded")
+
+            with pytest.raises(wreq.RequestError) as caught:
+                await asyncio.wait_for(client.post(url, body=chunks()), 5)
+            assert isinstance(caught.value.__cause__, ValueError)
+            assert str(caught.value.__cause__) == "upload exploded"
+
+
+def test_mismatched_exceptions_module_fails_import():
+    # A class the extension raises is missing, as with a stale `wreq/exceptions.py`.
+    script = """
+import importlib.util, os, sys
+package = os.path.dirname(importlib.util.find_spec("wreq").origin)
+spec = importlib.util.spec_from_file_location(
+    "wreq.exceptions", os.path.join(package, "exceptions.py")
+)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+del module.UpgradeError
+sys.modules["wreq.exceptions"] = module
+try:
+    import wreq
+except ImportError as error:
+    print(type(error.__cause__).__name__)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, timeout=60
+    )
+    assert result.stdout.strip() == "AttributeError", result.stderr

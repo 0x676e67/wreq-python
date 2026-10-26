@@ -83,9 +83,10 @@ async def main():
 asyncio.run(main())
 ```
 
-File paths are opened on the client's runtime when building the request. A
-missing file raises an error at that point. Stream parts are consumed once;
-recreate them for another request. Text, bytes and path parts can be reused.
+File paths are opened on the client's runtime when building the request.
+File errors raise `OSError` subclasses, such as `FileNotFoundError` for a missing
+file. Stream parts are consumed once; recreate them for another request.
+Text, bytes and path parts can be reused.
 
 Construct async-generator parts inside a running event loop: their producers
 start at `Part` construction. Their buffering and cleanup follow the same rules

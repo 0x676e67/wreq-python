@@ -1,6 +1,6 @@
 # wreq.exceptions
 
-All exception types that can be raised by wreq.
+Exception classes defined by wreq.
 
 ::: wreq.exceptions
     options:
