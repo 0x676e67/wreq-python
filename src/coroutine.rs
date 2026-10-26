@@ -6,13 +6,15 @@
 //! A [`Coroutine`] polls its future on the event loop thread, and [`spawn`] moves
 //! the work to Tokio. A wake marks the coroutine ready and queues it on the [`Port`]
 //! of the awaiting loop, ringing a socket the loop watches only when the queue was
-//! empty, so waking Tokio threads never take the GIL. A loop that cannot watch the
-//! socket is woken with `call_soon_threadsafe`, which does attach the waking thread.
-//! The loop thread then resolves every queued asyncio future in one batch.
+//! empty, so waking threads never take the GIL. A loop that cannot watch the socket is
+//! woken with `call_soon_threadsafe` from a dedicated thread, as wakers may run under
+//! runtime locks that a GIL holder waits for. The loop thread then resolves every queued
+//! [`Waiter`](waiter::Waiter) in one batch, running the woken tasks' wakeups at once.
 
 mod asyncio;
 mod awaitable;
 mod scope;
+mod waiter;
 
 use std::{
     any::TypeId,
@@ -21,6 +23,7 @@ use std::{
     task::Poll,
 };
 
+use futures_util::{FutureExt, future::BoxFuture};
 use pyo3::{IntoPyObjectExt, PyTypeInfo, intern, prelude::*, sync::PyOnceLock};
 
 pub(crate) use self::asyncio::running_loop;
@@ -55,6 +58,29 @@ where
     T: for<'a> IntoPyObject<'a> + 'static,
 {
     Bound::new(py, coroutine(qualname, fut))
+}
+
+/// Run `start` with `arg` on the first await. A result ready then finishes the coroutine
+/// without the boxed future and waker that [`local`] allocates for a suspension.
+#[inline]
+pub fn eager<'py, A>(
+    qualname: &'static str,
+    arg: Bound<'py, A>,
+    start: fn(Bound<'_, PyAny>) -> PyResult<Start>,
+) -> PyResult<Bound<'py, Coroutine>> {
+    let py = arg.py();
+    Bound::new(
+        py,
+        Coroutine::eager(qualname, arg.into_any().unbind(), start),
+    )
+}
+
+/// What the first step of an [`eager`] coroutine produced.
+pub enum Start {
+    /// The result, returned without suspending.
+    Ready(Py<PyAny>),
+    /// A future polled from then on, as [`local`] polls one.
+    Pending(BoxFuture<'static, PyResult<Py<PyAny>>>),
 }
 
 /// A result type whose native `__aenter__` returns the object itself, so `async with` on a
@@ -102,9 +128,7 @@ pub fn ready<'py, T>(
     qualname: &'static str,
     value: Bound<'py, T>,
 ) -> PyResult<Bound<'py, Coroutine>> {
-    let py = value.py();
-    let value = value.into_any().unbind();
-    Bound::new(py, Coroutine::new(qualname, async move { Ok(value) }))
+    eager(qualname, value, |value| Ok(Start::Ready(value.unbind())))
 }
 
 /// Yield to the event loop once, like `asyncio.sleep(0)`.
@@ -122,20 +146,54 @@ pub async fn yield_now() {
     .await;
 }
 
-/// A coroutine awaiting `fut` and converting its output to a Python object. Like a sync
-/// method, one with no result returns `None`, where `()` would convert to an empty tuple.
+/// A coroutine awaiting `fut` and converting its output to a Python object.
 fn coroutine<F, T>(qualname: &'static str, fut: F) -> Coroutine
 where
     F: Future<Output = PyResult<T>> + Send + 'static,
     T: for<'a> IntoPyObject<'a> + 'static,
 {
-    Coroutine::new(qualname, async move {
-        let value = fut.await?;
-        Python::attach(|py| {
-            if TypeId::of::<T>() == TypeId::of::<()>() {
-                return Ok(py.None());
-            }
-            value.into_py_any(py)
-        })
-    })
+    Coroutine::new(qualname, converted(fut))
+}
+
+/// Await `fut` and convert its output to a Python object.
+async fn converted<F, T>(fut: F) -> PyResult<Py<PyAny>>
+where
+    F: Future<Output = PyResult<T>>,
+    T: for<'a> IntoPyObject<'a> + 'static,
+{
+    let value = fut.await?;
+    Python::attach(|py| to_object(py, value))
+}
+
+/// Like a sync method's result, `()` converts to `None`, not an empty tuple.
+#[inline]
+fn to_object<T>(py: Python<'_>, value: T) -> PyResult<Py<PyAny>>
+where
+    T: for<'a> IntoPyObject<'a> + 'static,
+{
+    if TypeId::of::<T>() == TypeId::of::<()>() {
+        return Ok(py.None());
+    }
+    value.into_py_any(py)
+}
+
+impl Start {
+    /// Finish with `value`, converted as [`local`] converts a result.
+    #[inline]
+    pub fn ready<T>(py: Python<'_>, value: T) -> PyResult<Start>
+    where
+        T: for<'a> IntoPyObject<'a> + 'static,
+    {
+        to_object(py, value).map(Start::Ready)
+    }
+
+    /// Continue by polling `fut` on the event loop thread, as [`local`] does.
+    #[inline]
+    pub fn pending<F, T>(fut: F) -> Start
+    where
+        F: Future<Output = PyResult<T>> + Send + 'static,
+        T: for<'a> IntoPyObject<'a> + 'static,
+    {
+        Start::Pending(converted(fut).boxed())
+    }
 }

@@ -1,10 +1,11 @@
 //! The Tokio runtime behind clients, and how calls wait on it.
 //!
-//! Requests, and async reads that must wait, run as tasks on the client's selected worker
-//! ([`Runtime::block_on_task`], [`Runtime::run_task`]); blocking reads are polled by the
-//! caller ([`Runtime::block_on`], [`Runtime::block_on_eager`]). These blocking calls release
-//! the GIL while they wait; on a current-thread runtime they drive it and run the request
-//! themselves instead of spawning it.
+//! Async requests and reads that must wait run as tasks on the client's selected worker
+//! ([`Runtime::join`], [`Runtime::run_task`]). Blocking requests run on the caller with work
+//! stealing, or on the selected worker with per-worker scheduling ([`Runtime::block_on_task`]);
+//! blocking reads are polled by the caller ([`Runtime::block_on`], [`Runtime::block_on_eager`]).
+//! Blocking calls release the GIL while waiting. A current-thread runtime also drives its
+//! connection tasks and IO on the caller, with no background IO workers.
 //!
 //! Every other runtime operation goes through [`Runtime`] too; `clippy.toml` rejects direct
 //! Tokio handles, spawns and yields elsewhere.
@@ -51,9 +52,13 @@ pub enum Scheduler {
 #[derive(Clone)]
 #[pyclass(frozen)]
 pub struct Runtime {
-    /// Shared owner; `None` only once `Drop` has taken it to shut the runtime down.
+    binding: Arc<Binding>,
+}
+
+/// The selected worker and its owner, shared by a client and its responses.
+/// Selecting another client creates a binding; cloning keeps that worker.
+struct Binding {
     inner: Option<Arc<Inner>>,
-    /// The worker this copy runs on; per-worker clients keep their tasks there.
     handle: Handle,
 }
 
@@ -79,25 +84,28 @@ thread_local! {
 impl Runtime {
     /// Whether blocking calls drive this runtime on their own thread.
     pub fn is_current_thread(&self) -> bool {
-        matches!(self.inner.as_deref(), Some(Inner::CurrentThread(_)))
+        matches!(self.binding.inner.as_deref(), Some(Inner::CurrentThread(_)))
     }
 
     /// Share the runtime and select a worker for a new client.
     pub fn select(&self) -> PyResult<Self> {
         let inner = self
+            .binding
             .inner
             .as_ref()
             .ok_or_else(|| PyRuntimeError::new_err("Runtime is unavailable"))?;
         Ok(Self {
-            handle: inner.handle(),
-            inner: Some(inner.clone()),
+            binding: Arc::new(Binding {
+                handle: inner.handle(),
+                inner: Some(inner.clone()),
+            }),
         })
     }
 
     /// Poll `future` once inside the runtime, where a read timeout can start its timer;
     /// `None` if it must wait. A pending future is dropped, so pass `&mut` to keep it.
     pub fn poll_now<F: Future>(&self, future: F) -> Option<F::Output> {
-        let _runtime = self.handle.enter();
+        let _runtime = self.binding.handle.enter();
         future.now_or_never()
     }
 
@@ -127,8 +135,9 @@ impl Runtime {
         }
     }
 
-    /// Run `future` as a task on the selected worker while the caller waits detached. A
-    /// current-thread runtime's only worker is its caller, which drives the future itself.
+    /// Run a request detached from Python: on the caller with work stealing, or on the
+    /// selected worker with per-worker scheduling. A current-thread runtime also drives
+    /// its connection tasks and IO on the caller.
     pub fn block_on_task<F, T>(&self, py: Python<'_>, future: F) -> PyResult<T>
     where
         F: Future<Output = PyResult<T>> + Send + 'static,
@@ -145,11 +154,17 @@ impl Runtime {
         F: Future<Output = PyResult<T>> + Send + 'static,
         T: Send + 'static,
     {
-        let task = self.handle.clone().spawn(async move {
+        let task = self.binding.handle.clone().spawn(async move {
             let _owner = self;
             future.await
         });
-        AbortOnDropHandle::new(task).await.map_err(join_error)?
+        Self::join(task).await
+    }
+
+    /// Wait for a task from [`spawn`](Self::spawn) from any executor. Dropping the returned
+    /// future aborts the task; the task must keep the runtime alive itself.
+    pub fn join<T>(task: JoinHandle<PyResult<T>>) -> impl Future<Output = PyResult<T>> {
+        AbortOnDropHandle::new(task).map(|result| result.map_err(join_error)?)
     }
 
     /// Spawn `future` on the selected worker. Dropping the handle detaches the task, which
@@ -159,28 +174,28 @@ impl Runtime {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        self.handle.spawn(future)
+        self.binding.handle.spawn(future)
     }
 
     /// [`block_on`](Self::block_on) for a caller already detached. It refuses a nested call
     /// itself, where Tokio would panic.
     fn wait<T>(&self, future: impl Future<Output = PyResult<T>>) -> PyResult<T> {
         Self::refuse_nested()?;
-        match self.inner.as_deref() {
+        match self.binding.inner.as_deref() {
             Some(Inner::CurrentThread(runtime)) => Driving::drive(runtime, future),
-            _ => self.handle.block_on(future),
+            _ => self.binding.handle.block_on(future),
         }
     }
 
     /// [`block_on_task`](Self::block_on_task) for a caller already detached; refused before
-    /// the spawn, so a nested request starts nothing.
+    /// polling or spawning, so a nested request starts nothing.
     fn wait_task<F, T>(&self, future: F) -> PyResult<T>
     where
         F: Future<Output = PyResult<T>> + Send + 'static,
         T: Send + 'static,
     {
         Self::refuse_nested()?;
-        match self.inner.as_deref() {
+        match self.binding.inner.as_deref() {
             Some(Inner::CurrentThread(runtime)) => Driving::drive(runtime, async {
                 // Nothing ran since the last call. The first yield lets the driver collect IO
                 // that arrived meanwhile, such as a server closing an idle connection, and the
@@ -189,9 +204,13 @@ impl Runtime {
                 task::yield_now().await;
                 future.await
             }),
+            Some(Inner::Workers(PingoraRuntime::Steal { .. })) => {
+                self.binding.handle.block_on(future)
+            }
             _ => self
+                .binding
                 .handle
-                .block_on(self.handle.spawn(future))
+                .block_on(self.binding.handle.spawn(future))
                 .map_err(join_error)?,
         }
     }
@@ -274,8 +293,10 @@ impl From<Inner> for Runtime {
     fn from(runtime: Inner) -> Self {
         let handle = runtime.handle();
         Self {
-            inner: Some(Arc::new(runtime)),
-            handle,
+            binding: Arc::new(Binding {
+                inner: Some(Arc::new(runtime)),
+                handle,
+            }),
         }
     }
 }
@@ -369,7 +390,9 @@ impl Runtime {
     }
 }
 
-impl Drop for Runtime {
+// ===== impl Binding =====
+
+impl Drop for Binding {
     fn drop(&mut self) {
         // The final owner may be released on a worker or while holding the GIL.
         if let Some(runtime) = self.inner.take().and_then(Arc::into_inner) {
@@ -430,12 +453,41 @@ fn parallelism() -> usize {
 
 /// The runtime this thread is in, else the shared one.
 fn current() -> Handle {
-    Handle::try_current().unwrap_or_else(|_| Runtime::shared().handle.clone())
+    Handle::try_current().unwrap_or_else(|_| Runtime::shared().binding.handle.clone())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn work_stealing_polls_requests_on_callers_and_keeps_background_workers() {
+        let runtime = Runtime::from(RuntimeBuilder::new(2, "wreq-caller").build());
+        let caller = thread::current().id();
+        let (release, released) = tokio::sync::oneshot::channel();
+        let (completed, completion) = std::sync::mpsc::channel();
+        let child = runtime
+            .wait_task(async move {
+                assert!(!Runtime::driving());
+                assert_eq!(thread::current().id(), caller);
+                task::yield_now().await;
+                assert_eq!(thread::current().id(), caller);
+                Ok(task::spawn(async move {
+                    released.await.unwrap();
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                    completed.send(thread::current().id()).unwrap();
+                }))
+            })
+            .unwrap();
+        // Only release the child after the blocking call returns. Its timer must keep
+        // progressing without the caller entering the runtime again.
+        release.send(()).unwrap();
+        assert_ne!(
+            completion.recv_timeout(Duration::from_secs(5)).unwrap(),
+            caller,
+        );
+        runtime.binding.handle.block_on(child).unwrap();
+    }
 
     #[test]
     fn fixed_worker() {
@@ -521,8 +573,8 @@ mod tests {
                     .work_steal(steal)
                     .build(),
             );
-            let weak = Arc::downgrade(runtime.inner.as_ref().unwrap());
-            let handle = runtime.handle.clone();
+            let weak = Arc::downgrade(runtime.binding.inner.as_ref().unwrap());
+            let handle = runtime.binding.handle.clone();
             let (dropped, released) = std::sync::mpsc::channel();
             let guard = NotifyOnDrop(dropped);
             let background = handle.spawn(async move {

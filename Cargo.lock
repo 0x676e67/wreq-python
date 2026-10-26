@@ -802,8 +802,7 @@ dependencies = [
 [[package]]
 name = "http2"
 version = "0.5.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92d3114be2f413b2e491e686b93a28cda30c355cffc8d091a57f8be4b1342896"
+source = "git+https://github.com/0x676e67/http2?rev=fb5bf8bdbf3e9d9aad7073759a6f06f47373342e#fb5bf8bdbf3e9d9aad7073759a6f06f47373342e"
 dependencies = [
  "atomic-waker",
  "bytes",

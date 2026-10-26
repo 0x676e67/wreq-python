@@ -29,6 +29,20 @@ where
         .transpose()
 }
 
+/// Take one exact-string keyword without invoking key or value callbacks.
+pub(crate) fn single_keyword<'py>(
+    ob: &Bound<'py, PyAny>,
+) -> Option<(Bound<'py, PyString>, Bound<'py, PyAny>)> {
+    let dict = ob.cast_exact::<PyDict>().ok()?;
+    pyo3::sync::critical_section::with_critical_section(dict.as_any(), || {
+        if dict.len() != 1 {
+            return None;
+        }
+        let (key, value) = dict.iter().next()?;
+        Some((key.cast_into_exact::<PyString>().ok()?, value))
+    })
+}
+
 /// Look up an optional keyword; a dict answers a missing key without raising KeyError.
 pub(crate) fn lookup<'py>(
     ob: &Bound<'py, PyAny>,
@@ -42,7 +56,9 @@ pub(crate) fn lookup<'py>(
 
 derive_deftly::define_derive_deftly! {
     /// Derive keyword names and extraction from the parameter fields.
-    /// Reject unknown keys when the type specifies `deny_unknown`.
+    /// Reject unknown keys when the type specifies `deny_unknown`. With `single_keyword`, a
+    /// lone exact-string keyword is converted directly, and `from_single_keyword` exposes that
+    /// dispatch to wrapping types.
     /// Marked fields are converted last, after other parameters are validated.
     ExtractOptions for struct:
 
@@ -50,6 +66,31 @@ derive_deftly::define_derive_deftly! {
         pub(crate) const FIELDS: &'static [&'static str] = &[
             ${for fields { ${concat $fname}, }}
         ];
+
+        ${if tmeta(single_keyword) {
+            /// The parameters for a lone keyword `name` set to `value`; `None` for an unknown
+            /// name. Converting the value fails the same way as a full extraction.
+            pub(crate) fn from_single_keyword(
+                name: &str,
+                value: &pyo3::Bound<'_, pyo3::PyAny>,
+            ) -> Option<pyo3::PyResult<Self>> {
+                use pyo3::prelude::*;
+                match name {
+                    ${for fields {
+                        ${concat $fname} => Some(
+                            value
+                                .extract()
+                                .map(|$fname| Self {
+                                    $fname,
+                                    ..Self::default()
+                                })
+                                .map_err(pyo3::PyErr::from),
+                        ),
+                    }}
+                    _ => None,
+                }
+            }
+        }}
     }
 
     impl<'__extract_a, '__extract_py, $tgens>
@@ -60,6 +101,16 @@ derive_deftly::define_derive_deftly! {
 
         fn extract(ob: pyo3::Borrowed<'__extract_a, '__extract_py, pyo3::PyAny>) -> pyo3::PyResult<Self> {
             use pyo3::prelude::*;
+            ${if tmeta(single_keyword) {
+                // Nested: the template expands under the proc-macro crate's edition.
+                if let Some((key, value)) = $crate::macros::single_keyword(&ob) {
+                    if let Ok(name) = key.to_str() {
+                        if let Some(params) = Self::from_single_keyword(name, &value) {
+                            return params;
+                        }
+                    }
+                }
+            }}
             ${if tmeta(deny_unknown) {
                 let _ = $crate::macros::reject_unknown_kwargs(
                     ob.cast::<pyo3::types::PyDict>().ok(),
@@ -97,6 +148,64 @@ derive_deftly::define_derive_deftly! {
             // Avoid an unused-assignment warning after the last generated field.
             let _ = remaining;
             Ok(params)
+        }
+    }
+}
+
+derive_deftly::define_derive_deftly! {
+    /// Extract inline fields directly and delegate other parameters to boxed options.
+    /// The field marked `flatten` names the full options type.
+    ExtractOptionsWrapper for struct:
+
+    impl<$tgens> $ttype where $twheres {
+        ${for fields {
+            ${when fmeta(flatten)}
+            pub(crate) const FIELDS: &'static [&'static str] =
+                ${fmeta(flatten) as ty}::FIELDS;
+        }}
+    }
+
+    impl<'__extract_a, '__extract_py, $tgens>
+        pyo3::FromPyObject<'__extract_a, '__extract_py> for $ttype
+        where $twheres
+    {
+        type Error = pyo3::PyErr;
+
+        fn extract(ob: pyo3::Borrowed<'__extract_a, '__extract_py, pyo3::PyAny>) -> pyo3::PyResult<Self> {
+            use pyo3::prelude::*;
+            let wrap = |options| Self {
+                ${for fields {
+                    ${when fmeta(flatten)}
+                    $fname: Some(Box::new(options)),
+                }}
+                ..Self::default()
+            };
+            if let Some((key, value)) = $crate::macros::single_keyword(&ob) {
+                if let Ok(name) = key.to_str() {
+                    match name {
+                        ${for fields {
+                            ${when not(fmeta(flatten))}
+                            ${concat $fname} => return value.extract().map(|value| Self {
+                                $fname: value,
+                                ..Self::default()
+                            }),
+                        }}
+                        _ => {}
+                    }
+                    ${for fields {
+                        ${when fmeta(flatten)}
+                        if let Some(options) =
+                            ${fmeta(flatten) as ty}::from_single_keyword(name, &value)
+                        {
+                            return options.map(wrap);
+                        }
+                    }}
+                }
+            }
+            ${for fields {
+                ${when fmeta(flatten)}
+                ${fmeta(flatten) as ty}::extract(ob).map(wrap)
+            }}
         }
     }
 }

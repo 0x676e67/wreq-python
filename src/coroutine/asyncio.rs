@@ -1,19 +1,21 @@
-//! The asyncio event loop side: the futures a suspended task waits on, and the per-loop
-//! [`Port`] that resolves them when Rust work wakes.
+//! The asyncio event loop side: the per-loop [`Port`] that resolves the futures suspended
+//! tasks wait on when Rust work wakes.
 
 use std::{
     cell::RefCell,
     io::{self, ErrorKind, Read, Write},
     iter, mem,
     sync::{
-        Arc, Mutex, MutexGuard, PoisonError, Weak,
+        Arc, Mutex, MutexGuard, OnceLock, PoisonError, Weak,
         atomic::{AtomicBool, Ordering},
+        mpsc::{self, Sender},
     },
+    thread,
 };
 
 use pyo3::{PyTraverseError, PyVisit, intern, prelude::*, sync::PyOnceLock};
 
-use super::awaitable::Slot;
+use super::{awaitable::Slot, waiter::Waiter};
 
 /// Wakes queued for one event loop, delivered by a single bell per batch.
 pub(crate) struct Port {
@@ -28,7 +30,7 @@ enum Bell {
     /// A socket pair whose read end the loop watches. The read end is `None`
     /// when Python owns it, as with a proactor loop.
     Socket { tx: Socket, rx: Option<Socket> },
-    /// A loop that cannot watch the socket: the waking thread schedules the drain,
+    /// A loop that cannot watch the socket: a dedicated thread schedules the drain,
     /// and a [`Keeper`] holds the port until the loop closes.
     Loop(Py<PyAny>),
 }
@@ -39,7 +41,7 @@ type Socket = std::os::unix::net::UnixStream;
 #[cfg(windows)]
 type Socket = std::net::TcpStream;
 
-/// Resolves the asyncio futures of queued coroutines on the loop thread.
+/// Resolves the waiters of queued coroutines on the loop thread, resuming their tasks.
 #[pyclass(frozen, module = "wreq")]
 struct Drain(Arc<Port>);
 
@@ -56,13 +58,11 @@ thread_local! {
 // ===== impl Port =====
 
 impl Port {
-    /// A new asyncio future for a task to wait on, and the port of the loop that runs it.
-    pub(super) fn waiter(py: Python<'_>) -> PyResult<(Py<PyAny>, Arc<Port>)> {
+    /// A new future for a task to wait on, and the port of the loop that runs it.
+    pub(super) fn waiter(py: Python<'_>) -> PyResult<(Py<Waiter>, Arc<Port>)> {
         let (event_loop, port) = Self::current(py)?;
-        let waiter = event_loop.call_method0(intern!(py, "create_future"))?;
-        // Tasks only accept futures marked as yielded by `await`.
-        waiter.setattr(intern!(py, "_asyncio_future_blocking"), true)?;
-        Ok((waiter.unbind(), port))
+        let waiter = Py::new(py, Waiter::new(event_loop))?;
+        Ok((waiter, port))
     }
 
     /// Return the running loop and its port, opening the port on first use.
@@ -173,19 +173,50 @@ impl Port {
                     _ => break,
                 }
             },
-            Bell::Loop(event_loop) => {
-                Python::try_attach(|py| {
-                    let drain = Drain(self.clone());
-                    let scheduled = event_loop
-                        .bind(py)
-                        .call_method1(intern!(py, "call_soon_threadsafe"), (drain,));
-                    // A closed loop never runs the drain.
-                    if scheduled.is_err() {
-                        self.close();
-                    }
-                });
-            }
+            Bell::Loop(_) => self.clone().schedule_off_thread(),
         }
+    }
+
+    /// Schedule a drain from a thread that only waits for the GIL, started on first use.
+    ///
+    /// Wakers may run under a runtime's internal locks, such as a semaphore's while it closes,
+    /// that a GIL holder may be waiting for, so they never attach themselves. Without the
+    /// thread, the waking thread schedules the drain.
+    fn schedule_off_thread(self: Arc<Self>) {
+        static SCHEDULER: OnceLock<Option<Sender<Arc<Port>>>> = OnceLock::new();
+        let scheduler = SCHEDULER.get_or_init(|| {
+            let (tx, rx) = mpsc::channel::<Arc<Port>>();
+            thread::Builder::new()
+                .name("wreq-loop-wake".into())
+                .spawn(move || rx.into_iter().for_each(|port| port.schedule_drain()))
+                .ok()
+                .map(|_| tx)
+        });
+        match scheduler {
+            Some(tx) => {
+                if let Err(mpsc::SendError(port)) = tx.send(self) {
+                    port.schedule_drain();
+                }
+            }
+            None => self.schedule_drain(),
+        }
+    }
+
+    /// Schedule a drain on the port's loop, attached to Python.
+    fn schedule_drain(self: &Arc<Self>) {
+        let Bell::Loop(event_loop) = &self.bell else {
+            return;
+        };
+        Python::try_attach(|py| {
+            let drain = Drain(self.clone());
+            let scheduled = event_loop
+                .bind(py)
+                .call_method1(intern!(py, "call_soon_threadsafe"), (drain,));
+            // A closed loop never runs the drain.
+            if scheduled.is_err() {
+                self.close();
+            }
+        });
     }
 
     /// Discard queued wakes, breaking the cycle between queued slots and the port.
@@ -224,21 +255,10 @@ impl Drain {
             let Some(waiter) = slot.take_waiter() else {
                 continue;
             };
-            // Resume the task awaiting the waiter, unless it was already cancelled.
-            let done = waiter
-                .bind(py)
-                .call_method0(intern!(py, "done"))
-                .and_then(|done| done.is_truthy());
-            let released = match done {
-                Ok(false) => waiter
-                    .bind(py)
-                    .call_method1(intern!(py, "set_result"), (py.None(),))
-                    .map(drop),
-                done => done.map(drop),
-            };
-            if let Err(err) = released {
-                // A raising callback, such as a signal handler, ends this drain. Requeue
-                // this wake and the rest; the next drain skips futures already done.
+            // Resume the task awaiting the waiter now, unless it was already cancelled.
+            if let Err(err) = Waiter::resolve(waiter.bind(py)) {
+                // A `KeyboardInterrupt`, `SystemExit` or busy waiter ends this drain. Requeue
+                // this wake and the rest; the next drain skips a waiter already resolved.
                 slot.set_waiter(waiter);
                 port.lock().splice(..0, iter::once(slot).chain(slots));
                 port.ring();

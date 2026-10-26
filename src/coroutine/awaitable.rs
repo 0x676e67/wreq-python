@@ -16,12 +16,12 @@ use pyo3::{
     types::{PyTraceback, PyTuple, PyType},
 };
 
-use super::{Port, scope::Scope};
+use super::{Port, Start, scope::Scope, waiter::Waiter};
 
 /// An awaitable driving a Rust future on the asyncio event loop thread.
 ///
-/// Each suspension hands the task a real asyncio future, so task cancellation and
-/// the C task fast path work unchanged. A throw it accepts, or a close, drops the Rust
+/// Each suspension hands the task a waiter following the asyncio future protocol, so
+/// task cancellation works unchanged. A throw it accepts, or a close, drops the Rust
 /// future, which aborts any spawned work.
 ///
 /// A request coroutine also works as `async with`, as `async with await` would.
@@ -31,32 +31,50 @@ use super::{Port, scope::Scope};
 #[pyclass(module = "wreq")]
 pub struct Coroutine {
     qualname: &'static str,
+    /// Run on the first step, which may finish without polling a future.
+    eager: Option<Eager>,
     /// Polled only through `&mut self`, so `get_mut` reaches it without locking.
     future: Mutex<Option<BoxFuture<'static, PyResult<Py<PyAny>>>>>,
+    /// Created on the first poll, so a coroutine finishing on its first step needs none.
+    wakeup: Option<Wakeup>,
+    /// A poll reached suspension, which may have published a port or waiter.
+    suspended: bool,
+    pub(super) scope: Scope,
+}
+
+/// The first step of an eager coroutine, taken on first await.
+struct Eager {
+    start: fn(Bound<'_, PyAny>) -> PyResult<Start>,
+    arg: Py<PyAny>,
+}
+
+/// The waker a coroutine polls its future with, and the wake state behind it.
+///
+/// Reusing one waker lets Tokio skip re-registering it on every poll.
+struct Wakeup {
     slot: Arc<Slot>,
     waker: Waker,
-    pub(super) scope: Scope,
 }
 
 /// The outcome of a step: the protocol's `StopIteration` is built only for Python.
 pub(super) enum Step {
-    /// Suspend, handing the task an asyncio future to wait on, or `None`.
+    /// Suspend, handing the task a future to wait on, or `None`.
     Yield(Py<PyAny>),
     /// Finish with this value.
     Return(Py<PyAny>),
 }
 
-/// Wake state shared with Rust wakers for the coroutine's whole life.
+/// Wake state shared with Rust wakers from the first poll on.
 ///
-/// Reusing one waker lets Tokio skip re-registering it on every poll. Wakes only
-/// change the state and queue the slot; Python objects are touched on the loop thread.
+/// Wakes only change the state and queue the slot; Python objects are touched on the loop
+/// thread.
 #[derive(Default)]
 pub(super) struct Slot {
     state: AtomicU8,
     /// The port of the loop the coroutine last waited on, set before each wait.
     port: Mutex<Option<Arc<Port>>>,
-    /// The asyncio future the task awaits while the coroutine waits.
-    waiter: Mutex<Option<Py<PyAny>>>,
+    /// The future the task awaits while the coroutine waits.
+    waiter: Mutex<Option<Py<Waiter>>>,
 }
 
 const POLLING: u8 = 0;
@@ -71,12 +89,27 @@ impl Coroutine {
     where
         F: Future<Output = PyResult<Py<PyAny>>> + Send + 'static,
     {
-        let slot = Arc::new(Slot::default());
         Coroutine {
             qualname,
+            eager: None,
             future: Mutex::new(Some(future.boxed())),
-            waker: Waker::from(slot.clone()),
-            slot,
+            wakeup: None,
+            suspended: false,
+            scope: Scope::Unsupported,
+        }
+    }
+
+    pub(super) fn eager(
+        qualname: &'static str,
+        arg: Py<PyAny>,
+        start: fn(Bound<'_, PyAny>) -> PyResult<Start>,
+    ) -> Self {
+        Coroutine {
+            qualname,
+            eager: Some(Eager { start, arg }),
+            future: Mutex::new(None),
+            wakeup: None,
+            suspended: false,
             scope: Scope::Unsupported,
         }
     }
@@ -86,6 +119,12 @@ impl Coroutine {
         self.future
             .get_mut()
             .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Whether the coroutine was not yet awaited to its end.
+    #[inline]
+    pub(super) fn is_pending(&mut self) -> bool {
+        self.eager.is_some() || self.future().is_some()
     }
 
     pub(super) fn step(
@@ -98,6 +137,19 @@ impl Coroutine {
         }
         self.scope.start();
 
+        if let Some(Eager { start, arg }) = self.eager.take() {
+            match start(arg.into_bound(py)) {
+                Ok(Start::Ready(value)) => {
+                    return self.complete(py, value).inspect_err(|_| self.abandon());
+                }
+                Ok(Start::Pending(future)) => *self.future() = Some(future),
+                Err(err) => {
+                    self.abandon();
+                    return Err(err);
+                }
+            }
+        }
+
         let future = self
             .future
             .get_mut()
@@ -105,35 +157,46 @@ impl Coroutine {
             .as_mut()
             .ok_or_else(|| PyRuntimeError::new_err("cannot reuse already awaited coroutine"))?;
 
+        let Wakeup { slot, waker } = self.wakeup.get_or_insert_with(Wakeup::new);
+
         // A pending waiter means another task is suspended on this coroutine. Once
         // it is taken, wakes from now on resume this poll.
-        if let Some(waiter) = self.slot.take_waiter()
-            && let Err(err) = ensure_done(waiter.bind(py))
+        if self.suspended
+            && let Some(waiter) = slot.take_waiter()
         {
-            self.slot.set_waiter(waiter);
-            return Err(err);
+            let done = waiter.get().is_done();
+            if !matches!(done, Ok(true)) {
+                slot.set_waiter(waiter);
+                return Err(done.err().unwrap_or_else(awaited_already));
+            }
         }
 
-        self.slot.state.store(POLLING, Ordering::Release);
-        if let Poll::Ready(result) = future.as_mut().poll(&mut Context::from_waker(&self.waker)) {
+        slot.state.store(POLLING, Ordering::Release);
+        if let Poll::Ready(result) = future.as_mut().poll(&mut Context::from_waker(waker)) {
             return result
                 .and_then(|value| self.complete(py, value))
                 .inspect_err(|_| self.abandon());
         }
         // A coroutine that cannot wait ends here, releasing any spawned work.
-        self.slot
-            .suspend(py)
-            .map(Step::Yield)
+        self.suspended = true;
+        slot.suspend(py)
+            .map(|waiter| Step::Yield(waiter.map_or_else(|| py.None(), Py::into_any)))
             .inspect_err(|_| self.abandon())
     }
 
     pub(super) fn finish(&mut self) {
+        self.eager = None;
         *self.future() = None;
-        self.slot.state.store(DONE, Ordering::Release);
+        let Some(Wakeup { slot, .. }) = &self.wakeup else {
+            return;
+        };
+        slot.state.store(DONE, Ordering::Release);
         // A finished coroutine must not keep its loop's port open.
-        let port = self.slot.lock_port().take();
-        drop(port);
-        drop(self.slot.take_waiter());
+        if self.suspended {
+            let port = slot.lock_port().take();
+            drop(port);
+            drop(slot.take_waiter());
+        }
     }
 }
 
@@ -189,14 +252,19 @@ impl Coroutine {
 
     fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {
         self.scope.traverse(&visit)?;
+        if let Some(eager) = &self.eager {
+            visit.call(&eager.arg)?;
+        }
+        let Some(Wakeup { slot, .. }) = &self.wakeup else {
+            return Ok(());
+        };
         // Pending Rust work owns the waiter until its loop closes the port; only then
         // can a cycle through the waiter be collected without aborting live requests.
-        let closed = self
-            .slot
+        let closed = slot
             .port
             .try_lock()
             .is_ok_and(|port| port.as_ref().is_some_and(|port| !port.is_open()));
-        if closed && let Ok(waiter) = self.slot.waiter.try_lock() {
+        if closed && let Ok(waiter) = slot.waiter.try_lock() {
             visit.call(&*waiter)?;
         }
         Ok(())
@@ -316,9 +384,23 @@ pub(super) fn ensure_done(waiter: &Bound<'_, PyAny>) -> PyResult<()> {
     {
         Ok(())
     } else {
-        Err(PyRuntimeError::new_err(
-            "coroutine is being awaited already",
-        ))
+        Err(awaited_already())
+    }
+}
+
+fn awaited_already() -> PyErr {
+    PyRuntimeError::new_err("coroutine is being awaited already")
+}
+
+// ===== impl Wakeup =====
+
+impl Wakeup {
+    fn new() -> Self {
+        let slot = Arc::new(Slot::default());
+        Wakeup {
+            waker: Waker::from(slot.clone()),
+            slot,
+        }
     }
 }
 
@@ -327,9 +409,9 @@ pub(super) fn ensure_done(waiter: &Bound<'_, PyAny>) -> PyResult<()> {
 impl Slot {
     /// Suspend after a pending poll, returning the future the task should await,
     /// or `None` for a bare yield when a wake already arrived.
-    fn suspend(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+    fn suspend(&self, py: Python<'_>) -> PyResult<Option<Py<Waiter>>> {
         if self.state.load(Ordering::Acquire) == NOTIFIED {
-            return Ok(py.None());
+            return Ok(None);
         }
         let (waiter, port) = Port::waiter(py)?;
         // Publish the port and waiter before waiting, so a wake that sees WAITING
@@ -340,11 +422,11 @@ impl Slot {
             .state
             .compare_exchange(POLLING, WAITING, Ordering::AcqRel, Ordering::Acquire)
         {
-            Ok(_) => Ok(waiter),
+            Ok(_) => Ok(Some(waiter)),
             // Woken after the poll but before waiting: resume on the next loop turn.
             Err(_) => {
                 drop(self.take_waiter());
-                Ok(py.None())
+                Ok(None)
             }
         }
     }
@@ -355,12 +437,16 @@ impl Slot {
     }
 
     #[inline]
-    pub(super) fn set_waiter(&self, waiter: Py<PyAny>) {
-        *self.waiter.lock().unwrap_or_else(PoisonError::into_inner) = Some(waiter);
+    pub(super) fn set_waiter(&self, waiter: Py<Waiter>) {
+        let mut slot = self.waiter.lock().unwrap_or_else(PoisonError::into_inner);
+        let replaced = slot.replace(waiter);
+        // Released after the lock: dropping a waiter may run Python, which may wake this slot.
+        drop(slot);
+        drop(replaced);
     }
 
     #[inline]
-    pub(super) fn take_waiter(&self) -> Option<Py<PyAny>> {
+    pub(super) fn take_waiter(&self) -> Option<Py<Waiter>> {
         self.waiter
             .lock()
             .unwrap_or_else(PoisonError::into_inner)

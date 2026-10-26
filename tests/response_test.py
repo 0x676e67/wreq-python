@@ -1,6 +1,8 @@
 import asyncio
+import gc
 import json
 import socket
+import sys
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -196,6 +198,63 @@ async def test_reads_decode_buffered_and_cached_bodies(count):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("blocking", [False, True], ids=["async", "blocking"])
+@pytest.mark.parametrize("scope", ["client", "request"])
+@pytest.mark.parametrize("reader", ["bytes", "stream"])
+@pytest.mark.parametrize("prefix", [0, 5], ids=["head-only", "partial-body"])
+async def test_read_timeout_starts_when_the_caller_reads(blocking, scope, reader, prefix):
+    body = b"0123456789"
+    timeout = {"read_timeout": timedelta(milliseconds=150)}
+    client_options = timeout if scope == "client" else {}
+    request_options = timeout if scope == "request" else {}
+    received = asyncio.Event()
+    release = threading.Event()
+    loop = asyncio.get_running_loop()
+
+    def read_blocking(url):
+        with wreq.blocking.Client(proxies=[], **client_options) as client:
+            with client.get(url, **request_options) as response:
+                loop.call_soon_threadsafe(received.set)
+                assert release.wait(5)
+                if reader == "bytes":
+                    return bytes(response.bytes())
+                with response.stream() as stream:
+                    return b"".join(stream)
+
+    async def read_async(url):
+        async with wreq.Client(proxies=[], **client_options) as client:
+            async with await client.get(url, **request_options) as response:
+                received.set()
+                assert await asyncio.to_thread(release.wait, 5)
+                if reader == "bytes":
+                    return bytes(await response.bytes())
+                async with response.stream() as stream:
+                    return b"".join([chunk async for chunk in stream])
+
+    async with local_server() as (url, connections):
+        task = asyncio.create_task(
+            asyncio.to_thread(read_blocking, url) if blocking else read_async(url)
+        )
+        try:
+            _, writer = await asyncio.wait_for(connections.get(), 5)
+            writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\n" + body[:prefix])
+            await writer.drain()
+            await asyncio.wait_for(received.wait(), 5)
+            # The rest arrives within the timeout, while application code waits longer.
+            await asyncio.sleep(0.05)
+            writer.write(body[prefix:])
+            await writer.drain()
+            await asyncio.sleep(0.3)
+            release.set()
+            assert await asyncio.wait_for(task, 5) == body
+        finally:
+            release.set()
+            if not task.done():
+                task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
 async def test_empty_body_and_unit_results():
     async with local_server() as (url, connections):
         client = wreq.Client(proxies=[])
@@ -222,6 +281,117 @@ async def test_empty_body_and_unit_results():
             response.close().__next__()
         assert stop.value.value is None
         assert await client.__aexit__(None, None, None) is None
+
+
+@pytest.mark.asyncio
+async def test_ready_awaits_finish_on_first_step_and_stay_lazy():
+    payload = b'{"ready": 1}'
+    head = b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: %d\r\n\r\n"
+    # Only CPython's GC sees what an extension object holds.
+    cpython = sys.implementation.name == "cpython"
+    async with local_server() as (url, connections), wreq.Client(proxies=[]) as client:
+
+        async def get():
+            task = asyncio.create_task(client.get(url))
+            _, writer = await asyncio.wait_for(connections.get(), 5)
+            writer.write(head % len(payload) + payload)
+            return await asyncio.wait_for(task, 5)
+
+        def finish(coroutine):
+            with pytest.raises(StopIteration) as stop:
+                coroutine.send(None)
+            with pytest.raises(RuntimeError, match="already awaited"):
+                coroutine.send(None)
+            return stop.value.value
+
+        response = await get()
+        # Nothing runs before the first step: an unstarted close or exit leaves the body
+        # readable.
+        response.close().close()
+        response.__aexit__(None, None, None).close()
+        # A buffered body finishes on the first step.
+        assert bytes(finish(response.bytes())) == payload
+        assert finish(response.json()) == {"ready": 1}
+        assert finish(response.text()) == payload.decode()
+        assert finish(response.text(encoding="utf-8")) == payload.decode()
+        assert finish(response.__aenter__()) is response
+        assert finish(response.__aexit__(None, None, None)) is None
+        with pytest.raises(RuntimeError):
+            await response.bytes()
+
+        # Nor does an unstarted read take the body: a read caches it, and a cached body
+        # cannot be streamed. Until it ends, the read holds the response.
+        response = await get()
+        read = response.bytes()
+        if cpython:
+            assert response in gc.get_referents(read)
+        with pytest.raises(ValueError):
+            read.throw(ValueError("unread"))
+        if cpython:
+            assert response not in gc.get_referents(read)
+        response.json().close()
+        response.text().close()
+        streamer = response.stream()
+        unread = streamer.__anext__()
+        if cpython:
+            assert streamer in gc.get_referents(unread)
+        unread.close()
+        streamer.__aexit__(None, None, None).close()
+        assert bytes(finish(streamer.__anext__())) == payload
+        with pytest.raises(StopAsyncIteration):
+            streamer.__anext__().send(None)
+        assert finish(streamer.__aexit__(None, None, None)) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("blocking", [False, True], ids=["async", "blocking"])
+async def test_prefetched_stream_keeps_lazy_reads_and_owned_views(blocking):
+    payload = b"buffered" * 128
+    reply = b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 1024\r\n\r\n" + payload
+
+    def read_blocking(url):
+        with wreq.blocking.Client(proxies=[]) as client:
+            response = client.get(url)
+            with response.stream() as stream:
+                views = list(stream)
+                # Every later read reports the end the same way.
+                for _ in range(2):
+                    with pytest.raises(StopIteration) as stop:
+                        next(stream)
+                    assert stop.value.args == ("The iterator is exhausted",)
+            with pytest.raises(RuntimeError):
+                response.stream()
+            assert response.status.as_int() == 200
+            assert response.content_length == len(payload)
+            response.close()
+            return views
+
+    async def read_async(url):
+        async with wreq.Client(proxies=[]) as client:
+            response = await client.get(url)
+            async with response.stream() as stream:
+                # Creating and discarding a read must not consume a prefetched frame.
+                unread = stream.__anext__()
+                unread.close()
+                views = [view async for view in stream]
+            with pytest.raises(RuntimeError):
+                response.stream()
+            assert response.status.as_int() == 200
+            assert response.content_length == len(payload)
+            await response.close()
+            return views
+
+    async with local_server() as (url, connections):
+        task = asyncio.create_task(
+            asyncio.to_thread(read_blocking, url) if blocking else read_async(url)
+        )
+        _, writer = await asyncio.wait_for(connections.get(), 5)
+        writer.write(reply)
+        views = await asyncio.wait_for(task, 5)
+
+    assert all(isinstance(view, memoryview) and view.readonly for view in views)
+    # Both the stream and response have closed; each view still owns its bytes.
+    assert b"".join(views) == payload
 
 
 @pytest.mark.asyncio
@@ -270,8 +440,9 @@ async def steps(coroutine):
 
 
 @asynccontextmanager
-async def body_server(http2, body):
-    """Answer every request with `body` and its Content-Length, over HTTP/1 or h2c."""
+async def body_server(http2, body, delay=0):
+    """Answer every request with `body` and its Content-Length, over HTTP/1 or h2c,
+    sending the body `delay` seconds after the head."""
     length = str(len(body)).encode()
     handlers, writers = set(), []
 
@@ -286,7 +457,11 @@ async def body_server(http2, body):
             if not http2:
                 await reader.readuntil(b"\r\n\r\n")
                 head = b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: "
-                writer.write(head + length + b"\r\n\r\n" + body)
+                writer.write(head + length + b"\r\n\r\n")
+                if delay:
+                    await writer.drain()
+                    await asyncio.sleep(delay)
+                writer.write(body)
                 await writer.drain()
                 await reader.read()
                 return
@@ -302,7 +477,12 @@ async def body_server(http2, body):
                 elif kind == 1:
                     # `:status: 200` and `content-length`, then the body ending the stream.
                     block = b"\x88\x0f\x0d" + bytes((len(length),)) + length
-                    if body:
+                    if delay:
+                        writer.write(frame(1, 4, stream, block))
+                        await writer.drain()
+                        await asyncio.sleep(delay)
+                        writer.write(frame(0, 1, stream, body))
+                    elif body:
                         writer.write(
                             frame(1, 4, stream, block) + frame(0, 1, stream, body)
                         )
@@ -328,12 +508,15 @@ async def body_server(http2, body):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("read", ["bytes", "stream"])
+@pytest.mark.parametrize("delay", [0, 0.02], ids=["with-head", "later"])
 @pytest.mark.parametrize("body", [b"ok", b""], ids=["body", "empty"])
 @pytest.mark.parametrize("http2", [False, True], ids=["http1", "http2"])
-async def test_only_http1_bodies_are_read_on_the_event_loop(http2, body, read):
-    # A buffered HTTP/1 body is read in the first step of the coroutine. An HTTP/2 body,
-    # even an empty one, is always read on the runtime, so the coroutine suspends first.
-    async with body_server(http2, body) as url:
+async def test_event_loop_reads_only_bodies_it_may_poll(http2, body, delay, read):
+    # A buffered HTTP/1 body, or a short HTTP/2 body that arrived with its head and was
+    # read along with it, is read in the first step of the coroutine. An HTTP/2 body still
+    # tied to its stream, even an empty one, is read on the runtime, so the coroutine
+    # suspends first.
+    async with body_server(http2, body, delay) as url:
         async with wreq.Client(http2_only=http2, proxies=[]) as client:
             response = await asyncio.wait_for(client.get(url), 5)
             assert response.version == (Version.HTTP_2 if http2 else Version.HTTP_11)
@@ -345,7 +528,7 @@ async def test_only_http1_bodies_are_read_on_the_event_loop(http2, body, read):
             else:
                 result, suspended = await steps(response.stream().__anext__())
                 assert (bytes(result) if result is not None else b"") == body
-            assert (suspended > 0) == http2
+            assert (suspended > 0) == (http2 and delay > 0)
 
 
 @pytest.mark.asyncio

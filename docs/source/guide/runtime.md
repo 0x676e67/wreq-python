@@ -20,6 +20,10 @@ Both worker schedulers support async and blocking clients. `CURRENT_THREAD`
 supports only `wreq.blocking.Client`; passing it to `wreq.Client` raises
 `ValueError`.
 
+With `WORK_STEALING`, blocking requests run on the calling thread while
+background workers handle connection I/O. `PER_WORKER` submits requests to the
+client's selected worker. Both keep processing connections between calls.
+
 Runtime worker count and request concurrency are different settings. For
 example, one async client can have many requests in flight with `workers=1`.
 With `PER_WORKER`, increasing the worker count distributes newly created clients
@@ -74,7 +78,8 @@ or all process resources.
 
 ## Use the calling thread for blocking I/O {#current-thread}
 
-`CURRENT_THREAD` avoids dispatching each request to a background I/O worker.
+`CURRENT_THREAD` runs connection I/O on the calling thread, without background
+I/O workers.
 Create the client and runtime together and reuse them for subsequent calls:
 
 ```python

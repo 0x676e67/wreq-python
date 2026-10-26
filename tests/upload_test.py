@@ -1,6 +1,7 @@
 import asyncio
 import contextvars
 import gc
+import inspect
 import threading
 
 import pytest
@@ -64,6 +65,97 @@ async def test_async_upload(multipart, no_automatic_gc):
         response = await asyncio.wait_for(task, 5)
         await response.close()
         assert closed.is_set()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("hook", ["instance", "base", "factory"])
+@pytest.mark.parametrize("keywords", [False, True], ids=["legacy", "kwargs"])
+async def test_upload_task_creation_hooks(hook, keywords, monkeypatch):
+    loop = asyncio.get_running_loop()
+    original = loop.create_task
+    context = contextvars.ContextVar("task_hook", default="missing")
+    created = []
+
+    def tracked(coro, **kwargs):
+        # The loop also closes collected async generators here, which PyPy does late.
+        if getattr(coro, "__qualname__", None) == "forward":
+            created.append(coro)
+            task_context = contextvars.copy_context()
+            task_context.run(context.set, "wrapped")
+            kwargs["context"] = task_context
+        if hook == "factory":
+            return asyncio.Task(coro, loop=loop, **kwargs)
+        return original(coro, **kwargs)
+
+    def legacy(coro, *, name=None, context=None):
+        return tracked(coro, name=name, context=context)
+
+    create = tracked if keywords else legacy
+    if hook == "instance":
+        monkeypatch.setattr(loop, "create_task", create)
+    else:
+        if keywords:
+
+            def create_on_loop(self, coro, **kwargs):
+                return tracked(coro, **kwargs)
+        else:
+
+            def create_on_loop(self, coro, *, name=None, context=None):
+                return tracked(coro, name=name, context=context)
+        if hook == "base":
+            monkeypatch.setattr(asyncio.BaseEventLoop, "create_task", create_on_loop)
+        else:
+            factory = loop.get_task_factory()
+            loop.set_task_factory(create_on_loop)
+
+    async def chunks():
+        assert context.get() == "wrapped"
+        yield b"body"
+
+    try:
+        async with local_server() as (url, connections), wreq.Client(proxies=[]) as client:
+            request = asyncio.create_task(client.post(url, body=chunks()))
+            try:
+                await asyncio.sleep(0)
+                assert len(created) == 1
+                reader, writer = await asyncio.wait_for(connections.get(), 5)
+                assert await asyncio.wait_for(read_chunked(reader), 5) == b"body"
+                writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+                await writer.drain()
+                await (await asyncio.wait_for(request, 5)).close()
+                assert context.get() == "missing"
+            finally:
+                request.cancel()
+                await asyncio.gather(request, return_exceptions=True)
+    finally:
+        if hook == "factory":
+            loop.set_task_factory(factory)
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    inspect.getfullargspec(asyncio.BaseEventLoop.create_task).varkw is None,
+    reason="loop create_task does not pass eager_start",
+)
+async def test_upload_starts_eagerly_on_standard_loop():
+    started = False
+
+    async def chunks():
+        nonlocal started
+        started = True
+        yield b"body"
+
+    async with local_server() as (url, connections), wreq.Client(proxies=[]) as client:
+        request = asyncio.create_task(client.post(url, body=chunks()))
+        # Let the request's first poll extract the body, before a separately queued
+        # forwarding task could run on the following loop iteration.
+        await asyncio.sleep(0)
+        assert started
+        reader, writer = await asyncio.wait_for(connections.get(), 5)
+        assert await asyncio.wait_for(read_chunked(reader), 5) == b"body"
+        writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+        await writer.drain()
+        await (await asyncio.wait_for(request, 5)).close()
 
 
 @pytest.mark.asyncio
@@ -247,3 +339,38 @@ async def test_cancelled_forwarding_fails_the_upload():
     finally:
         server.close()
         await server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_upload_task_code_replacement_keeps_hook_arguments(monkeypatch):
+    loop = asyncio.get_running_loop()
+    original = loop.create_task
+    calls = []
+
+    def create(coro, **kwargs):
+        if getattr(coro, "__qualname__", None) == "forward":
+            calls.append(dict(kwargs))
+        return original(coro, **kwargs)
+
+    def legacy(coro, *, name=None, context=None):
+        if getattr(coro, "__qualname__", None) == "forward":
+            calls.append({})
+        return original(coro, name=name, context=context)
+
+    monkeypatch.setattr(loop, "create_task", create)
+    async with local_server() as (url, connections), wreq.Client(proxies=[]) as client:
+        for code in (create.__code__, legacy.__code__):
+            create.__code__ = code
+            create.__kwdefaults__ = legacy.__kwdefaults__
+
+            async def chunks():
+                yield b"body"
+
+            task = original(client.post(url, body=chunks()))
+            reader, writer = await asyncio.wait_for(connections.get(), 5)
+            assert await asyncio.wait_for(read_chunked(reader), 5) == b"body"
+            writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+            await writer.drain()
+            await (await asyncio.wait_for(task, 5)).close()
+    assert len(calls) == 2
+    assert calls[-1] == {}

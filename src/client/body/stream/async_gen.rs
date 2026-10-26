@@ -3,12 +3,17 @@
 use std::{
     ffi::CStr,
     pin::Pin,
-    sync::Mutex,
+    sync::{Mutex, OnceLock},
     task::{Context, Poll, ready},
 };
 
 use futures_util::{Stream, StreamExt};
-use pyo3::{IntoPyObjectExt, intern, prelude::*, sync::PyOnceLock};
+use pyo3::{
+    IntoPyObjectExt, intern,
+    prelude::*,
+    sync::PyOnceLock,
+    types::{PyCode, PyDict, PyType},
+};
 use tokio::sync::TryAcquireError;
 
 use super::{Item, PyBytesLike, lock, queue};
@@ -53,12 +58,9 @@ impl AsyncStream {
             tx: Mutex::new(Some(tx)),
         };
         let coroutine = forward.bind(py).call1((generator, sender))?;
-        // create_task captures the caller's contextvars on the running loop.
-        let task = event_loop
-            .call_method1(intern!(py, "create_task"), (&coroutine,))
-            .inspect_err(|_| {
-                let _ = coroutine.call_method0(intern!(py, "close"));
-            })?;
+        let task = start(&event_loop, &coroutine).inspect_err(|_| {
+            let _ = coroutine.call_method0(intern!(py, "close"));
+        })?;
         Ok(Self {
             rx,
             task: Some((task.unbind(), event_loop.unbind())),
@@ -151,6 +153,81 @@ impl Sender {
         let tx = lock(&self.tx).take();
         drop(tx);
     }
+}
+
+/// Run `coroutine` as a task on `event_loop`, capturing the caller's contextvars.
+///
+/// A standard loop whose `create_task` passes extra keywords to `Task`, as on Python 3.14 and
+/// later 3.13 releases, receives an eager-start hint so chunks can be queued before the
+/// request is sent. Task creation always goes through the loop, including wrappers that
+/// capture context or instrument tasks.
+fn start<'py>(
+    event_loop: &Bound<'py, PyAny>,
+    coroutine: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = event_loop.py();
+    let create_task = event_loop.getattr(intern!(py, "create_task"))?;
+    if eager(event_loop, &create_task) {
+        let kwargs = PyDict::new(py);
+        kwargs.set_item(intern!(py, "eager_start"), true)?;
+        return create_task.call((coroutine,), Some(&kwargs));
+    }
+    create_task.call1((coroutine,))
+}
+
+/// Only pass the hint where the standard loop API supports it. Older wrappers and custom
+/// factories keep their usual arguments; the actual loop method still controls scheduling.
+fn eager(event_loop: &Bound<'_, PyAny>, create_task: &Bound<'_, PyAny>) -> bool {
+    static BASE: PyOnceLock<Py<PyType>> = PyOnceLock::new();
+    static VERSION: OnceLock<(bool, bool)> = OnceLock::new();
+    let py = event_loop.py();
+    let (supported, forwards_keywords) = *VERSION.get_or_init(|| {
+        let version = py.version_info();
+        (version >= (3, 12), version >= (3, 14))
+    });
+    if !supported {
+        return false;
+    }
+    let standard = || -> PyResult<bool> {
+        let base = BASE.import(py, "asyncio", "BaseEventLoop")?;
+        let name = intern!(py, "create_task");
+        let method = base.getattr(name)?;
+        // Python 3.14 always passes extra keywords to `Task`, 3.12 never does, and 3.13 only
+        // in later releases; there only the unwrapped standard method shows whether it does.
+        let forwards = forwards_keywords
+            || (method
+                .getattr(intern!(py, "__module__"))?
+                .eq("asyncio.base_events")?
+                && takes_keywords(&method)?);
+        Ok(forwards
+            && event_loop.is_instance(base)?
+            && event_loop.get_type().getattr(name)?.is(&method)
+            && event_loop
+                .call_method0(intern!(py, "get_task_factory"))?
+                .is_none()
+            // Don't send a new keyword to an old-signature wrapper.
+            && takes_keywords(create_task)?)
+    };
+    standard().unwrap_or(false)
+}
+
+/// Whether the Python function `func` accepts `**kwargs` (`inspect.CO_VARKEYWORDS`).
+fn takes_keywords(func: &Bound<'_, PyAny>) -> PyResult<bool> {
+    static CODE: PyOnceLock<(Py<PyAny>, bool)> = PyOnceLock::new();
+    let py = func.py();
+    let code = func.getattr(intern!(py, "__code__"))?;
+    if let Some((cached, keywords)) = CODE.get(py)
+        && code.is(cached)
+    {
+        return Ok(*keywords);
+    }
+    let keywords = code.getattr(intern!(py, "co_flags"))?.extract::<u32>()? & 0x08 != 0;
+    // Code objects are immutable; replacing a function or its code misses this cache.
+    // A custom callable can expose a mutable __code__ proxy, so never cache that.
+    if code.is_exact_instance_of::<PyCode>() {
+        let _ = CODE.set(py, (code.unbind(), keywords));
+    }
+    Ok(keywords)
 }
 
 /// The coroutine that forwards an async generator into its [`Sender`].

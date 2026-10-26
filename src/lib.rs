@@ -25,7 +25,8 @@ mod tls;
 use client::{
     BlockingClient, Client, SocketAddr,
     body::multipart::{Multipart, Part},
-    resp::{BlockingResponse, BlockingWebSocket, Message, Response, Streamer, WebSocket},
+    resp::{BlockingResponse, Response, Streamer},
+    ws::{BlockingWebSocket, WebSocket, msg::Message},
 };
 use cookie::{Cookie, Jar, SameSite};
 use dns::{DnsOptions, LookupIpStrategy};
@@ -212,7 +213,8 @@ mod blocking {
         client::{
             BlockingClient,
             req::{Request, WebSocketRequest},
-            resp::{BlockingResponse, BlockingWebSocket},
+            resp::BlockingResponse,
+            ws::BlockingWebSocket,
         },
         http::Method,
     };
