@@ -153,6 +153,8 @@ class Part:
         value: (
             str
             | bytes
+            | bytearray
+            | memoryview
             | Path
             | Generator[bytes, str, None]
             | AsyncGenerator[bytes, str]
@@ -222,7 +224,7 @@ class Message:
     """
 
     @staticmethod
-    def from_binary(like: bytes | Any) -> "Message":
+    def from_binary(like: bytes | bytearray | memoryview | Any) -> "Message":
         r"""
         Creates a new binary message.
 
@@ -244,7 +246,7 @@ class Message:
         ...
 
     @staticmethod
-    def from_ping(data: bytes) -> "Message":
+    def from_ping(data: bytes | bytearray | memoryview) -> "Message":
         r"""
         Creates a new ping message.
 
@@ -255,7 +257,7 @@ class Message:
         ...
 
     @staticmethod
-    def from_pong(data: bytes) -> "Message":
+    def from_pong(data: bytes | bytearray | memoryview) -> "Message":
         r"""
         Creates a new pong message.
 
@@ -979,6 +981,8 @@ class Request(TypedDict):
     body: NotRequired[
         str
         | bytes
+        | bytearray
+        | memoryview
         | Sequence[Tuple[str, str]]
         | Tuple[str, str | int | float | bool]
         | Mapping[str, str | int | float | bool]

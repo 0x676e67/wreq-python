@@ -8,21 +8,18 @@ mod stream;
 use pyo3::{
     FromPyObject, PyResult, intern,
     prelude::*,
-    types::{PyByteArray, PyBytes, PyDict, PyIterator, PyList, PyString, PyTuple},
+    types::{PyDict, PyIterator, PyList, PyString, PyTuple},
 };
 
 pub use self::{form::Form, json::Json, stream::PyStream};
-use crate::{
-    error::Error,
-    extractor::{Binary, Text},
-};
+use crate::{buffer::PyBuffer, error::Error, extractor::Text};
 
 /// A `body=` argument, matched by type before trying form, JSON and then a stream.
 /// Mappings and pair sequences with scalar values are form-encoded and other containers
 /// JSON-encoded, without the `Content-Type` that `form=` and `json=` set.
 pub enum Body {
     Text(Text),
-    Bytes(Binary),
+    Bytes(PyBuffer),
     Form(Form),
     Json(Json),
     Stream(PyStream),
@@ -37,7 +34,7 @@ impl FromPyObject<'_, '_> for Body {
         if ob.is_instance_of::<PyString>() {
             return ob.extract().map(Body::Text);
         }
-        if ob.is_instance_of::<PyBytes>() || ob.is_instance_of::<PyByteArray>() {
+        if PyBuffer::is_bytes_like(&ob) {
             return ob.extract().map(Body::Bytes);
         }
         if ob.cast::<PyIterator>().is_ok() {

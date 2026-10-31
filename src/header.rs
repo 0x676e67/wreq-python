@@ -5,11 +5,7 @@ use pyo3::{
 };
 use wreq::header::{self, HeaderName, HeaderValue};
 
-use crate::{
-    buffer::PyBuffer,
-    error::Error,
-    extractor::{Binary, Text},
-};
+use crate::{buffer::PyBuffer, error::Error, extractor::Text};
 
 /// An HTTP header map whose names and values are exposed as read-only memoryviews.
 #[derive(Clone)]
@@ -67,7 +63,7 @@ impl HeaderMap {
     /// is returned. Use `get_all` to get all values associated with a given
     /// key. Returns `None` if there are no values associated with the key.
     #[pyo3(signature = (key, default=None))]
-    fn get(&self, key: PyBackedStr, default: Option<Binary>) -> Option<PyBuffer> {
+    fn get(&self, key: PyBackedStr, default: Option<PyBuffer>) -> Option<PyBuffer> {
         self.0
             .get::<&str>(key.as_ref())
             .cloned()

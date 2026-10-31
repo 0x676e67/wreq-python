@@ -1,3 +1,4 @@
+import array
 import asyncio
 import datetime
 import gc
@@ -107,6 +108,11 @@ def test_subclass_input_cycles_are_collected():
     cases = [
         (Text, "payload", lambda source: Message.from_text(source).data),
         (Binary, b"payload", lambda source: Message.from_binary(source).binary),
+        (
+            Binary,
+            b"payload",
+            lambda source: Message.from_binary(memoryview(source)).binary,
+        ),
         (Binary, b"payload", lambda source: Message.from_ping(source).ping),
         (Binary, b"payload", lambda source: Message.from_pong(source).pong),
         (Text, "payload", lambda source: HeaderMap({"X-Buffer": source})["X-Buffer"]),
@@ -168,6 +174,21 @@ def buffer_http_server():
                 self.end_headers()
                 self.wfile.write(b"hello world")
 
+        def do_POST(self):
+            if self.headers.get("Transfer-Encoding") == "chunked":
+                body = b""
+                while size := int(self.rfile.readline(), 16):
+                    body += self.rfile.read(size)
+                    self.rfile.readline()
+                self.rfile.readline()
+            else:
+                body = self.rfile.read(int(self.headers["Content-Length"]))
+            self.send_response(200)
+            self.send_header("Connection", "close")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         def log_message(self, *_):
             pass
 
@@ -183,6 +204,35 @@ def buffer_http_server():
         server.server_close()
         thread.join(timeout=5)
         assert not thread.is_alive()
+
+
+def test_bytes_like_inputs(buffer_http_server):
+    sources = [
+        Message.from_binary(b"<payload>").binary[1:-1],
+        memoryview(b"<payload>")[1:-1],
+        memoryview(bytearray(b"payload")),
+        memoryview(b"ppaayyllooaadd")[::2],
+        memoryview(array.array("B", b"payload")),
+    ]
+    client = blocking.Client(no_proxy=True, timeout=datetime.timedelta(seconds=3))
+    try:
+        # Other exporters keep their JSON meaning unless wrapped in a memoryview.
+        numbers = array.array("d", [1.5])
+        assert Message.from_binary(numbers).binary == b"[1.5]"
+        assert client.post(buffer_http_server, body=numbers).bytes() == b"[1.5]"
+        for source in sources:
+            assert Message.from_binary(source).binary == b"payload"
+            assert Message.from_ping(source).ping == b"payload"
+            assert Message.from_pong(source).pong == b"payload"
+            assert HeaderMap().get("missing", source) == b"payload"
+            for body in (source, iter([source])):
+                response = client.post(buffer_http_server, body=body)
+                assert response.bytes() == b"payload", source
+            form = Multipart(Part("field", source))
+            response = client.post(buffer_http_server, multipart=form)
+            assert b"\r\n\r\npayload\r\n" in bytes(response.bytes()), source
+    finally:
+        client.close()
 
 
 @pytest.mark.asyncio

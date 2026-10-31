@@ -25,13 +25,13 @@ use pyo3::{
 };
 
 use self::{async_gen::AsyncStream, iter::SyncStream};
-use crate::extractor::{Binary, Text};
+use crate::{buffer::PyBuffer, extractor::Text};
 
 type Item = PyResult<PyBytesLike>;
 
-/// A request body chunk: `bytes` or `bytearray` data, or a `str` sent as UTF-8.
+/// A request body chunk: `bytes`, `bytearray` or `memoryview` data, or a `str` sent as UTF-8.
 pub enum PyBytesLike {
-    Bytes(Binary),
+    Bytes(PyBuffer),
     String(Text),
 }
 

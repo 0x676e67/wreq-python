@@ -143,7 +143,9 @@ class HeaderMap:
         """
         ...
 
-    def get(self, key: str, default: bytes | None = None) -> memoryview | None:
+    def get(
+        self, key: str, default: bytes | bytearray | memoryview | None = None
+    ) -> memoryview | None:
         r"""
         Get the first value for a header name with optional default.
 

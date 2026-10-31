@@ -12,17 +12,11 @@ use std::fmt::Debug;
 use pyo3::{exceptions::PyValueError, prelude::*};
 use wreq::ws::message::{self, CloseCode, CloseFrame, Utf8Bytes};
 
-use crate::{
-    buffer::PyBuffer,
-    client::body::Json,
-    error::Error,
-    extractor::{Binary, Text},
-};
+use crate::{buffer::PyBuffer, client::body::Json, error::Error, extractor::Text};
 
 /// An enum representing either a bytes message or a JSON message.
-#[derive(FromPyObject)]
 pub enum BytesLike {
-    Bytes(Binary),
+    Bytes(PyBuffer),
     Json(Json),
 }
 
@@ -37,6 +31,23 @@ pub enum TextLike {
 #[derive(Debug, Clone)]
 #[pyclass(subclass, str, frozen, from_py_object)]
 pub struct Message(pub message::Message);
+
+// ===== impl BytesLike =====
+
+impl FromPyObject<'_, '_> for BytesLike {
+    type Error = PyErr;
+
+    fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
+        // Checked by type, so a JSON value does not first fail as bytes.
+        if PyBuffer::is_bytes_like(&ob) {
+            ob.extract().map(BytesLike::Bytes)
+        } else {
+            ob.extract().map(BytesLike::Json)
+        }
+    }
+}
+
+// ===== impl Message =====
 
 #[pymethods]
 impl Message {
@@ -145,14 +156,14 @@ impl Message {
     /// Creates a new ping message.
     #[staticmethod]
     #[pyo3(signature = (data))]
-    pub fn from_ping(data: Binary) -> Self {
+    pub fn from_ping(data: PyBuffer) -> Self {
         Self(message::Message::ping(data.0))
     }
 
     /// Creates a new pong message.
     #[staticmethod]
     #[pyo3(signature = (data))]
-    pub fn from_pong(data: Binary) -> Self {
+    pub fn from_pong(data: PyBuffer) -> Self {
         Self(message::Message::pong(data.0))
     }
 

@@ -1,13 +1,13 @@
 use std::path::PathBuf;
 
-use pyo3::{prelude::*, types::PyTuple};
+use pyo3::{
+    prelude::*,
+    types::{PyString, PyTuple},
+};
 use wreq::{Body, multipart};
 
 use crate::{
-    client::body::PyStream,
-    error::Error,
-    extractor::{Binary, Text},
-    header::HeaderMap,
+    buffer::PyBuffer, client::body::PyStream, error::Error, extractor::Text, header::HeaderMap,
 };
 
 /// A multipart form for a request. Its files open when the request is built, on the
@@ -17,11 +17,11 @@ pub struct Multipart {
     pub parts: Vec<Part>,
 }
 
-/// The data for a part value of a multipart form.
-#[derive(FromPyObject)]
+/// The data for a part value of a multipart form: text, bytes-like data, a file path, or
+/// otherwise a stream.
 pub enum Value {
     Text(Text),
-    Bytes(Binary),
+    Bytes(PyBuffer),
     File(PathBuf),
     Stream(PyStream),
 }
@@ -92,6 +92,24 @@ impl FromPyObject<'_, '_> for Multipart {
 }
 
 // ===== impl Value =====
+
+impl FromPyObject<'_, '_> for Value {
+    type Error = PyErr;
+
+    fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
+        // Matched by type, so a path or a stream does not first fail as text and bytes.
+        if ob.is_instance_of::<PyString>() {
+            return ob.extract().map(Value::Text);
+        }
+        if PyBuffer::is_bytes_like(&ob) {
+            return ob.extract().map(Value::Bytes);
+        }
+        match ob.extract() {
+            Ok(path) => Ok(Value::File(path)),
+            Err(_) => ob.extract().map(Value::Stream),
+        }
+    }
+}
 
 impl Value {
     /// Copy a reusable value; `None` for a stream, which can be sent only once.
