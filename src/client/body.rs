@@ -34,8 +34,8 @@ impl FromPyObject<'_, '_> for Body {
         if ob.is_instance_of::<PyString>() {
             return ob.extract().map(Body::Text);
         }
-        if PyBuffer::is_bytes_like(&ob) {
-            return ob.extract().map(Body::Bytes);
+        if let Some(bytes) = PyBuffer::extract_bytes_like(&ob) {
+            return bytes.map(Body::Bytes);
         }
         if ob.cast::<PyIterator>().is_ok() {
             return ob.extract().map(Body::Stream);

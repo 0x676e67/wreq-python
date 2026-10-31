@@ -39,10 +39,9 @@ impl FromPyObject<'_, '_> for BytesLike {
 
     fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
         // Checked by type, so a JSON value does not first fail as bytes.
-        if PyBuffer::is_bytes_like(&ob) {
-            ob.extract().map(BytesLike::Bytes)
-        } else {
-            ob.extract().map(BytesLike::Json)
+        match PyBuffer::extract_bytes_like(&ob) {
+            Some(bytes) => bytes.map(BytesLike::Bytes),
+            None => ob.extract().map(BytesLike::Json),
         }
     }
 }

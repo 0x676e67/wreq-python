@@ -101,8 +101,8 @@ impl FromPyObject<'_, '_> for Value {
         if ob.is_instance_of::<PyString>() {
             return ob.extract().map(Value::Text);
         }
-        if PyBuffer::is_bytes_like(&ob) {
-            return ob.extract().map(Value::Bytes);
+        if let Some(bytes) = PyBuffer::extract_bytes_like(&ob) {
+            return bytes.map(Value::Bytes);
         }
         match ob.extract() {
             Ok(path) => Ok(Value::File(path)),

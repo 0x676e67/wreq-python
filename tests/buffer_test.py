@@ -220,6 +220,10 @@ def test_bytes_like_inputs(buffer_http_server):
         numbers = array.array("d", [1.5])
         assert Message.from_binary(numbers).binary == b"[1.5]"
         assert client.post(buffer_http_server, body=numbers).bytes() == b"[1.5]"
+        assert Message.from_binary({"a": 1}).binary == b'{"a":1}'
+        message = r"'dict' object is not an instance of 'bytes \| bytearray \| memoryview'"
+        with pytest.raises(TypeError, match=message):
+            Message.from_ping({})
         for source in sources:
             assert Message.from_binary(source).binary == b"payload"
             assert Message.from_ping(source).ping == b"payload"

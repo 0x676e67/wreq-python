@@ -17,8 +17,9 @@
 
 use std::{ops::Range, os::raw::c_int};
 
-use bytes::Bytes;
+use bytes::{Buf, Bytes};
 use pyo3::{
+    PyTypeCheck, PyTypeInfo,
     buffer::PyUntypedBuffer,
     exceptions::{PyOverflowError, PyTypeError},
     ffi, intern,
@@ -44,13 +45,22 @@ struct BufferView(Bytes);
 // ===== impl PyBuffer =====
 
 impl PyBuffer {
-    /// Whether `ob` is a `bytes`, `bytearray` or `memoryview`, so callers can dispatch by type
-    /// instead of building an error for each failed attempt.
-    #[inline]
-    pub fn is_bytes_like(ob: &Bound<PyAny>) -> bool {
-        ob.is_instance_of::<PyBytes>()
-            || ob.is_instance_of::<PyByteArray>()
-            || ob.is_instance_of::<PyMemoryView>()
+    /// Extracts `bytes`, `bytearray` or `memoryview` data in one pass over their types, or
+    /// returns `None` for any other type without building an error, so callers can fall back.
+    pub fn extract_bytes_like(ob: &Bound<PyAny>) -> Option<PyResult<Self>> {
+        let bytes = if let Some(bytes) = as_exact::<PyBytes>(ob) {
+            let owner = PyBackedBytes::from(bytes.clone());
+            share(0..owner.len(), owner)
+        } else if let Some(view) = as_exact::<PyMemoryView>(ob) {
+            return Some(view_bytes(view).map(Self));
+        } else if let Some(array) = as_instance::<PyByteArray>(ob) {
+            // A bytearray may change after extraction, so it is copied once.
+            Bytes::from(array.to_vec())
+        } else {
+            // Subclasses can reference an exported view; Bytes owners are invisible to GC.
+            Bytes::copy_from_slice(as_instance::<PyBytes>(ob)?.as_bytes())
+        };
+        Some(Ok(Self(bytes)))
     }
 }
 
@@ -58,23 +68,15 @@ impl FromPyObject<'_, '_> for PyBuffer {
     type Error = PyErr;
 
     fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
-        let bytes = if ob.is_exact_instance_of::<PyBytes>() || ob.is_instance_of::<PyByteArray>() {
-            // Shares an exact bytes and copies a bytearray.
-            Bytes::from_owner(ob.extract::<PyBackedBytes>()?)
-        } else if let Ok(bytes) = ob.cast::<PyBytes>() {
-            // Subclasses can reference an exported view; Bytes owners are invisible to GC.
-            Bytes::copy_from_slice(bytes.as_bytes())
-        } else if let Ok(view) = ob.cast::<PyMemoryView>() {
-            view_bytes(&view)?
-        } else {
+        match Self::extract_bytes_like(&ob) {
+            Some(bytes) => bytes,
             // Other exporters, such as numpy numbers or `array('d')`, count as bytes only in a
             // memoryview, so `body=` and `from_binary` keep encoding them as JSON.
-            return Err(PyTypeError::new_err(format!(
+            None => Err(PyTypeError::new_err(format!(
                 "'{}' object is not an instance of 'bytes | bytearray | memoryview'",
                 ob.get_type().qualname()?
-            )));
-        };
-        Ok(Self(bytes))
+            ))),
+        }
     }
 }
 
@@ -139,11 +141,11 @@ impl BufferView {
     /// `view` must be a writable `Py_buffer` supplied by the Python buffer protocol.
     #[allow(unsafe_code)]
     unsafe fn __getbuffer__(
-        slf: PyRef<Self>,
+        slf: &Bound<'_, Self>,
         view: *mut ffi::Py_buffer,
         flags: c_int,
     ) -> PyResult<()> {
-        let bytes = &slf.0;
+        let bytes = &slf.get().0;
         let len = ffi::Py_ssize_t::try_from(bytes.len())
             .map_err(|_| PyOverflowError::new_err("buffer length exceeds Python's maximum size"))?;
         // SAFETY: PyO3 supplies a valid output buffer. FillInfo retains the exporter,
@@ -168,15 +170,20 @@ impl BufferView {
 /// Shares a view of an exact `bytes` or of our own memoryview, and copies any other view.
 fn view_bytes(view: &Bound<PyMemoryView>) -> PyResult<Bytes> {
     let obj = view.getattr(intern!(view.py(), "obj"))?;
-    if let Ok(exporter) = obj.cast::<BufferView>() {
+    // BufferView allows no subclasses, so an exact test covers it.
+    if let Some(exporter) = as_exact::<BufferView>(&obj) {
         let bytes = &exporter.get().0;
         if let Some(range) = view_range(view, bytes) {
+            // A counted clone of the exporter's Bytes, whatever its vtable.
             return Ok(bytes.slice(range));
         }
-    } else if let Ok(bytes) = obj.cast_into_exact::<PyBytes>()
-        && let Some(range) = view_range(view, bytes.as_bytes())
+    } else if obj.is_exact_instance_of::<PyBytes>()
+        && let Ok(bytes) = obj.cast_into_exact::<PyBytes>()
     {
-        return Ok(Bytes::from_owner(PyBackedBytes::from(bytes)).slice(range));
+        let owner = PyBackedBytes::from(bytes);
+        if let Some(range) = view_range(view, &owner) {
+            return Ok(share(range, owner));
+        }
     }
     // `bytes()` copies any layout or item format as raw bytes.
     let copy = view
@@ -184,18 +191,57 @@ fn view_bytes(view: &Bound<PyMemoryView>) -> PyResult<Bytes> {
         .get_type::<PyBytes>()
         .call1((view,))?
         .cast_into::<PyBytes>()?;
-    Ok(Bytes::from_owner(PyBackedBytes::from(copy)))
+    let owner = PyBackedBytes::from(copy);
+    Ok(share(0..owner.len(), owner))
+}
+
+/// Shares the `range` of the exact `bytes` behind `owner`, which must contain it. Empty data
+/// needs no owner, and the owned `Bytes` narrows in place instead of through a counted clone.
+#[inline]
+fn share(range: Range<usize>, owner: PyBackedBytes) -> Bytes {
+    if range.is_empty() {
+        return Bytes::new();
+    }
+    let mut bytes = Bytes::from_owner(owner);
+    bytes.truncate(range.end);
+    bytes.advance(range.start);
+    bytes
 }
 
 /// The range of `data` that a C-contiguous `view` covers, if the view lies within it.
 fn view_range(view: &Bound<PyMemoryView>, data: &[u8]) -> Option<Range<usize>> {
     let buffer = PyUntypedBuffer::get(view.as_any()).ok()?;
-    if !buffer.is_c_contiguous() {
+    let contiguous = buffer.is_c_contiguous();
+    let (ptr, len) = (buffer.buf_ptr().addr(), buffer.len_bytes());
+    // Released while attached, so `Drop` need not attach to the interpreter.
+    buffer.release(view.py());
+    if !contiguous {
         return None;
     }
-    let start = buffer.buf_ptr().addr().checked_sub(data.as_ptr().addr())?;
-    let end = start.checked_add(buffer.len_bytes())?;
+    let start = ptr.checked_sub(data.as_ptr().addr())?;
+    let end = start.checked_add(len)?;
     (end <= data.len()).then_some(start..end)
+}
+
+/// `ob` as exactly a `T`; other types return `None` without building a cast error.
+#[inline]
+fn as_exact<'a, 'py, T: PyTypeInfo>(ob: &'a Bound<'py, PyAny>) -> Option<&'a Bound<'py, T>> {
+    // The cast repeats the checked type test and cannot fail.
+    if ob.is_exact_instance_of::<T>() {
+        ob.cast_exact().ok()
+    } else {
+        None
+    }
+}
+
+/// `ob` as a `T` or a subclass; other types return `None` without building a cast error.
+#[inline]
+fn as_instance<'a, 'py, T: PyTypeCheck>(ob: &'a Bound<'py, PyAny>) -> Option<&'a Bound<'py, T>> {
+    if ob.is_instance_of::<T>() {
+        ob.cast().ok()
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -241,12 +287,20 @@ mod tests {
                 binary.as_bytes().as_ptr()
             );
 
-            let tail = PyMemoryView::from(binary.as_any())
-                .unwrap()
-                .get_item(PySlice::new(py, 8, 13, 1))
-                .unwrap();
-            let input = tail.extract::<PyBuffer>().unwrap();
+            // Views of an exact bytes share it, whole or narrowed; empty data needs no owner.
+            let view = PyMemoryView::from(binary.as_any()).unwrap();
+            let input = view.extract::<PyBuffer>().unwrap();
+            assert_eq!(input.0.as_ptr(), binary.as_bytes().as_ptr());
+            assert_eq!(input.0[..], *b"builtin bytes");
+            let word = view.get_item(PySlice::new(py, 8, 12, 1)).unwrap();
+            let input = word.extract::<PyBuffer>().unwrap();
             assert_eq!(input.0.as_ptr(), binary.as_bytes()[8..].as_ptr());
+            assert_eq!(input.0[..], *b"byte");
+            let empty = view.get_item(PySlice::new(py, 3, 3, 1)).unwrap();
+            let input = empty.extract::<PyBuffer>().unwrap();
+            assert_eq!(input.0.as_ptr(), Bytes::new().as_ptr());
+            let input = PyBytes::new(py, b"").extract::<PyBuffer>().unwrap();
+            assert_eq!(input.0.as_ptr(), Bytes::new().as_ptr());
 
             // A bytearray may change after extraction, so its views are copied.
             let array = PyByteArray::new(py, b"mutable");
@@ -256,6 +310,15 @@ mod tests {
                 .unwrap();
             array.set_item(0, b'M').unwrap();
             assert_eq!(input.0[..], *b"mutable");
+
+            // A bytes subclass can reference an exported view, so it is copied as well.
+            let module =
+                PyModule::from_code(py, c"class Sub(bytes): pass", c"sub.py", c"sub").unwrap();
+            let sub = module.getattr("Sub").unwrap().call1((&binary,)).unwrap();
+            let input = sub.extract::<PyBuffer>().unwrap();
+            let data = sub.cast::<PyBytes>().unwrap().as_bytes();
+            assert_ne!(input.0.as_ptr(), data.as_ptr());
+            assert_eq!(input.0[..], *data);
 
             let text = PyString::new(py, "builtin text");
             let input = text.extract::<Text>().unwrap();
