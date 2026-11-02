@@ -41,10 +41,11 @@ Use `Message.from_binary(data)` to send binary data. `send_all([...])` sends
 a sequence of messages in order. To choose the closing status, call
 `await ws.close(code=1000, reason="Finished")` before leaving the context.
 
-Binary payload access is zero-copy: `Message.data`, `.binary`, `.ping`, and
-`.pong` return read-only `memoryview` objects when present. The views remain
-valid after the message is deleted or the connection closes. Use `bytes(view)`
-when another API requires a `bytes` object; `Message.text` returns a string.
+Binary payload access is zero-copy: `Message.data` and `.binary` return
+`wreq.Bytes` when present, which stay valid after the message is deleted or the
+connection closes. `.ping` and `.pong` return `bytes`, since RFC 6455 limits
+control payloads to 125 bytes. Use `data.tobytes()` when another API requires a
+`bytes` object; `Message.text` returns a string.
 
 ## Receive timeouts
 

@@ -59,6 +59,12 @@ The main `wreq` module contains core classes and types used throughout the libra
     options:
       show_root_heading: true
 
+## Binary Data
+
+::: wreq.Bytes
+    options:
+      show_root_heading: true
+
 ## Network Types
 
 ::: wreq.SocketAddr

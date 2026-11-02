@@ -8,7 +8,6 @@ use wreq::tls::compress::CertificateCompressor;
 use wreq_util::emulate::compress;
 
 pub use self::{identity::Identity, keylog::KeyLog, store::CertStore};
-use crate::buffer::PyBuffer;
 
 define_enum!(
     /// The TLS version.
@@ -409,11 +408,8 @@ pub struct TlsInfo(pub wreq::tls::TlsInfo);
 
 #[pymethods]
 impl TlsInfo {
-    /// Get a read-only memoryview of the peer's DER-encoded leaf certificate.
-    pub fn peer_certificate(&self) -> Option<PyBuffer> {
-        self.0
-            .peer_certificate()
-            .map(ToOwned::to_owned)
-            .map(PyBuffer::from)
+    /// Get the peer's DER-encoded leaf certificate as `bytes`.
+    pub fn peer_certificate(&self) -> Option<&[u8]> {
+        self.0.peer_certificate()
     }
 }

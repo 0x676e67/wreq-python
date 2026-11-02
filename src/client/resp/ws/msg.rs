@@ -50,7 +50,7 @@ impl FromPyObject<'_, '_> for BytesLike {
 
 #[pymethods]
 impl Message {
-    /// Returns the message data as a read-only memoryview.
+    /// Returns the message data as an immutable `Bytes`.
     #[getter]
     pub fn data(&self) -> Option<PyBuffer> {
         let bytes = match &self.0 {
@@ -73,7 +73,7 @@ impl Message {
         }
     }
 
-    /// Returns a read-only memoryview if this is a binary message.
+    /// Returns an immutable `Bytes` if this is a binary message.
     #[getter]
     pub fn binary(&self) -> Option<PyBuffer> {
         if let message::Message::Binary(data) = &self.0 {
@@ -83,21 +83,24 @@ impl Message {
         }
     }
 
-    /// Returns a read-only memoryview if this is a ping message.
+    /// Returns the payload as `bytes` if this is a ping message. [RFC 6455 §5.5] limits control
+    /// payloads to 125 bytes, so a copy is cheaper than a shared buffer.
+    ///
+    /// [RFC 6455 §5.5]: https://www.rfc-editor.org/rfc/rfc6455#section-5.5
     #[getter]
-    pub fn ping(&self) -> Option<PyBuffer> {
+    pub fn ping(&self) -> Option<&[u8]> {
         if let message::Message::Ping(data) = &self.0 {
-            Some(PyBuffer::from(data))
+            Some(data)
         } else {
             None
         }
     }
 
-    /// Returns a read-only memoryview if this is a pong message.
+    /// Returns the payload as `bytes` if this is a pong message.
     #[getter]
-    pub fn pong(&self) -> Option<PyBuffer> {
+    pub fn pong(&self) -> Option<&[u8]> {
         if let message::Message::Pong(data) = &self.0 {
-            Some(PyBuffer::from(data))
+            Some(data)
         } else {
             None
         }

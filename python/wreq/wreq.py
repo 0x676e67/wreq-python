@@ -12,12 +12,18 @@ from typing import (
     Sequence,
     Mapping,
     Tuple,
+    TypeAlias,
     TypedDict,
     TypeVar,
     Unpack,
     final,
+    overload,
+    SupportsIndex,
+    Iterator,
 )
 from collections.abc import Coroutine
+
+from typing_extensions import Buffer, deprecated
 
 from . import redirect
 from . import emulation
@@ -31,6 +37,160 @@ from .proxy import *
 from .redirect import History
 from .runtime import Runtime
 from .tls import *
+
+_BytesLike: TypeAlias = "bytes | bytearray | memoryview | Bytes"
+
+
+@final
+class Bytes(Sequence[int], Buffer):
+    r"""
+    Immutable binary data returned by wreq without copying.
+
+    It exports a read-only buffer, so `memoryview(data)`, `hashlib`, `bytes.join`, `socket.send`
+    and `numpy.frombuffer` read it in place. It compares and hashes like `bytes`, so it works as
+    a `bytes` dictionary key. `data.tobytes()` makes a copy for APIs that require `bytes`, such
+    as `json.loads` or `isinstance(x, bytes)` checks; `memoryview(data)` suits APIs that accept
+    only `bytes`, `bytearray` or `memoryview`, such as asyncio transports and `orjson.loads`.
+    wreq accepts it wherever it accepts `bytes`.
+    """
+
+    def __new__(cls, data: Buffer | None = None, /) -> Self:
+        r"""
+        Wrap any buffer. `bytes`, a `Bytes` (returned as is) and contiguous memoryviews of either
+        are shared and keep their whole source alive; other data is copied. Wrap
+        `view.tobytes()` for a compact copy.
+        """
+        ...
+
+    def __buffer__(self, flags: int, /) -> memoryview: ...
+    def __len__(self) -> int: ...
+    @overload
+    def __getitem__(self, key: SupportsIndex, /) -> int: ...
+    @overload
+    def __getitem__(self, key: slice, /) -> "Bytes": ...
+    def __getitem__(self, key: SupportsIndex | slice, /) -> "int | Bytes":
+        r"""
+        An int for an index. A slice shares memory with this data unless it is strided, which
+        copies.
+        """
+        ...
+
+    def __iter__(self) -> Iterator[int]: ...
+    def __contains__(self, item: SupportsIndex | Buffer, /) -> bool:  # type: ignore[override]
+        r"""
+        Whether `item`, a buffer or a byte value, occurs in this data.
+        """
+        ...
+
+    def __eq__(self, other: object, /) -> bool: ...
+    def __ne__(self, other: object, /) -> bool: ...
+    def __lt__(self, other: "bytes | Bytes", /) -> bool: ...
+    def __le__(self, other: "bytes | Bytes", /) -> bool: ...
+    def __gt__(self, other: "bytes | Bytes", /) -> bool: ...
+    def __ge__(self, other: "bytes | Bytes", /) -> bool: ...
+    def __hash__(self) -> int: ...
+    def __bytes__(self) -> bytes: ...
+    def __add__(self, other: Buffer, /) -> "Bytes":
+        r"""
+        Concatenate with any buffer into a new `Bytes`.
+        """
+        ...
+
+    def __copy__(self) -> Self: ...
+    def __deepcopy__(self, memo: Any, /) -> Self: ...
+    def decode(self, encoding: str = "utf-8", errors: str = "strict") -> str:
+        r"""
+        Decode into `str`, like `bytes.decode()`.
+        """
+        ...
+
+    def hex(self, sep: str | bytes | None = None, bytes_per_sep: int = 1) -> str:
+        r"""
+        Hexadecimal digits for each byte, like `bytes.hex()`.
+        """
+        ...
+
+    def tobytes(self) -> bytes:
+        r"""
+        Copy into `bytes`, like `memoryview.tobytes()`; cheaper than `bytes(data)`.
+        """
+        ...
+
+    def find(
+        self,
+        sub: SupportsIndex | Buffer,
+        start: SupportsIndex | None = None,
+        end: SupportsIndex | None = None,
+        /,
+    ) -> int:
+        r"""
+        The lowest index of `sub`, a buffer or a byte value, within `[start:end]`, or `-1`.
+        """
+        ...
+
+    def index(
+        self,
+        sub: SupportsIndex | Buffer,
+        start: SupportsIndex | None = None,
+        end: SupportsIndex | None = None,
+        /,
+    ) -> int:
+        r"""
+        Like `find()`, but raise `ValueError` when `sub` is not found.
+        """
+        ...
+
+    def count(
+        self,
+        sub: SupportsIndex | Buffer,
+        start: SupportsIndex | None = None,
+        end: SupportsIndex | None = None,
+        /,
+    ) -> int:
+        r"""
+        The number of non-overlapping occurrences of `sub` within `[start:end]`.
+        """
+        ...
+
+    def startswith(
+        self,
+        prefix: Buffer | tuple[Buffer, ...],
+        start: SupportsIndex | None = None,
+        end: SupportsIndex | None = None,
+        /,
+    ) -> bool:
+        r"""
+        Whether `[start:end]` starts with `prefix` or with any prefix in a tuple.
+        """
+        ...
+
+    def endswith(
+        self,
+        suffix: Buffer | tuple[Buffer, ...],
+        start: SupportsIndex | None = None,
+        end: SupportsIndex | None = None,
+        /,
+    ) -> bool:
+        r"""
+        Whether `[start:end]` ends with `suffix` or with any suffix in a tuple.
+        """
+        ...
+
+    @deprecated("Bytes holds no exported view; drop the reference instead")
+    def release(self) -> None:
+        r"""
+        Does nothing and warns; kept for code written against `memoryview`.
+        """
+        ...
+
+    @deprecated("Bytes is not a context manager; use `with memoryview(data) as view:`")
+    def __enter__(self) -> Self:
+        r"""
+        Returns this data and warns; kept for code written against `memoryview`.
+        """
+        ...
+
+    def __exit__(self, *args: object) -> None: ...
 
 
 @final
@@ -155,6 +315,7 @@ class Part:
             | bytes
             | bytearray
             | memoryview
+            | Bytes
             | Path
             | Generator[bytes, str, None]
             | AsyncGenerator[bytes, str]
@@ -185,12 +346,13 @@ class Message:
     r"""
     A WebSocket message.
 
-    Binary fields return read-only memoryviews that retain their backing data.
+    `data` and `binary` return immutable `Bytes` that retain their backing data;
+    `ping` and `pong` return `bytes`, since RFC 6455 limits control payloads to 125 bytes.
     """
 
-    data: memoryview | None
+    data: Bytes | None
     r"""
-    Returns the data of the message as a read-only memoryview.
+    Returns the data of the message as an immutable `Bytes`.
     """
 
     text: str | None
@@ -198,17 +360,17 @@ class Message:
     Returns the text content of the message if it is a text message.
     """
 
-    binary: memoryview | None
+    binary: Bytes | None
     r"""
     Returns the binary data of the message if it is a binary message.
     """
 
-    ping: memoryview | None
+    ping: bytes | None
     r"""
     Returns the ping data of the message if it is a ping message.
     """
 
-    pong: memoryview | None
+    pong: bytes | None
     r"""
     Returns the pong data of the message if it is a pong message.
     """
@@ -224,7 +386,7 @@ class Message:
     """
 
     @staticmethod
-    def from_binary(like: bytes | bytearray | memoryview | Any) -> "Message":
+    def from_binary(like: bytes | bytearray | memoryview | Bytes | Any) -> "Message":
         r"""
         Creates a new binary message.
 
@@ -246,7 +408,7 @@ class Message:
         ...
 
     @staticmethod
-    def from_ping(data: bytes | bytearray | memoryview) -> "Message":
+    def from_ping(data: bytes | bytearray | memoryview | Bytes) -> "Message":
         r"""
         Creates a new ping message.
 
@@ -257,7 +419,7 @@ class Message:
         ...
 
     @staticmethod
-    def from_pong(data: bytes | bytearray | memoryview) -> "Message":
+    def from_pong(data: bytes | bytearray | memoryview | Bytes) -> "Message":
         r"""
         Creates a new pong message.
 
@@ -285,14 +447,14 @@ class Message:
 class Streamer:
     r"""
     A stream response.
-    An asynchronous iterator yielding read-only memoryviews or HTTP trailers (HeaderMap) from the response stream.
+    An asynchronous iterator yielding immutable `Bytes` or HTTP trailers (HeaderMap) from the response stream.
     Used to stream response content and receive HTTP trailers if present.
     Implemented in the `stream` method of the `Response` class.
     Can be used in an asynchronous for loop in Python.
 
-    When streaming a response, each iteration yields either a memoryview (for body data) or a HeaderMap (for HTTP trailers, if the server sends them).
+    When streaming a response, each iteration yields either a `Bytes` (for body data) or a HeaderMap (for HTTP trailers, if the server sends them).
     This allows you to access HTTP/1.1 or HTTP/2 trailers in addition to the main body.
-    Data views retain their backing data after the stream is closed.
+    Data frames stay valid after the stream is closed.
     A stream on a `CURRENT_THREAD` runtime supports only blocking iteration;
     its async entry points raise `RuntimeError`.
 
@@ -308,10 +470,10 @@ class Streamer:
         async with wreq.get("https://example.com/stream-with-trailers") as resp:
             async with resp.stream() as streamer:
                 async for chunk in streamer:
-                    if isinstance(chunk, memoryview):
-                        sys.stdout.buffer.write(chunk)
-                    elif isinstance(chunk, HeaderMap):
+                    if isinstance(chunk, HeaderMap):
                         print("Trailers: ", chunk)
+                    else:
+                        sys.stdout.buffer.write(chunk)
                     await asyncio.sleep(0.1)
 
     if __name__ == "__main__":
@@ -321,24 +483,24 @@ class Streamer:
 
     def __iter__(self) -> "Streamer": ...
 
-    def __next__(self) -> memoryview | HeaderMap: ...
+    def __next__(self) -> Bytes | HeaderMap: ...
 
     def __enter__(self) -> Self: ...
 
     def __exit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
         r"""
-        Release the body and end any pending read; returned views stay valid.
+        Release the body and end any pending read; returned data stays valid.
         """
 
     def __aiter__(self) -> "Streamer": ...
 
-    async def __anext__(self) -> memoryview | HeaderMap: ...
+    async def __anext__(self) -> Bytes | HeaderMap: ...
 
     async def __aenter__(self) -> Self: ...
 
     async def __aexit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
         r"""
-        Release the body and end any pending read; returned views stay valid.
+        Release the body and end any pending read; returned data stays valid.
         """
 
 
@@ -426,7 +588,7 @@ class Response:
 
     def stream(self) -> Streamer:
         r"""
-        Stream the body as read-only memoryviews, with HeaderMap frames for trailers.
+        Stream the body as immutable `Bytes`, with HeaderMap frames for trailers.
         """
         ...
 
@@ -441,11 +603,12 @@ class Response:
         Get the JSON content of the response.
         """
 
-    async def bytes(self) -> memoryview:
+    async def bytes(self) -> Bytes:
         r"""
-        Read the body as a read-only memoryview without copying it into Python bytes.
-        The view remains valid after the response is closed or deleted.
-        Use bytes(view) or view.tobytes() for a copy; view.release() releases this view.
+        Read the body as an immutable `Bytes` without copying it.
+        The data stays valid after the response is closed or deleted.
+        Use `data.tobytes()` for a `bytes` copy, or `memoryview(data)` for APIs that accept
+        only `bytes`, `bytearray` or `memoryview`.
         """
         ...
 
@@ -454,7 +617,7 @@ class Response:
         Discard the retained body and mark its connection as non-reusable.
         This does not guarantee an immediate socket shutdown or cancel an active read.
         Cancel and await any body-read task before closing. A body transferred to a
-        Streamer is managed separately; previously returned memoryviews remain valid.
+        Streamer is managed separately; previously returned `Bytes` remain valid.
         `async with` instead releases the body and keeps a fully read connection reusable.
         """
 
@@ -983,6 +1146,7 @@ class Request(TypedDict):
         | bytes
         | bytearray
         | memoryview
+        | Bytes
         | Sequence[Tuple[str, str]]
         | Tuple[str, str | int | float | bool]
         | Mapping[str, str | int | float | bool]

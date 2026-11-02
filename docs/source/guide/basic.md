@@ -117,18 +117,17 @@ from wreq.header import HeaderMap
 
 headers = HeaderMap({"Accept": "application/json"})
 headers.append("Accept", "text/html")
-print([str(value, "ascii") for value in headers.get_all("accept")])
+print([value.decode("ascii") for value in headers.get_all("accept")])
 
 async with client.get("https://httpbin.org/headers", headers=headers) as response:
     content_type = response.headers.get("content-type")
     if content_type is not None:
-        print(str(content_type, "ascii"))
+        print(content_type.decode("ascii"))
     print(await response.json())
 ```
 
 Header names are case insensitive. Header names and values returned by
-`HeaderMap` are read-only memoryviews; `str(view, encoding)` decodes them
-without an intermediate `bytes` copy.
+`HeaderMap` are `bytes`.
 
 ## Authentication
 
@@ -209,10 +208,10 @@ another. `stream()` only accepts an unread body and transfers it to a streamer;
 after that, use the streamer to read it. Reading a released body or starting an
 overlapping read raises `RuntimeError`.
 
-`bytes()` returns a zero-copy, read-only memoryview of the collected Rust
-buffer. Collecting the body may allocate to join chunks. Views stay valid after
-the response closes; see [binary data](../getting-started/quickstart.md#binary-data)
-for decoding, copying and releasing them.
+`bytes()` returns a zero-copy `wreq.Bytes` of the collected Rust buffer.
+Collecting the body may allocate to join chunks. The data stays valid after the
+response closes; see [binary data](../getting-started/quickstart.md#binary-data)
+for decoding and copying it.
 
 ## Concurrent requests
 
@@ -253,7 +252,7 @@ propagate when a caller cancels your task.
 ## Streaming responses
 
 Read large bodies incrementally with `response.stream()`. Data frames are
-read-only memoryviews, and trailing HTTP headers are `HeaderMap` objects.
+`wreq.Bytes`, and trailing HTTP headers are `HeaderMap` objects.
 This complete example counts the bytes without retaining the whole body:
 
 ```python
@@ -269,10 +268,10 @@ async def main():
             response.raise_for_status()
             async with response.stream() as streamer:
                 async for frame in streamer:
-                    if isinstance(frame, memoryview):
-                        total += len(frame)
-                    elif isinstance(frame, HeaderMap):
+                    if isinstance(frame, HeaderMap):
                         print("Trailers:", frame)
+                    else:
+                        total += len(frame)
     print("Received bytes:", total)
 
 

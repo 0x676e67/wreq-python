@@ -81,7 +81,7 @@ asyncio.run(main())
 
 <a class="wreq-feature" href="benchmark/"><span class="wreq-feature-label">02 · PERFORMANCE</span><h3>High-throughput HTTPS</h3><p>Rust handles the network I/O. See how wreq compares with other Python clients, then choose the body size and runtime mode that matter to your workload.</p><span class="wreq-feature-link">View performance results</span></a>
 
-<a class="wreq-feature" href="guide/advanced/"><span class="wreq-feature-label">03 · STREAMING</span><h3>Stream uploads and responses</h3><p>Send an upload in chunks or read a response as it arrives. Response chunks are read-only memoryviews backed by Rust buffers.</p><span class="wreq-feature-link">Streaming guide</span></a>
+<a class="wreq-feature" href="guide/advanced/"><span class="wreq-feature-label">03 · STREAMING</span><h3>Stream uploads and responses</h3><p>Send an upload in chunks or read a response as it arrives. Response chunks are zero-copy wreq.Bytes objects backed by Rust buffers.</p><span class="wreq-feature-link">Streaming guide</span></a>
 
 <a class="wreq-feature" href="guide/blocking/"><span class="wreq-feature-label">04 · PYTHON</span><h3>Async and blocking APIs</h3><p>Use await in async code. For a synchronous script, import Client from wreq.blocking.</p><span class="wreq-feature-link">Blocking API</span></a>
 

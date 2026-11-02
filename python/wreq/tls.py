@@ -6,7 +6,11 @@ This module provides types and utilities for configuring TLS (Transport Layer Se
 
 from enum import Enum, auto
 from pathlib import Path
-from typing import Sequence, NotRequired, TypedDict, Unpack, final
+from typing import Sequence, NotRequired, TypeAlias, TypedDict, Unpack, final
+
+from .wreq import Bytes
+
+_BytesLike: TypeAlias = "bytes | bytearray | memoryview | Bytes"
 
 __all__ = [
     "TlsVersion",
@@ -134,7 +138,7 @@ class Identity:
     """
 
     @staticmethod
-    def from_pkcs12_der(buf: bytes, pass_: str, /) -> "Identity":
+    def from_pkcs12_der(buf: _BytesLike, pass_: str, /) -> "Identity":
         """
         Parses a DER-formatted PKCS #12 archive, using the specified password to decrypt the key.
         Pass the archive and password positionally: Identity.from_pkcs12_der(data, password).
@@ -151,7 +155,7 @@ class Identity:
         ...
 
     @staticmethod
-    def from_pkcs8_pem(buf: bytes, key: bytes) -> "Identity":
+    def from_pkcs8_pem(buf: _BytesLike, key: _BytesLike) -> "Identity":
         """
         Parses a chain of PEM encoded X509 certificates, with the leaf certificate first.
         `key` is a PEM encoded PKCS #8 formatted private key for the leaf certificate.
@@ -172,7 +176,7 @@ class CertStore:
 
     def __init__(
         self,
-        der_certs: Sequence[bytes] | None = None,
+        der_certs: Sequence[_BytesLike] | None = None,
         pem_certs: Sequence[str] | None = None,
         default_paths: bool = False,
     ) -> None:
@@ -180,19 +184,19 @@ class CertStore:
         Creates a new CertStore.
 
         Args:
-            der_certs: Optional list of DER-encoded certificates (as bytes).
+            der_certs: Optional list of DER-encoded certificates (bytes-like).
             pem_certs: Optional list of PEM-encoded certificates (as str).
             default_paths: If True, use system default certificate paths. Defaults to False.
         """
         ...
 
     @staticmethod
-    def from_der_certs(certs: Sequence[bytes]) -> "CertStore":
+    def from_der_certs(certs: Sequence[_BytesLike]) -> "CertStore":
         """
         Creates a CertStore from a collection of DER-encoded certificates.
 
         Args:
-            certs: List of DER-encoded certificates (as bytes).
+            certs: List of DER-encoded certificates (bytes-like).
         """
         ...
 
@@ -207,12 +211,12 @@ class CertStore:
         ...
 
     @staticmethod
-    def from_pem_stack(certs: bytes) -> "CertStore":
+    def from_pem_stack(certs: _BytesLike) -> "CertStore":
         """
         Creates a CertStore from a PEM-encoded certificate stack.
 
         Args:
-            certs: PEM-encoded certificate stack (as bytes).
+            certs: PEM-encoded certificate stack (bytes-like).
         """
         ...
 
@@ -460,8 +464,8 @@ class TlsInfo:
     Information about the established TLS connection.
     """
 
-    def peer_certificate(self) -> memoryview | None:
+    def peer_certificate(self) -> bytes | None:
         """
-        Get a read-only memoryview of the peer's DER-encoded leaf certificate.
+        Get the peer's DER-encoded leaf certificate as `bytes`.
         """
         ...

@@ -29,7 +29,8 @@ use crate::{buffer::PyBuffer, extractor::Text};
 
 type Item = PyResult<PyBytesLike>;
 
-/// A request body chunk: `bytes`, `bytearray` or `memoryview` data, or a `str` sent as UTF-8.
+/// A request body chunk: `bytes`, `bytearray`, `memoryview` or `wreq.Bytes` data, or a `str` sent
+/// as UTF-8.
 pub enum PyBytesLike {
     Bytes(PyBuffer),
     String(Text),
