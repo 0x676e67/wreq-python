@@ -227,8 +227,9 @@ def test_bytes_api():
     if hasattr(collections.abc, "Buffer"):
         assert isinstance(data, collections.abc.Buffer)
     assert sorted([b"z", data, b"a"]) == [b"a", b"hello world", b"z"]
-    # Other types reflect, so bytearray and memoryview compare by content.
+    # bytearray compares here and memoryview through its own method, both by content.
     assert data == bytearray(b"hello world") and data == memoryview(b"hello world")
+    assert bytearray(b"hello world") == data and memoryview(b"hello world") == data
     assert data != bytearray(b"x") and data < bytearray(b"z")
     assert data != "hello world"
     assert hash(wreq.Bytes()) == hash(b"")

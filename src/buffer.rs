@@ -394,14 +394,20 @@ impl SharedBytes {
         Ok(window(&self.bytes, start, end).map_or(0, |(_, data)| needle.count(data)))
     }
 
-    /// Compares with `bytes` or `Bytes`; other types reflect, so `bytearray` and `memoryview`
-    /// compare through their own methods over this buffer.
+    /// Compares with `bytes`, `bytearray` or `Bytes`; other types reflect, so a `memoryview`
+    /// compares through its own method over this buffer.
     fn __richcmp__(&self, other: &Bound<PyAny>, op: CompareOp) -> Py<PyAny> {
         let py = other.py();
+        let copy;
         let other = if let Some(other) = as_exact::<SharedBytes>(other) {
             &other.get().bytes[..]
         } else if let Some(other) = as_instance::<PyBytes>(other) {
             other.as_bytes()
+        } else if let Some(array) = as_instance::<PyByteArray>(other) {
+            // Compared here, since PyPy's bytearray does not read extension buffers. A copy
+            // keeps the bytearray from being resized under the comparison.
+            copy = array.to_vec();
+            &copy
         } else {
             return py.NotImplemented();
         };
