@@ -70,12 +70,10 @@ impl HeaderMap {
         default: Option<PyBuffer>,
     ) -> Option<Bound<'py, PyBytes>> {
         // Header values are short, so a `bytes` copy is cheaper than a shared buffer.
-        if let Some(value) = self.0.get::<&str>(key.as_ref()) {
-            return Some(PyBytes::new(py, value.as_bytes()));
-        }
-        HeaderValue::from_maybe_shared(default?.0)
-            .ok()
-            .map(|value| PyBytes::new(py, value.as_bytes()))
+        let value = self.0.get::<&str>(key.as_ref()).map(HeaderValue::as_bytes);
+        value
+            .or(default.as_ref().map(AsRef::as_ref))
+            .map(|value| PyBytes::new(py, value))
     }
 
     /// Returns a list of `bytes` for the values associated with a key.

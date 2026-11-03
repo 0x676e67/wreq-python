@@ -125,8 +125,9 @@ print(hashlib.sha256(data).hexdigest())
 The data remains valid after the response closes. Use it directly with APIs
 that accept buffers, such as `file.write(data)` or `hashlib.sha256(data)`. It
 compares and hashes like `bytes`, and provides read-only `bytes` methods such as
-`decode()`, `find()`, `count()` and `startswith()`, plus zero-copy slicing. Passing it back to wreq, for example as a
-request `body` or to `Message.from_binary`, does not copy it.
+`decode()`, `find()`, `count()` and `startswith()`, plus zero-copy slicing.
+Passing it back to wreq, for example as a request `body` or to
+`Message.from_binary`, does not copy it.
 
 Use `data.tobytes()` when an API needs a `bytes` object, such as `json.loads`
 or code that checks `isinstance(x, bytes)`; it copies the data. APIs that accept

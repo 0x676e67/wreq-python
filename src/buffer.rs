@@ -122,10 +122,10 @@ impl FromPyObject<'_, '_> for PyBuffer {
             Some(bytes) => bytes,
             // Other exporters, such as numpy numbers or `array('d')`, count as bytes only in a
             // memoryview, so `body=` and `from_binary` keep encoding them as JSON.
-            None => Err(PyTypeError::new_err(format!(
-                "'{}' object is not an instance of 'bytes | bytearray | memoryview | Bytes'",
-                ob.get_type().qualname()?
-            ))),
+            None => Err(not_instance_of(
+                &ob,
+                "bytes | bytearray | memoryview | Bytes",
+            )),
         }
     }
 }
@@ -493,16 +493,17 @@ impl SharedBytes {
 
     #[pyo3(signature = (sep = None, bytes_per_sep = 1))]
     fn hex<'py>(
-        slf: &Bound<'py, Self>,
+        &self,
+        py: Python<'py>,
         sep: Option<&Bound<'py, PyAny>>,
         bytes_per_sep: isize,
     ) -> PyResult<Bound<'py, PyAny>> {
-        // `memoryview.hex` reads this buffer in place.
-        let view = PyMemoryView::from(slf.as_any())?;
-        let hex = intern!(slf.py(), "hex");
+        // `bytes.hex` on a copy: PyPy never frees a memoryview made through its C API.
+        let copy = to_bytes(py, &self.bytes)?;
+        let hex = intern!(py, "hex");
         match sep {
-            Some(sep) => view.call_method1(hex, (sep, bytes_per_sep)),
-            None => view.call_method0(hex),
+            Some(sep) => copy.call_method1(hex, (sep, bytes_per_sep)),
+            None => copy.call_method0(hex),
         }
     }
 
@@ -661,7 +662,8 @@ fn py_len(data: &[u8]) -> PyResult<ffi::Py_ssize_t> {
         .map_err(|_| PyOverflowError::new_err("buffer length exceeds Python's maximum size"))
 }
 
-/// A `bytes` copy of `data` that raises `MemoryError` where `PyBytes::new` would panic.
+/// A `bytes` copy of `data` that raises `MemoryError` where `PyBytes::new` would panic. Unlike
+/// the safe `PyBytes::new_with`, it writes the data once instead of zero-filling it first.
 #[allow(unsafe_code)]
 fn to_bytes<'py>(py: Python<'py>, data: &[u8]) -> PyResult<Bound<'py, PyBytes>> {
     let len = py_len(data)?;
@@ -744,17 +746,37 @@ fn bytes_like<'a>(ob: &'a Bound<PyAny>) -> Option<PyResult<Operand<'a>>> {
 
 /// A raw copy of any other buffer exporter, such as an `array` or numpy data, or `None` for an
 /// object without a buffer.
+#[allow(unsafe_code)]
 fn buffer_like(ob: &Bound<PyAny>) -> Option<PyResult<Bytes>> {
-    match PyMemoryView::from(ob) {
-        Ok(view) => Some(view_bytes(&view)),
-        Err(err) if err.is_instance_of::<PyTypeError>(ob.py()) => None,
-        Err(err) => Some(Err(err)),
+    let py = ob.py();
+    // Probed without a memoryview, which PyPy never frees once made through its C API.
+    match PyUntypedBuffer::get(ob) {
+        Ok(buffer) => buffer.release(py),
+        Err(err) if err.is_instance_of::<PyTypeError>(py) => return None,
+        Err(err) => return Some(Err(err)),
     }
+    // SAFETY: `ob` is a live object. For a buffer exporter the call returns a new `bytes` holding
+    // a C-ordered copy of its raw data, or NULL with an error set.
+    let copy = unsafe { Bound::from_owned_ptr_or_err(py, ffi::PyBytes_FromObject(ob.as_ptr())) };
+    Some(copy.and_then(|copy| {
+        let owner = PyBackedBytes::from(copy.cast_into::<PyBytes>()?);
+        Ok(share(0..owner.len(), owner))
+    }))
 }
 
 /// `ob` as any buffer, as `bytes` methods take their operands.
 fn operand<'a>(ob: &'a Bound<PyAny>) -> Option<PyResult<Operand<'a>>> {
     bytes_like(ob).or_else(|| buffer_like(ob).map(|bytes| bytes.map(Operand::Owned)))
+}
+
+/// The `TypeError` for `ob` where only the `expected` types are accepted.
+pub fn not_instance_of(ob: &Bound<PyAny>, expected: &str) -> PyErr {
+    match ob.get_type().qualname() {
+        Ok(name) => PyTypeError::new_err(format!(
+            "'{name}' object is not an instance of '{expected}'"
+        )),
+        Err(err) => err,
+    }
 }
 
 /// The `TypeError` for an operand that exports no buffer.

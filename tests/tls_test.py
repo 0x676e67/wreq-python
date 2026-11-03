@@ -71,3 +71,9 @@ def test_cert_store_accepts_bytes_like():
     CertStore(der_certs=[wreq.Bytes(der), memoryview(der)])
     CertStore.from_der_certs([wreq.Bytes(der)])
     CertStore.from_pem_stack(wreq.Bytes(pem))
+
+
+def test_trust_anchors_accept_bytes_like():
+    # Any buffer is taken as raw bytes, not as a sequence of items.
+    for ids in (wreq.Bytes(b"\x01\x02"), memoryview(b"\x01\x02\x03\x04").cast("I")):
+        assert TlsOptions(trust_anchors=ids) is not None

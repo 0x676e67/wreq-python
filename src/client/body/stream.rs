@@ -25,7 +25,10 @@ use pyo3::{
 };
 
 use self::{async_gen::AsyncStream, iter::SyncStream};
-use crate::{buffer::PyBuffer, extractor::Text};
+use crate::{
+    buffer::{PyBuffer, not_instance_of},
+    extractor::Text,
+};
 
 type Item = PyResult<PyBytesLike>;
 
@@ -48,9 +51,14 @@ impl FromPyObject<'_, '_> for PyBytesLike {
     fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
         // Checked by type, so a str chunk does not first fail as bytes.
         if ob.is_instance_of::<PyString>() {
-            ob.extract().map(PyBytesLike::String)
-        } else {
-            ob.extract().map(PyBytesLike::Bytes)
+            return ob.extract().map(PyBytesLike::String);
+        }
+        match PyBuffer::extract_bytes_like(&ob) {
+            Some(bytes) => bytes.map(PyBytesLike::Bytes),
+            None => Err(not_instance_of(
+                &ob,
+                "str | bytes | bytearray | memoryview | Bytes",
+            )),
         }
     }
 }

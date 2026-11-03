@@ -54,6 +54,8 @@ def test_header_and_message_values():
     assert shorts[:4] == [b"value", b"value", b"default", b"default"]
     assert shorts[-2:] == [b"ping", b"pong"]
     assert headers.get("missing") is None
+    # A default is returned as given, even if it is not a valid header value.
+    assert headers.get("missing", b"bad\nvalue") == b"bad\nvalue"
 
     # Payloads share their data as wreq.Bytes.
     messages = [
@@ -348,9 +350,14 @@ def buffer_http_server():
         def do_POST(self):
             if self.headers.get("Transfer-Encoding") == "chunked":
                 body = b""
-                while size := int(self.rfile.readline(), 16):
+                while line := self.rfile.readline():
+                    if not (size := int(line, 16)):
+                        break
                     body += self.rfile.read(size)
                     self.rfile.readline()
+                else:
+                    # The client closed the connection mid-body.
+                    return
                 self.rfile.readline()
             else:
                 body = self.rfile.read(int(self.headers["Content-Length"]))
@@ -407,6 +414,10 @@ def test_bytes_like_inputs(buffer_http_server):
             form = Multipart(Part("field", source))
             response = client.post(buffer_http_server, multipart=form)
             assert b"\r\n\r\npayload\r\n" in bytes(response.bytes()), source
+        # Stream chunks may also be str, which the error names.
+        message = r"'int' object is not an instance of 'str \| bytes \| bytearray"
+        with pytest.raises(wreq.RequestError, match=message):
+            client.post(buffer_http_server, body=iter([1]))
     finally:
         client.close()
 

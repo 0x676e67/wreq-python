@@ -8,6 +8,7 @@ use wreq::tls::compress::CertificateCompressor;
 use wreq_util::emulate::compress;
 
 pub use self::{identity::Identity, keylog::KeyLog, store::CertStore};
+use crate::buffer::PyBuffer;
 
 define_enum!(
     /// The TLS version.
@@ -220,7 +221,7 @@ struct Builder {
     grease_sigalgs_enabled: Option<bool>,
 
     /// Encoded Trust Anchor IDs sent in a TLS 1.3 ClientHello.
-    trust_anchors: Option<Vec<u8>>,
+    trust_anchors: Option<PyBuffer>,
 }
 
 /// TLS connection configuration options.
@@ -394,7 +395,13 @@ impl TlsOptions {
                     params.grease_sigalgs_enabled,
                     grease_sigalgs_enabled
                 );
-                apply_option!(set_if_some, builder, params.trust_anchors, trust_anchors);
+                apply_option!(
+                    set_if_some_map,
+                    builder,
+                    params.trust_anchors,
+                    trust_anchors,
+                    |ids: PyBuffer| ids.0.to_vec()
+                );
             }
 
             Self(builder.build())

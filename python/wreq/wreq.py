@@ -317,8 +317,8 @@ class Part:
             | memoryview
             | Bytes
             | Path
-            | Generator[bytes, str, None]
-            | AsyncGenerator[bytes, str]
+            | Generator[_BytesLike | str, str, None]
+            | AsyncGenerator[_BytesLike | str, str]
         ),
         filename: str | None = None,
         mime: str | None = None,
@@ -1151,8 +1151,8 @@ class Request(TypedDict):
         | Tuple[str, str | int | float | bool]
         | Mapping[str, str | int | float | bool]
         | Any
-        | Generator[bytes, str, None]
-        | AsyncGenerator[bytes, str]
+        | Generator[_BytesLike | str, str, None]
+        | AsyncGenerator[_BytesLike | str, str]
     ]
     """
     The body to use for the request.

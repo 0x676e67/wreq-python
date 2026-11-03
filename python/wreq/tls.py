@@ -430,7 +430,7 @@ class Params(TypedDict):
     Whether the `signature_algorithms` extension includes a GREASE value.
     """
 
-    trust_anchors: NotRequired[bytes]
+    trust_anchors: NotRequired[_BytesLike]
     """
     Encoded Trust Anchor IDs sent in a TLS 1.3 ClientHello.
     """
