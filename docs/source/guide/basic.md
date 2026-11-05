@@ -82,8 +82,9 @@ keywords are converted when the coroutine is first awaited or entered with
 ## Request bodies
 
 Use `json` for JSON, `form` for URL-encoded fields, and `body` for raw text or
-bytes. `json` and `form` set their content type automatically. Set it explicitly
-for a raw body when the server needs it. Choose one body argument per request.
+bytes-like data (`bytes`, `bytearray`, `memoryview` or `wreq.Bytes`). `json` and
+`form` set their content type automatically. Set it explicitly for a raw body
+when the server needs it. Choose one body argument per request.
 
 ```python
 async with client.post(

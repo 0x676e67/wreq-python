@@ -57,7 +57,9 @@ connections, and use context managers to close resources when you're done.
     headers are `bytes`. Use `data.tobytes()` when an API requires `bytes`; the
     conversion copies the data.
 
-    [Advanced features](../guide/advanced.md)
+    [Streaming responses](../guide/basic.md#streaming-responses) ·
+    [Uploads](../guide/advanced.md#streaming-request-bodies) ·
+    [Binary data](quickstart.md#binary-data)
 
 - **Runtime configuration**
 
