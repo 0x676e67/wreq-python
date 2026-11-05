@@ -1,10 +1,6 @@
-use pyo3::{
-    PyResult,
-    pybacked::{PyBackedBytes, PyBackedStr},
-    pyclass, pymethods,
-};
+use pyo3::{PyResult, pybacked::PyBackedStr, pyclass, pymethods};
 
-use crate::error::Error;
+use crate::{buffer::PyBuffer, error::Error};
 
 /// Represents a private key and X509 cert as a client certificate.
 #[derive(Clone)]
@@ -27,7 +23,7 @@ impl Identity {
     /// ```
     #[staticmethod]
     #[pyo3(signature = (buf, pass))]
-    pub fn from_pkcs12_der(buf: PyBackedBytes, pass: PyBackedStr) -> PyResult<Identity> {
+    pub fn from_pkcs12_der(buf: PyBuffer, pass: PyBackedStr) -> PyResult<Identity> {
         wreq::tls::trust::Identity::from_pkcs12_der(buf.as_ref(), pass.as_ref())
             .map(Identity)
             .map_err(Error::Library)
@@ -43,7 +39,7 @@ impl Identity {
     /// A certificate chain here means a series of PEM encoded certificates concatenated together.
     #[staticmethod]
     #[pyo3(signature = (buf, key))]
-    pub fn from_pkcs8_pem(buf: PyBackedBytes, key: PyBackedBytes) -> PyResult<Identity> {
+    pub fn from_pkcs8_pem(buf: PyBuffer, key: PyBuffer) -> PyResult<Identity> {
         wreq::tls::trust::Identity::from_pkcs8_pem(buf.as_ref(), key.as_ref())
             .map(Identity)
             .map_err(Error::Library)

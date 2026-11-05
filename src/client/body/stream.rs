@@ -25,13 +25,17 @@ use pyo3::{
 };
 
 use self::{async_gen::AsyncStream, iter::SyncStream};
-use crate::extractor::{Binary, Text};
+use crate::{
+    buffer::{PyBuffer, not_instance_of},
+    extractor::Text,
+};
 
 type Item = PyResult<PyBytesLike>;
 
-/// A request body chunk: `bytes` or `bytearray` data, or a `str` sent as UTF-8.
+/// A request body chunk: `bytes`, `bytearray`, `memoryview` or `wreq.Bytes` data, or a `str` sent
+/// as UTF-8.
 pub enum PyBytesLike {
-    Bytes(Binary),
+    Bytes(PyBuffer),
     String(Text),
 }
 
@@ -47,9 +51,14 @@ impl FromPyObject<'_, '_> for PyBytesLike {
     fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
         // Checked by type, so a str chunk does not first fail as bytes.
         if ob.is_instance_of::<PyString>() {
-            ob.extract().map(PyBytesLike::String)
-        } else {
-            ob.extract().map(PyBytesLike::Bytes)
+            return ob.extract().map(PyBytesLike::String);
+        }
+        match PyBuffer::extract_bytes_like(&ob) {
+            Some(bytes) => bytes.map(PyBytesLike::Bytes),
+            None => Err(not_instance_of(
+                &ob,
+                "str | bytes | bytearray | memoryview | Bytes",
+            )),
         }
     }
 }

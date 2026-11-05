@@ -128,8 +128,7 @@ async def test_peer_certificate():
     async with resp:
         assert resp.tls_info is not None
         certificate = resp.tls_info.peer_certificate()
-        assert type(certificate) is memoryview
-        assert certificate.readonly
+        assert type(certificate) is bytes
 
 
 @pytest.mark.asyncio
