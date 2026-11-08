@@ -1,6 +1,5 @@
 use std::fmt;
 
-use indexmap::IndexMap;
 use pyo3::{
     FromPyObject,
     prelude::*,
@@ -9,7 +8,8 @@ use pyo3::{
 };
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
-    de::{Error, MapAccess, SeqAccess, Visitor},
+    de::{DeserializeSeed, Error, MapAccess, SeqAccess, Visitor},
+    ser::SerializeMap,
 };
 
 /// Represents a JSON value for HTTP requests.
@@ -17,7 +17,7 @@ use serde::{
 #[derive(IntoPyObject, Serialize)]
 #[serde(untagged)]
 pub enum Json {
-    Object(IndexMap<JsonString, Json>),
+    Object(JsonObject),
     Boolean(bool),
     Number(isize),
     Float(f64),
@@ -28,15 +28,59 @@ pub enum Json {
 
 /// A JSON string: borrowed from Python when serializing a request body, owned when
 /// deserializing a response.
-#[derive(IntoPyObject, PartialEq, Eq, Hash)]
+#[derive(IntoPyObject)]
 pub enum JsonString {
     PyString(PyBackedStr),
     RustString(String),
 }
 
+pub struct JsonObject(Vec<(JsonString, Json)>);
+
 /// Builds a [`Json`] in one pass; an untagged derive would buffer every value and then try
 /// each variant in turn.
-struct JsonVisitor;
+struct JsonVisitor<'a>(&'a mut Vec<(JsonString, Json)>);
+
+// ===== impl JsonObject =====
+
+impl FromPyObject<'_, '_> for JsonObject {
+    type Error = PyErr;
+
+    fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
+        let dict = ob.cast::<PyDict>()?;
+        let mut members = Vec::with_capacity(dict.len());
+        for (k, v) in dict.iter() {
+            members.push((k.extract()?, v.extract()?));
+        }
+        Ok(JsonObject(members))
+    }
+}
+
+impl<'py> IntoPyObject<'py> for JsonObject {
+    type Target = PyDict;
+    type Output = Bound<'py, PyDict>;
+    type Error = PyErr;
+
+    fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
+        let dict = PyDict::new(py);
+        for (k, v) in self.0 {
+            dict.set_item(k, v)?;
+        }
+        Ok(dict)
+    }
+}
+
+impl Serialize for JsonObject {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(self.0.len()))?;
+        for (k, v) in &self.0 {
+            map.serialize_entry(k, v)?;
+        }
+        map.end()
+    }
+}
 
 // ===== impl JsonString =====
 
@@ -118,13 +162,25 @@ impl<'de> Deserialize<'de> for Json {
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_any(JsonVisitor)
+        deserializer.deserialize_any(JsonVisitor(&mut Vec::new()))
     }
 }
 
 // ===== impl JsonVisitor =====
 
-impl<'de> Visitor<'de> for JsonVisitor {
+impl<'de> DeserializeSeed<'de> for JsonVisitor<'_> {
+    type Value = Json;
+
+    #[inline]
+    fn deserialize<D>(self, deserializer: D) -> Result<Json, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_any(self)
+    }
+}
+
+impl<'de> Visitor<'de> for JsonVisitor<'_> {
     type Value = Json;
 
     fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -166,17 +222,19 @@ impl<'de> Visitor<'de> for JsonVisitor {
 
     fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Json, A::Error> {
         let mut values = Vec::new();
-        while let Some(value) = seq.next_element()? {
+        while let Some(value) = seq.next_element_seed(JsonVisitor(&mut *self.0))? {
             values.push(value);
         }
         Ok(Json::Array(values))
     }
 
     fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Json, A::Error> {
-        let mut values = IndexMap::new();
-        while let Some((key, value)) = map.next_entry()? {
-            values.insert(key, value);
+        let stack = self.0;
+        let start = stack.len();
+        while let Some(key) = map.next_key()? {
+            let value = map.next_value_seed(JsonVisitor(&mut *stack))?;
+            stack.push((key, value));
         }
-        Ok(Json::Object(values))
+        Ok(Json::Object(JsonObject(stack.drain(start..).collect())))
     }
 }
