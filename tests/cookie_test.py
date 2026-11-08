@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 import wreq
 from wreq.cookie import Cookie
@@ -247,3 +249,27 @@ async def test_cookie_value_update_from_server():
         len(user_id_cookies) == 1
     ), "Should have exactly one user_id cookie after update"
     assert user_id_cookies[0].value == "updated_value"
+
+
+@pytest.mark.asyncio
+async def test_cookie_dict_sends_one_header():
+    requests = asyncio.Queue()
+
+    async def handle(reader, writer):
+        requests.put_nowait(await reader.readuntil(b"\r\n\r\n"))
+        writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+        await writer.drain()
+        writer.close()
+
+    server = await asyncio.start_server(handle, "127.0.0.1", 0)
+    url = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}/"
+    try:
+        resp = await client.get(url, cookies={"a": "1", "b": "2"})
+        await resp.close()
+        head = (await asyncio.wait_for(requests.get(), 5)).decode().lower()
+    finally:
+        server.close()
+        await server.wait_closed()
+
+    cookies = [line for line in head.split("\r\n") if line.startswith("cookie:")]
+    assert cookies == ["cookie: a=1; b=2"]
