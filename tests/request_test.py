@@ -216,20 +216,39 @@ async def test_json_and_query_value_types():
     async def handle(reader, writer):
         head = await reader.readuntil(b"\r\n\r\n")
         length = next(
-            (int(line.split(b":")[1]) for line in head.split(b"\r\n") if line.lower().startswith(b"content-length:")),
+            (
+                int(line.split(b":")[1])
+                for line in head.split(b"\r\n")
+                if line.lower().startswith(b"content-length:")
+            ),
             0,
         )
-        requests.put_nowait(head.split(b" ")[1] + b" " + await reader.readexactly(length))
-        writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+        requests.put_nowait(
+            head.split(b" ")[1] + b" " + await reader.readexactly(length)
+        )
+        writer.write(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        )
         await writer.drain()
         writer.close()
 
     server = await asyncio.start_server(handle, "127.0.0.1", 0)
     url = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}/"
-    body = {"b": True, "i": 1, "f": 1.5, "s": "x", "n": None, "l": [1, "a"], "t": (False,), "o": {"k": {}}}
+    body = {
+        "b": True,
+        "i": 1,
+        "f": 1.5,
+        "s": "x",
+        "n": None,
+        "l": [1, "a"],
+        "t": (False,),
+        "o": {"k": {}},
+    }
     try:
         await (await client.post(url, json=body)).close()
-        await (await client.get(url, query={"b": False, "i": 2, "f": 0.5, "s": "y"})).close()
+        await (
+            await client.get(url, query={"b": False, "i": 2, "f": 0.5, "s": "y"})
+        ).close()
         sent = [await asyncio.wait_for(requests.get(), 5) for _ in range(2)]
     finally:
         server.close()
