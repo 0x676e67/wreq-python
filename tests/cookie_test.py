@@ -257,7 +257,9 @@ async def test_cookie_dict_sends_one_header():
 
     async def handle(reader, writer):
         requests.put_nowait(await reader.readuntil(b"\r\n\r\n"))
-        writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+        writer.write(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        )
         await writer.drain()
         writer.close()
 
