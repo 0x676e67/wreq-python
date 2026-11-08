@@ -158,8 +158,7 @@ async def test_context_exit_keeps_connection_but_close_forbids_reuse():
         assert connections.empty()
 
 
-# 2**63 overflows `isize`, so it decodes as a float.
-JSON_ITEM = {"n": [0, -2, 1.5, 2**63, True, None], "s": "\u00e9\n", "o": {}}
+JSON_ITEM = {"n": [0, -2, 1.5, 2**63, -(2**63), True, None], "s": "\u00e9\n", "o": {}}
 
 
 @pytest.mark.asyncio
@@ -192,7 +191,7 @@ async def test_reads_decode_buffered_and_cached_bodies(count):
         assert await asyncio.wait_for(task, 5) == reads
 
     assert reads == ([JSON_ITEM] * count, payload.decode(), payload)
-    assert isinstance(value[0]["n"][3], float)
+    assert isinstance(value[0]["n"][3], int)
 
 
 @pytest.mark.asyncio

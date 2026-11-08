@@ -18,7 +18,8 @@ pub enum Params {
 #[derive(FromPyObject)]
 pub enum ParamValue {
     Boolean(bool),
-    Number(isize),
+    Number(i64),
+    UInt(u64),
     Float64(f64),
     String(PyBackedStr),
 }
@@ -30,7 +31,8 @@ impl Serialize for ParamValue {
     {
         match self {
             ParamValue::String(s) => serializer.serialize_str(s.as_ref()),
-            ParamValue::Number(n) => serializer.serialize_i64(*n as i64),
+            ParamValue::Number(n) => serializer.serialize_i64(*n),
+            ParamValue::UInt(n) => serializer.serialize_u64(*n),
             ParamValue::Float64(f) => serializer.serialize_f64(*f),
             ParamValue::Boolean(b) => serializer.serialize_bool(*b),
         }

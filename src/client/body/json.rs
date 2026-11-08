@@ -14,7 +14,8 @@ use serde::{
 pub enum Json {
     Object(IndexMap<JsonString, Json>),
     Boolean(bool),
-    Number(isize),
+    Number(i64),
+    UInt(u64),
     Float(f64),
     String(JsonString),
     Null(Option<isize>),
@@ -92,13 +93,12 @@ impl<'de> Visitor<'de> for JsonVisitor {
         Ok(Json::Boolean(v))
     }
 
-    // Integers outside `isize` become floats, as the untagged variant order did.
     fn visit_i64<E: Error>(self, v: i64) -> Result<Json, E> {
-        Ok(isize::try_from(v).map_or(Json::Float(v as f64), Json::Number))
+        Ok(Json::Number(v))
     }
 
     fn visit_u64<E: Error>(self, v: u64) -> Result<Json, E> {
-        Ok(isize::try_from(v).map_or(Json::Float(v as f64), Json::Number))
+        Ok(i64::try_from(v).map_or(Json::UInt(v), Json::Number))
     }
 
     fn visit_f64<E: Error>(self, v: f64) -> Result<Json, E> {
