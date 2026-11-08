@@ -1,7 +1,12 @@
 use std::fmt;
 
 use indexmap::IndexMap;
-use pyo3::{FromPyObject, prelude::*, pybacked::PyBackedStr};
+use pyo3::{
+    FromPyObject,
+    prelude::*,
+    pybacked::PyBackedStr,
+    types::{PyBool, PyDict, PyFloat, PyInt, PyList, PyString, PyTuple},
+};
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
     de::{Error, MapAccess, SeqAccess, Visitor},
@@ -9,7 +14,7 @@ use serde::{
 
 /// Represents a JSON value for HTTP requests.
 /// Supports objects, arrays, numbers, strings, booleans, and null.
-#[derive(FromPyObject, IntoPyObject, Serialize)]
+#[derive(IntoPyObject, Serialize)]
 #[serde(untagged)]
 pub enum Json {
     Object(IndexMap<JsonString, Json>),
@@ -34,6 +39,44 @@ pub enum JsonString {
 struct JsonVisitor;
 
 // ===== impl JsonString =====
+
+impl FromPyObject<'_, '_> for Json {
+    type Error = PyErr;
+
+    fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
+        if ob.is_instance_of::<PyString>() {
+            return ob.extract().map(Json::String);
+        }
+        if ob.is_instance_of::<PyBool>() {
+            return ob.extract().map(Json::Boolean);
+        }
+        if ob.is_instance_of::<PyInt>() {
+            return ob
+                .extract()
+                .map(Json::Number)
+                .or_else(|_| ob.extract().map(Json::Float));
+        }
+        if ob.is_instance_of::<PyFloat>() {
+            return ob.extract().map(Json::Float);
+        }
+        if ob.is_none() {
+            return Ok(Json::Null(None));
+        }
+        if ob.is_instance_of::<PyDict>() {
+            return ob.extract().map(Json::Object);
+        }
+        if ob.is_instance_of::<PyList>() || ob.is_instance_of::<PyTuple>() {
+            return ob.extract().map(Json::Array);
+        }
+        ob.extract()
+            .map(Json::Object)
+            .or_else(|_| ob.extract().map(Json::Boolean))
+            .or_else(|_| ob.extract().map(Json::Number))
+            .or_else(|_| ob.extract().map(Json::Float))
+            .or_else(|_| ob.extract().map(Json::String))
+            .or_else(|_| ob.extract().map(Json::Array))
+    }
+}
 
 impl FromPyObject<'_, '_> for JsonString {
     type Error = PyErr;

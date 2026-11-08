@@ -1,5 +1,10 @@
 use indexmap::IndexMap;
-use pyo3::{FromPyObject, pybacked::PyBackedStr};
+use pyo3::{
+    FromPyObject,
+    prelude::*,
+    pybacked::PyBackedStr,
+    types::{PyBool, PyFloat, PyInt, PyString},
+};
 use serde::{
     Serialize, Serializer,
     ser::{SerializeMap, SerializeSeq},
@@ -15,12 +20,38 @@ pub enum Params {
 
 /// A scalar parameter value: `bool`, `int`, `float` or `str`, serialized as its text form
 /// (`true`/`false` for booleans).
-#[derive(FromPyObject)]
 pub enum ParamValue {
     Boolean(bool),
     Number(isize),
     Float64(f64),
     String(PyBackedStr),
+}
+
+impl FromPyObject<'_, '_> for ParamValue {
+    type Error = PyErr;
+
+    fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
+        if ob.is_instance_of::<PyString>() {
+            return ob.extract().map(ParamValue::String);
+        }
+        if ob.is_instance_of::<PyBool>() {
+            return ob.extract().map(ParamValue::Boolean);
+        }
+        if ob.is_instance_of::<PyInt>() {
+            return ob
+                .extract()
+                .map(ParamValue::Number)
+                .or_else(|_| ob.extract().map(ParamValue::Float64));
+        }
+        if ob.is_instance_of::<PyFloat>() {
+            return ob.extract().map(ParamValue::Float64);
+        }
+        ob.extract()
+            .map(ParamValue::Boolean)
+            .or_else(|_| ob.extract().map(ParamValue::Number))
+            .or_else(|_| ob.extract().map(ParamValue::Float64))
+            .or_else(|_| ob.extract().map(ParamValue::String))
+    }
 }
 
 impl Serialize for ParamValue {
