@@ -216,11 +216,19 @@ async def test_large_ints_are_not_sent_as_floats():
     async def handle(reader, writer):
         head = await reader.readuntil(b"\r\n\r\n")
         length = next(
-            (int(line.split(b":")[1]) for line in head.split(b"\r\n") if line.lower().startswith(b"content-length:")),
+            (
+                int(line.split(b":")[1])
+                for line in head.split(b"\r\n")
+                if line.lower().startswith(b"content-length:")
+            ),
             0,
         )
-        requests.put_nowait(head.split(b" ")[1] + b" " + await reader.readexactly(length))
-        writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+        requests.put_nowait(
+            head.split(b" ")[1] + b" " + await reader.readexactly(length)
+        )
+        writer.write(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        )
         await writer.drain()
         writer.close()
 
