@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 import wreq
 from wreq import Version
@@ -205,3 +207,42 @@ async def test_send_sync_bytes_stream():
     async with resp:
         json = await resp.json()
         assert json["data"] in open("README.md").read()
+
+
+@pytest.mark.asyncio
+async def test_large_ints_are_not_sent_as_floats():
+    requests = asyncio.Queue()
+
+    async def handle(reader, writer):
+        head = await reader.readuntil(b"\r\n\r\n")
+        length = next(
+            (
+                int(line.split(b":")[1])
+                for line in head.split(b"\r\n")
+                if line.lower().startswith(b"content-length:")
+            ),
+            0,
+        )
+        requests.put_nowait(
+            head.split(b" ")[1] + b" " + await reader.readexactly(length)
+        )
+        writer.write(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        )
+        await writer.drain()
+        writer.close()
+
+    server = await asyncio.start_server(handle, "127.0.0.1", 0)
+    url = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}/"
+    try:
+        await (await client.post(url, json={"a": 2**63, "b": -(2**63)})).close()
+        await (await client.get(url, query={"a": 2**64 - 1})).close()
+        sent = [await asyncio.wait_for(requests.get(), 5) for _ in range(2)]
+    finally:
+        server.close()
+        await server.wait_closed()
+
+    assert sent == [
+        b'/ {"a":9223372036854775808,"b":-9223372036854775808}',
+        b"/?a=18446744073709551615 ",
+    ]
