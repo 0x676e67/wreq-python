@@ -1,3 +1,5 @@
+import ssl
+
 import pytest
 import wreq
 from wreq.emulation import Emulation
@@ -27,8 +29,7 @@ async def test_badssl_invalid_cert():
         peer_der_cert = tls_info.peer_certificate()
         assert peer_der_cert is not None
 
-        assert type(peer_der_cert) is memoryview
-        assert peer_der_cert.readonly
+        assert type(peer_der_cert) is bytes
         assert len(peer_der_cert) > 0
 
         cert_store = CertStore(der_certs=[bytes(peer_der_cert)])
@@ -59,3 +60,20 @@ def test_tls_options_trust_anchors_and_grease_sigalgs():
 def test_extension_type_trust_anchors():
     opts = TlsOptions(extension_permutation=[ExtensionType.TRUST_ANCHORS])
     assert opts is not None
+
+
+def test_cert_store_accepts_bytes_like():
+    certs = ssl.create_default_context().get_ca_certs(binary_form=True)
+    if not certs:
+        pytest.skip("no CA certificates loaded")
+    der = certs[0]
+    pem = ssl.DER_cert_to_PEM_cert(der).encode()
+    CertStore(der_certs=[wreq.Bytes(der), memoryview(der)])
+    CertStore.from_der_certs([wreq.Bytes(der)])
+    CertStore.from_pem_stack(wreq.Bytes(pem))
+
+
+def test_trust_anchors_accept_bytes_like():
+    # Any buffer is taken as raw bytes, not as a sequence of items.
+    for ids in (wreq.Bytes(b"\x01\x02"), memoryview(b"\x01\x02\x03\x04").cast("I")):
+        assert TlsOptions(trust_anchors=ids) is not None

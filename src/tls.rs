@@ -221,7 +221,7 @@ struct Builder {
     grease_sigalgs_enabled: Option<bool>,
 
     /// Encoded Trust Anchor IDs sent in a TLS 1.3 ClientHello.
-    trust_anchors: Option<Vec<u8>>,
+    trust_anchors: Option<PyBuffer>,
 }
 
 /// TLS connection configuration options.
@@ -395,7 +395,13 @@ impl TlsOptions {
                     params.grease_sigalgs_enabled,
                     grease_sigalgs_enabled
                 );
-                apply_option!(set_if_some, builder, params.trust_anchors, trust_anchors);
+                apply_option!(
+                    set_if_some_map,
+                    builder,
+                    params.trust_anchors,
+                    trust_anchors,
+                    |ids: PyBuffer| ids.0.to_vec()
+                );
             }
 
             Self(builder.build())
@@ -409,11 +415,8 @@ pub struct TlsInfo(pub wreq::tls::TlsInfo);
 
 #[pymethods]
 impl TlsInfo {
-    /// Get a read-only memoryview of the peer's DER-encoded leaf certificate.
-    pub fn peer_certificate(&self) -> Option<PyBuffer> {
-        self.0
-            .peer_certificate()
-            .map(ToOwned::to_owned)
-            .map(PyBuffer::from)
+    /// Get the peer's DER-encoded leaf certificate as `bytes`.
+    pub fn peer_certificate(&self) -> Option<&[u8]> {
+        self.0.peer_certificate()
     }
 }
