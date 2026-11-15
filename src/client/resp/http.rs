@@ -347,7 +347,7 @@ impl Response {
             .map_err(Into::into)
     }
 
-    /// Stream read-only memoryviews and any trailing headers from the body. Only an unread
+    /// Stream immutable `Bytes` and any trailing headers from the body. Only an unread
     /// body can be streamed; cached bytes stay readable.
     pub fn stream(&self) -> PyResult<Streamer> {
         let mut slot = self.slot();
@@ -382,7 +382,7 @@ impl Response {
         Self::read(slf, "Response.json", 8 * 1024, ResponseExt::json::<Json>)
     }
 
-    /// Read the body as a read-only memoryview, retaining its data after the response closes.
+    /// Read the body as an immutable `Bytes`, retaining its data after the response closes.
     pub fn bytes(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
         let py = slf.py();
         let slf = slf.unbind();
@@ -404,7 +404,7 @@ impl Response {
     /// Discard the retained body and mark its connection as non-reusable.
     /// This does not guarantee an immediate socket shutdown or cancel an active read.
     /// Cancel and await any body-read task before closing. A body transferred to a
-    /// Streamer is managed separately; previously returned memoryviews remain valid.
+    /// Streamer is managed separately; previously returned `Bytes` remain valid.
     /// `async with` instead releases the body and keeps a fully read connection reusable.
     pub fn close(slf: Bound<'_, Self>) -> PyResult<Bound<'_, Coroutine>> {
         let py = slf.py();
@@ -565,7 +565,7 @@ impl BlockingResponse {
         self.0.raise_for_status()
     }
 
-    /// Stream read-only memoryviews and any trailing headers from the body.
+    /// Stream immutable `Bytes` and any trailing headers from the body.
     pub fn stream(&self) -> PyResult<Streamer> {
         self.0.stream()
     }
@@ -581,7 +581,7 @@ impl BlockingResponse {
         self.read(py, ResponseExt::json::<Json>)
     }
 
-    /// Read the body as a read-only memoryview, retaining its data after the response closes.
+    /// Read the body as an immutable `Bytes`, retaining its data after the response closes.
     pub fn bytes(&self, py: Python) -> PyResult<PyBuffer> {
         Runtime::refuse_nested()?;
         let response = &self.0;
@@ -600,7 +600,7 @@ impl BlockingResponse {
     /// Discard the retained body and mark its connection as non-reusable.
     /// This does not guarantee an immediate socket shutdown or interrupt an active read.
     /// Do not close concurrently with a body read. A body transferred to a Streamer
-    /// is managed separately; previously returned memoryviews remain valid.
+    /// is managed separately; previously returned `Bytes` remain valid.
     /// `with` instead releases the body and keeps a fully read connection reusable.
     pub fn close(&self) {
         self.0.discard();

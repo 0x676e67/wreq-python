@@ -5,6 +5,8 @@
 - Unknown keyword arguments now raise `TypeError` when calling async or blocking client constructors, HTTP or WebSocket request methods and functions, `Http1Options`, `Http2Options`, `TlsOptions`, or `Proxy` factories. These arguments were previously ignored.
 - Set client-only options such as `connect_timeout` and `proxies` on `Client`; passing them to a request now raises `TypeError`. Use `proxy` to select a proxy for one request.
 - Async request calls check keyword names before returning a coroutine. Values for supported request keywords are still converted on first `await` or entry with `async with`.
+- Header names and values, `Message.ping`/`pong` and `TlsInfo.peer_certificate()` return `bytes` again instead of `memoryview`. `Response.bytes()`, stream data frames and `Message.data`/`binary` return the new immutable `wreq.Bytes`, which shares data without copying and compares and hashes like `bytes`. Tell stream frames apart with `isinstance(chunk, HeaderMap)` rather than `isinstance(chunk, memoryview)`, and use `memoryview(data)` for `memoryview` attributes such as `.obj`, `.cast()` or `.tolist()`. `bytes` values have no `.tobytes()` or `.release()`; on `wreq.Bytes`, `release()` and `with` emit `DeprecationWarning`. APIs that accept only `bytes`, `bytearray` or `memoryview` by type, such as asyncio `StreamWriter.write` and transports or `orjson.loads`, reject `wreq.Bytes`; pass `memoryview(data)`, which does not copy.
+- `memoryview` and `wreq.Bytes` values are now accepted wherever `bytes` is, and are sent as raw bytes. `body=` and `Message.from_binary()` previously JSON-encoded a `memoryview` as an array of integers.
 
 ## [0.11.0](https://github.com/0x676e67/wreq-python/compare/v0.10.2..v0.11.0) - 2026-04-13
 

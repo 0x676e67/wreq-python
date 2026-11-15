@@ -108,32 +108,36 @@ Finish each read before starting another. For large bodies, see
 
 ### Binary data
 
-`bytes()` returns a read-only `memoryview` backed by Rust-owned data. Returning
-the view is zero-copy; collecting a complete response can still allocate memory
-to join body chunks.
+`bytes()` returns an immutable `wreq.Bytes` backed by Rust-owned data. Returning
+it is zero-copy; collecting a complete response can still allocate memory to
+join body chunks.
 
 ```python
 import hashlib
 
 async with client.get("https://httpbin.org/bytes/16") as response:
-    view = await response.bytes()
+    data = await response.bytes()
 
-print(view.readonly)  # True
-print(hashlib.sha256(view).hexdigest())
+print(len(data), data[:4])
+print(hashlib.sha256(data).hexdigest())
 ```
 
-The view remains valid after the response closes. Use it directly with APIs
-that accept buffers, such as `file.write(view)` or `hashlib.sha256(view)`.
-For text, use `str(view, "utf-8")`; memoryviews have no `.decode()` method.
+The data remains valid after the response closes. Use it directly with APIs
+that accept buffers, such as `file.write(data)` or `hashlib.sha256(data)`. It
+compares and hashes like `bytes`, and provides read-only `bytes` methods such as
+`decode()`, `find()`, `count()` and `startswith()`, plus zero-copy slicing.
+Passing it back to wreq, for example as a request `body` or to
+`Message.from_binary`, does not copy it.
 
-Use `bytes(view)` or `view.tobytes()` when an API needs a `bytes` object. Both
-copy the data. This includes passing a view back to wreq's binary inputs such
-as `body`, `Part`, `Message` constructors or `CertStore`. You can release your
-reference early with `view.release()`; other views and slices stay valid.
+Use `data.tobytes()` when an API needs a `bytes` object, such as `json.loads`
+or code that checks `isinstance(x, bytes)`; it copies the data. APIs that accept
+only `bytes`, `bytearray` or `memoryview` by type, such as asyncio transports
+and `orjson.loads`, take `memoryview(data)` without copying.
 
-The blocking API returns the same type. Stream data frames, binary WebSocket
-fields, header names and values, and peer certificates also use read-only
-memoryviews that retain their backing data.
+The blocking API returns the same type, and so do stream data frames and the
+`data` and `binary` fields of WebSocket messages. Short values are plain
+`bytes`: header names and values, WebSocket ping and pong payloads, and peer
+certificates.
 
 ## Set headers
 

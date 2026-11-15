@@ -31,14 +31,14 @@ use crate::{
     runtime::Runtime,
 };
 
-/// A response frame exposed as a read-only memoryview or a header map.
+/// A response frame exposed as an immutable `Bytes` or a header map.
 #[derive(IntoPyObject)]
 pub enum Frame {
     Bytes(PyBuffer),
     Trailers(HeaderMap),
 }
 
-/// A response stream yielding read-only memoryviews and any trailing headers.
+/// A response stream yielding immutable `Bytes` and any trailing headers.
 ///
 /// Sync and async iteration share [`Streamer::next`]; [`Iteration`] picks the ready frames
 /// the caller reads and the error that ends iteration.
@@ -296,7 +296,7 @@ impl Streamer {
         slf
     }
 
-    /// Release the body and end any pending read; returned views stay valid.
+    /// Release the body and end any pending read; returned data stays valid.
     fn __exit__<'py>(
         &self,
         _exc_type: &Bound<'py, PyAny>,
@@ -336,7 +336,7 @@ impl Streamer {
         coroutine::ready("Streamer.__aenter__", slf)
     }
 
-    /// Release the body and end any pending read; returned views stay valid.
+    /// Release the body and end any pending read; returned data stays valid.
     fn __aexit__<'py>(
         &self,
         py: Python<'py>,

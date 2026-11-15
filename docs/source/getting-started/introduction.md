@@ -52,11 +52,14 @@ connections, and use context managers to close resources when you're done.
 
 - **Streaming and buffers**
 
-    Stream request and response bodies, or read a complete body. Rust-backed
-    binary outputs are read-only `memoryview` objects. Convert to `bytes` when
-    an API requires that type; the conversion copies the data.
+    Stream request and response bodies, or read a complete body. Bodies and
+    stream data are zero-copy `wreq.Bytes` objects, and short values such as
+    headers are `bytes`. Use `data.tobytes()` when an API requires `bytes`; the
+    conversion copies the data.
 
-    [Advanced features](../guide/advanced.md)
+    [Streaming responses](../guide/basic.md#streaming-responses) ·
+    [Uploads](../guide/advanced.md#streaming-request-bodies) ·
+    [Binary data](quickstart.md#binary-data)
 
 - **Runtime configuration**
 

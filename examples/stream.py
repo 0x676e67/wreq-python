@@ -7,10 +7,10 @@ async def main():
     async with wreq.get("https://httpbin.io/stream/20") as resp:
         async with resp.stream() as streamer:
             async for chunk in streamer:
-                if isinstance(chunk, memoryview):
-                    sys.stdout.buffer.write(chunk)
-                else:
+                if isinstance(chunk, wreq.HeaderMap):
                     print("Trailers:", chunk)
+                else:
+                    sys.stdout.buffer.write(chunk)
                 await asyncio.sleep(0.1)
 
 

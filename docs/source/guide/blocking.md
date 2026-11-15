@@ -111,7 +111,7 @@ Closing a client cancels pending requests and rejects new ones with
 
 ## Streaming response
 
-`response.bytes()` returns a read-only memoryview of the complete body. To
+`response.bytes()` returns a zero-copy `wreq.Bytes` of the complete body. To
 write a large response incrementally, use a streamer:
 
 ```python
@@ -124,14 +124,14 @@ with Client() as client:
         response.raise_for_status()
         with response.stream() as streamer, open("download.bin", "wb") as output:
             for frame in streamer:
-                if isinstance(frame, memoryview):
-                    output.write(frame)
-                elif isinstance(frame, HeaderMap):
+                if isinstance(frame, HeaderMap):
                     print("Trailers:", frame)
+                else:
+                    output.write(frame)
 ```
 
-Data views remain valid after the stream closes. `output.write(frame)` accepts
-the buffer directly; `bytes(frame)` makes a copy. Only an unread response can
+Data frames remain valid after the stream closes. `output.write(frame)` accepts
+the buffer directly; `frame.tobytes()` makes a copy. Only an unread response can
 be streamed. Complete body reads through `text()`, `json()` or `bytes()` are
 cached and can be repeated sequentially until the response is released.
 

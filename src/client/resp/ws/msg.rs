@@ -12,17 +12,11 @@ use std::fmt::Debug;
 use pyo3::{exceptions::PyValueError, prelude::*};
 use wreq::ws::message::{self, CloseCode, CloseFrame, Utf8Bytes};
 
-use crate::{
-    buffer::PyBuffer,
-    client::body::Json,
-    error::Error,
-    extractor::{Binary, Text},
-};
+use crate::{buffer::PyBuffer, client::body::Json, error::Error, extractor::Text};
 
 /// An enum representing either a bytes message or a JSON message.
-#[derive(FromPyObject)]
 pub enum BytesLike {
-    Bytes(Binary),
+    Bytes(PyBuffer),
     Json(Json),
 }
 
@@ -38,9 +32,25 @@ pub enum TextLike {
 #[pyclass(subclass, str, frozen, from_py_object)]
 pub struct Message(pub message::Message);
 
+// ===== impl BytesLike =====
+
+impl FromPyObject<'_, '_> for BytesLike {
+    type Error = PyErr;
+
+    fn extract(ob: Borrowed<PyAny>) -> PyResult<Self> {
+        // Checked by type, so a JSON value does not first fail as bytes.
+        match PyBuffer::extract_bytes_like(&ob) {
+            Some(bytes) => bytes.map(BytesLike::Bytes),
+            None => ob.extract().map(BytesLike::Json),
+        }
+    }
+}
+
+// ===== impl Message =====
+
 #[pymethods]
 impl Message {
-    /// Returns the message data as a read-only memoryview.
+    /// Returns the message data as an immutable `Bytes`.
     #[getter]
     pub fn data(&self) -> Option<PyBuffer> {
         let bytes = match &self.0 {
@@ -63,7 +73,7 @@ impl Message {
         }
     }
 
-    /// Returns a read-only memoryview if this is a binary message.
+    /// Returns an immutable `Bytes` if this is a binary message.
     #[getter]
     pub fn binary(&self) -> Option<PyBuffer> {
         if let message::Message::Binary(data) = &self.0 {
@@ -73,21 +83,24 @@ impl Message {
         }
     }
 
-    /// Returns a read-only memoryview if this is a ping message.
+    /// Returns the payload as `bytes` if this is a ping message. [RFC 6455 §5.5] limits control
+    /// payloads to 125 bytes, so a copy is cheaper than a shared buffer.
+    ///
+    /// [RFC 6455 §5.5]: https://www.rfc-editor.org/rfc/rfc6455#section-5.5
     #[getter]
-    pub fn ping(&self) -> Option<PyBuffer> {
+    pub fn ping(&self) -> Option<&[u8]> {
         if let message::Message::Ping(data) = &self.0 {
-            Some(PyBuffer::from(data))
+            Some(data)
         } else {
             None
         }
     }
 
-    /// Returns a read-only memoryview if this is a pong message.
+    /// Returns the payload as `bytes` if this is a pong message.
     #[getter]
-    pub fn pong(&self) -> Option<PyBuffer> {
+    pub fn pong(&self) -> Option<&[u8]> {
         if let message::Message::Pong(data) = &self.0 {
-            Some(PyBuffer::from(data))
+            Some(data)
         } else {
             None
         }
@@ -145,14 +158,14 @@ impl Message {
     /// Creates a new ping message.
     #[staticmethod]
     #[pyo3(signature = (data))]
-    pub fn from_ping(data: Binary) -> Self {
+    pub fn from_ping(data: PyBuffer) -> Self {
         Self(message::Message::ping(data.0))
     }
 
     /// Creates a new pong message.
     #[staticmethod]
     #[pyo3(signature = (data))]
-    pub fn from_pong(data: Binary) -> Self {
+    pub fn from_pong(data: PyBuffer) -> Self {
         Self(message::Message::pong(data.0))
     }
 

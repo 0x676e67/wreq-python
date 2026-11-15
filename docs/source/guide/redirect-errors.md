@@ -26,7 +26,7 @@ async def main():
             print(response.status)
             location = response.headers.get("location")
             if location is not None:
-                print("Location:", bytes(location).decode())
+                print("Location:", location.decode())
             await response.bytes()
 
 

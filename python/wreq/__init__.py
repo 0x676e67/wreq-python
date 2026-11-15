@@ -1,5 +1,7 @@
 # wreq/__init__.py
 
+from collections.abc import Sequence as _Sequence
+
 from .wreq import *
 
 from .cookie import *
@@ -13,6 +15,9 @@ from .dns import *
 from .redirect import *
 from .proxy import *
 from .runtime import *
+
+# A Sequence like `bytes`; like `memoryview`, it also matches sequence patterns in `match`.
+_Sequence.register(Bytes)  # pyright: ignore[reportAttributeAccessIssue]
 
 __all__ = (
     header.__all__

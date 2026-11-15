@@ -2652,6 +2652,7 @@ dependencies = [
  "http-body",
  "http-body-util",
  "indexmap",
+ "memchr",
  "mimalloc",
  "pingora-runtime",
  "pyo3",

@@ -22,6 +22,7 @@ from .header import HeaderMap
 from .redirect import History
 from .runtime import Runtime
 from .tls import TlsInfo
+from .wreq import Bytes
 
 
 class Response:
@@ -86,7 +87,7 @@ class Response:
 
     def stream(self) -> Streamer:
         r"""
-        Stream the body as read-only memoryviews, with HeaderMap frames for trailers.
+        Stream the body as immutable `Bytes`, with HeaderMap frames for trailers.
         """
         ...
 
@@ -101,11 +102,12 @@ class Response:
         Get the JSON content of the response.
         """
 
-    def bytes(self) -> memoryview:
+    def bytes(self) -> Bytes:
         r"""
-        Read the body as a read-only memoryview without copying it into Python bytes.
-        The view remains valid after the response is closed or deleted.
-        Use bytes(view) or view.tobytes() for a copy; view.release() releases this view.
+        Read the body as an immutable `Bytes` without copying it.
+        The data stays valid after the response is closed or deleted.
+        Use `data.tobytes()` for a `bytes` copy, or `memoryview(data)` for APIs that accept
+        only `bytes`, `bytearray` or `memoryview`.
         """
         ...
 
@@ -114,7 +116,7 @@ class Response:
         Discard the retained body and mark its connection as non-reusable.
         This does not guarantee an immediate socket shutdown or interrupt an active read.
         Do not close concurrently with a body read. A body transferred to a Streamer
-        is managed separately; previously returned memoryviews remain valid.
+        is managed separately; previously returned `Bytes` remain valid.
         `with` instead releases the body and keeps a fully read connection reusable.
         """
 

@@ -1,22 +1,18 @@
 use pyo3::{
     prelude::*,
     pybacked::PyBackedStr,
-    types::{PyDict, PyIterator, PyList},
+    types::{PyBytes, PyDict, PyIterator, PyList},
 };
 use wreq::header::{self, HeaderName, HeaderValue};
 
-use crate::{
-    buffer::PyBuffer,
-    error::Error,
-    extractor::{Binary, Text},
-};
+use crate::{buffer::PyBuffer, error::Error, extractor::Text};
 
-/// An HTTP header map whose names and values are exposed as read-only memoryviews.
+/// An HTTP header map whose names and values are exposed as `bytes`.
 #[derive(Clone)]
 #[pyclass(subclass, str)]
 pub struct HeaderMap(pub header::HeaderMap);
 
-/// An HTTP original header map whose iterator exposes read-only memoryviews.
+/// An HTTP original header map whose iterator exposes `bytes`.
 #[derive(Clone)]
 #[pyclass(subclass, str)]
 pub struct OrigHeaderMap(pub header::OrigHeaderMap);
@@ -61,28 +57,32 @@ impl HeaderMap {
         HeaderMap(headers)
     }
 
-    /// Returns a read-only memoryview of the value associated with the key.
+    /// Returns the value associated with the key as `bytes`.
     ///
     /// If there are multiple values associated with the key, then the first one
     /// is returned. Use `get_all` to get all values associated with a given
-    /// key. Returns `None` if there are no values associated with the key.
+    /// key. Returns `default`, or `None`, if there are no values associated with the key.
     #[pyo3(signature = (key, default=None))]
-    fn get(&self, key: PyBackedStr, default: Option<Binary>) -> Option<PyBuffer> {
-        self.0
-            .get::<&str>(key.as_ref())
-            .cloned()
-            .or_else(|| HeaderValue::from_maybe_shared(default?.0).ok())
-            .map(PyBuffer::from)
+    fn get<'py>(
+        &self,
+        py: Python<'py>,
+        key: PyBackedStr,
+        default: Option<PyBuffer>,
+    ) -> Option<Bound<'py, PyBytes>> {
+        // Header values are short, so a `bytes` copy is cheaper than a shared buffer.
+        let value = self.0.get::<&str>(key.as_ref()).map(HeaderValue::as_bytes);
+        value
+            .or(default.as_ref().map(AsRef::as_ref))
+            .map(|value| PyBytes::new(py, value))
     }
 
-    /// Returns a list of read-only memoryviews for the values associated with a key.
+    /// Returns a list of `bytes` for the values associated with a key.
     #[pyo3(signature = (key))]
-    fn get_all(&self, key: PyBackedStr) -> Vec<PyBuffer> {
+    fn get_all(&self, key: PyBackedStr) -> Vec<&[u8]> {
         self.0
             .get_all::<&str>(key.as_ref())
             .iter()
-            .cloned()
-            .map(PyBuffer::from)
+            .map(HeaderValue::as_bytes)
             .collect()
     }
 
@@ -120,14 +120,14 @@ impl HeaderMap {
         self.0.contains_key::<&str>(key.as_ref())
     }
 
-    /// Returns a list of read-only memoryviews for all keys.
-    fn keys(&self) -> Vec<PyBuffer> {
-        self.0.keys().cloned().map(PyBuffer::from).collect()
+    /// Returns a list of `bytes` for all keys.
+    fn keys(&self) -> Vec<&[u8]> {
+        self.0.keys().map(|name| name.as_str().as_bytes()).collect()
     }
 
-    /// Returns a list of read-only memoryviews for all values.
-    fn values(&self) -> Vec<PyBuffer> {
-        self.0.values().cloned().map(PyBuffer::from).collect()
+    /// Returns a list of `bytes` for all values.
+    fn values(&self) -> Vec<&[u8]> {
+        self.0.values().map(HeaderValue::as_bytes).collect()
     }
 
     /// Returns the number of headers stored in the map.
@@ -160,8 +160,8 @@ impl HeaderMap {
 
 #[pymethods]
 impl HeaderMap {
-    fn __getitem__(&self, key: PyBackedStr) -> Option<PyBuffer> {
-        self.get(key, None)
+    fn __getitem__<'py>(&self, py: Python<'py>, key: PyBackedStr) -> Option<Bound<'py, PyBytes>> {
+        self.get(py, key, None)
     }
 
     fn __setitem__(&mut self, key: PyBackedStr, value: Text) {
@@ -184,7 +184,7 @@ impl HeaderMap {
         let items = self
             .0
             .iter()
-            .map(|(k, v)| (PyBuffer::from(k.clone()), PyBuffer::from(v.clone())));
+            .map(|(k, v)| (k.as_str().as_bytes(), v.as_bytes()));
         let pylist = PyList::new(py, items)?;
         PyIterator::from_object(&pylist)
     }
@@ -277,12 +277,10 @@ impl OrigHeaderMap {
     }
 
     fn __iter__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyIterator>> {
-        let items = self.0.iter().map(|(name, orig_name)| {
-            (
-                PyBuffer::from(name.clone()),
-                PyBuffer::from(orig_name.clone()),
-            )
-        });
+        let items = self
+            .0
+            .iter()
+            .map(|(name, orig_name)| (name.as_str().as_bytes(), orig_name.as_ref()));
         let pylist = PyList::new(py, items)?;
         PyIterator::from_object(&pylist)
     }

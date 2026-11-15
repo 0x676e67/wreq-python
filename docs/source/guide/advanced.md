@@ -1,12 +1,13 @@
 # Advanced features
 
 Use streaming uploads for data produced incrementally, and multipart forms for
-named fields and files. Response streaming is covered in [basic usage](basic.md).
+named fields and files. Response streaming is covered in
+[basic usage](basic.md#streaming-responses).
 
 ## Streaming request bodies
 
 Pass a synchronous iterator or an async generator to `body`. Each item must
-be a supported body chunk, such as `bytes` or `str`:
+be `str` or bytes-like data, such as `bytes` or `wreq.Bytes`:
 
 ```python
 import asyncio
