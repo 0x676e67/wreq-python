@@ -500,6 +500,8 @@ impl Client {
                 apply_option!(set_if_some, builder, config.zstd, zstd);
 
                 raise_for_status = config.raise_for_status.unwrap_or(false);
+            } else {
+                builder = builder.dns_resolver(HickoryResolver::new(LookupIpStrategy::default())?);
             }
 
             builder
