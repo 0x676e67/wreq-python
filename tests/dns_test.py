@@ -92,7 +92,8 @@ async def invalid_name_resolve_error(client: wreq.Client) -> str:
     # sending a query, each with its own error.
     async with client:
         with pytest.raises(wreq.exceptions.ConnectionError) as exc_info:
-            await client.get(f"http://{'a' * 64}.invalid/")
+            async with await asyncio.wait_for(client.get(f"http://{'a' * 64}.invalid/"), 5):
+                pass
     return str(exc_info.value)
 
 
