@@ -1,11 +1,11 @@
 import asyncio
 import platform
 import threading
+from datetime import timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from ipaddress import IPv4Address
 
 import pytest
-
 import wreq
 from wreq import blocking
 from wreq.dns import DnsOptions, LookupIpStrategy
@@ -47,21 +47,22 @@ async def test_dns_options(dns_http_server, blocking_api):
         if blocking_api:
 
             def request():
-                with blocking.Client(**kwargs) as client:
-                    with client.get(url) as response:
-                        return response.text()
+                with blocking.Client(**kwargs) as client, client.get(url) as response:
+                    return response.text()
 
             body = await asyncio.to_thread(request)
         else:
-            async with wreq.Client(**kwargs) as client:
-                async with client.get(url) as response:
-                    body = await response.text()
+            async with wreq.Client(**kwargs) as client, client.get(url) as response:
+                body = await response.text()
         assert body == "DNS resolved"
 
     # Exercise actual hostname resolution, including the default resolver.
     await fetch("localhost", None)
     await fetch("localhost", DnsOptions(system_dns=True))
-    await fetch("localhost", DnsOptions(system_dns=False, lookup_ip_strategy=LookupIpStrategy.IPV4_ONLY))
+    await fetch(
+        "localhost",
+        DnsOptions(system_dns=False, lookup_ip_strategy=LookupIpStrategy.IPV4_ONLY),
+    )
 
     # Every strategy must initialize and preserve explicit address overrides.
     for strategy in (
@@ -79,7 +80,9 @@ async def test_dns_options(dns_http_server, blocking_api):
 @pytest.mark.asyncio
 async def test_dns_resolve_override(dns_http_server):
     # An override wins over the real address of a resolvable host.
-    dns_options = DnsOptions(system_dns=False, lookup_ip_strategy=LookupIpStrategy.IPV4_ONLY)
+    dns_options = DnsOptions(
+        system_dns=False, lookup_ip_strategy=LookupIpStrategy.IPV4_ONLY
+    )
     dns_options.add_resolve("www.google.com", [IPv4Address("127.0.0.1")])
     async with wreq.Client(dns_options=dns_options, no_proxy=True) as client:
         url = f"http://www.google.com:{dns_http_server}/"
@@ -87,12 +90,20 @@ async def test_dns_resolve_override(dns_http_server):
             assert await response.text() == "DNS resolved"
 
 
-async def invalid_name_resolve_error(client: wreq.Client) -> str:
+async def invalid_name_resolve_error(client: wreq.Client | blocking.Client) -> str:
     # A 64-byte label is not a valid DNS name, so every resolver fails without
     # sending a query, each with its own error.
-    async with client:
-        with pytest.raises(wreq.exceptions.ConnectionError) as exc_info:
-            async with await asyncio.wait_for(client.get(f"http://{'a' * 64}.invalid/"), 5):
+    url = f"http://{'a' * 64}.invalid/"
+
+    def request_blocking(blocking_client: blocking.Client) -> None:
+        with blocking_client, blocking_client.get(url, timeout=timedelta(seconds=5)):
+            pass
+
+    with pytest.raises(wreq.exceptions.ConnectionError) as exc_info:
+        if isinstance(client, blocking.Client):
+            await asyncio.to_thread(request_blocking, client)
+        else:
+            async with client, await asyncio.wait_for(client.get(url), 5):
                 pass
     return str(exc_info.value)
 
@@ -101,13 +112,18 @@ async def invalid_name_resolve_error(client: wreq.Client) -> str:
 @pytest.mark.parametrize(
     "use_dns_options", [False, True], ids=["no_kwargs", "dns_options"]
 )
-async def test_default_dns_resolver_is_getaddrinfo(use_dns_options: bool):
+@pytest.mark.parametrize(
+    "client_type", [wreq.Client, blocking.Client], ids=["async", "blocking"]
+)
+async def test_default_dns_resolver_is_getaddrinfo(
+    use_dns_options: bool, client_type: type[wreq.Client | blocking.Client]
+):
     # Control: hickory rejects the name while parsing it. If this stops holding,
     # the assertions below no longer tell the resolvers apart.
-    hickory_client = wreq.Client(dns_options=DnsOptions(system_dns=False))
+    hickory_client = client_type(dns_options=DnsOptions(system_dns=False))
     assert "LabelBytesTooLong" in await invalid_name_resolve_error(hickory_client)
 
-    client = wreq.Client(dns_options=DnsOptions()) if use_dns_options else wreq.Client()
+    client = client_type(dns_options=DnsOptions()) if use_dns_options else client_type()
     error = await invalid_name_resolve_error(client)
     assert "LabelBytesTooLong" not in error
     if platform.system() != "Windows":
