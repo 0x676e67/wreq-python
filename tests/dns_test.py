@@ -60,7 +60,7 @@ async def test_dns_options(dns_http_server, blocking_api):
     # Exercise actual hostname resolution, including the default resolver.
     await fetch("localhost", None)
     await fetch("localhost", DnsOptions(system_dns=True))
-    await fetch("localhost", DnsOptions(lookup_ip_strategy=LookupIpStrategy.IPV4_ONLY))
+    await fetch("localhost", DnsOptions(system_dns=False, lookup_ip_strategy=LookupIpStrategy.IPV4_ONLY))
 
     # Every strategy must initialize and preserve explicit address overrides.
     for strategy in (
@@ -70,7 +70,7 @@ async def test_dns_options(dns_http_server, blocking_api):
         LookupIpStrategy.IPV6_THEN_IPV4,
         LookupIpStrategy.IPV4_THEN_IPV6,
     ):
-        options = DnsOptions(lookup_ip_strategy=strategy)
+        options = DnsOptions(system_dns=False, lookup_ip_strategy=strategy)
         options.add_resolve("dns-test.invalid", [IPv4Address("127.0.0.1")])
         await fetch("dns-test.invalid", options)
 
@@ -78,7 +78,7 @@ async def test_dns_options(dns_http_server, blocking_api):
 @pytest.mark.asyncio
 async def test_dns_resolve_override(dns_http_server):
     # An override wins over the real address of a resolvable host.
-    dns_options = DnsOptions(lookup_ip_strategy=LookupIpStrategy.IPV4_ONLY)
+    dns_options = DnsOptions(system_dns=False, lookup_ip_strategy=LookupIpStrategy.IPV4_ONLY)
     dns_options.add_resolve("www.google.com", [IPv4Address("127.0.0.1")])
     async with wreq.Client(dns_options=dns_options, no_proxy=True) as client:
         url = f"http://www.google.com:{dns_http_server}/"
