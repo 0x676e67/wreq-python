@@ -64,6 +64,10 @@ async def test_dns_options(dns_http_server, blocking_api):
         DnsOptions(system_dns=False, lookup_ip_strategy=LookupIpStrategy.IPV4_ONLY),
     )
 
+    options = DnsOptions(system_dns=True)
+    options.add_resolve("dns-test.invalid", [IPv4Address("127.0.0.1")])
+    await fetch("dns-test.invalid", options)
+
     # Every strategy must initialize and preserve explicit address overrides.
     for strategy in (
         LookupIpStrategy.IPV4_ONLY,
