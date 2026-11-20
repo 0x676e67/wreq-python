@@ -52,7 +52,7 @@ impl DnsOptions {
     /// `lookup_ip_strategy` only applies to hickory and has no effect when
     /// using the system DNS resolver.
     #[new]
-    #[pyo3(signature=(system_dns = false, lookup_ip_strategy = LookupIpStrategy::IPV4_AND_IPV6))]
+    #[pyo3(signature=(system_dns = true, lookup_ip_strategy = LookupIpStrategy::IPV4_AND_IPV6))]
     pub fn new(system_dns: bool, lookup_ip_strategy: LookupIpStrategy) -> Self {
         DnsOptions {
             system_dns,

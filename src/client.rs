@@ -25,7 +25,7 @@ use self::{
 use crate::{
     cookie::Jar,
     coroutine::{self, Coroutine},
-    dns::{DnsOptions, HickoryResolver, LookupIpStrategy},
+    dns::{DnsOptions, HickoryResolver},
     emulate::EmulationLike,
     error::Error,
     extractor::Extractor,
@@ -488,10 +488,7 @@ impl Client {
                         builder =
                             builder.dns_resolver(HickoryResolver::new(opts.lookup_ip_strategy)?);
                     }
-                } else {
-                    builder =
-                        builder.dns_resolver(HickoryResolver::new(LookupIpStrategy::default())?);
-                };
+                }
 
                 // Compression options.
                 apply_option!(set_if_some, builder, config.gzip, gzip);
@@ -500,8 +497,6 @@ impl Client {
                 apply_option!(set_if_some, builder, config.zstd, zstd);
 
                 raise_for_status = config.raise_for_status.unwrap_or(false);
-            } else {
-                builder = builder.dns_resolver(HickoryResolver::new(LookupIpStrategy::default())?);
             }
 
             builder
