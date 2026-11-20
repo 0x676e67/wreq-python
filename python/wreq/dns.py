@@ -52,7 +52,7 @@ class DnsOptions:
 
     def __init__(
         self,
-        system_dns: bool = False,
+        system_dns: bool = True,
         lookup_ip_strategy: LookupIpStrategy = LookupIpStrategy.IPV4_AND_IPV6,
     ) -> None:
         """Create a new DnsOptions.

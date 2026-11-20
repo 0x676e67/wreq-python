@@ -129,15 +129,15 @@ enable logging only when you need it.
 ## DNS and protocol options
 
 `dns_options` selects the resolver and can override specific host addresses.
-Overrides retain the URL's hostname for HTTP and TLS. This configuration uses
-system DNS; omit it to use the default Hickory resolver:
+Overrides retain the URL's hostname for HTTP and TLS. Set `system_dns=False` to
+use the Hickory resolver instead of system DNS (such as `getaddrinfo` on Linux).
 
 ```python
 from wreq.blocking import Client
 from wreq.dns import DnsOptions
 
 
-with Client(dns_options=DnsOptions(system_dns=True)) as client:
+with Client(dns_options=DnsOptions(system_dns=False)) as client:
     with client.get("https://httpbin.io/get") as response:
         print(response.text())
 ```
