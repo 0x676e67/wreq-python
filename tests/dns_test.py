@@ -1,4 +1,5 @@
 import asyncio
+import platform
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from ipaddress import IPv4Address
@@ -84,3 +85,31 @@ async def test_dns_resolve_override(dns_http_server):
         url = f"http://www.google.com:{dns_http_server}/"
         async with await asyncio.wait_for(client.get(url), 5) as response:
             assert await response.text() == "DNS resolved"
+
+
+async def invalid_name_resolve_error(client: wreq.Client) -> str:
+    # A 64-byte label is not a valid DNS name, so every resolver fails without
+    # sending a query, each with its own error.
+    async with client:
+        with pytest.raises(wreq.exceptions.ConnectionError) as exc_info:
+            await client.get(f"http://{'a' * 64}.invalid/")
+    return str(exc_info.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "use_dns_options", [False, True], ids=["no_kwargs", "dns_options"]
+)
+async def test_default_dns_resolver_is_getaddrinfo(use_dns_options: bool):
+    # Control: hickory rejects the name while parsing it. If this stops holding,
+    # the assertions below no longer tell the resolvers apart.
+    hickory_client = wreq.Client(dns_options=DnsOptions(system_dns=False))
+    assert "LabelBytesTooLong" in await invalid_name_resolve_error(hickory_client)
+
+    client = wreq.Client(dns_options=DnsOptions()) if use_dns_options else wreq.Client()
+    error = await invalid_name_resolve_error(client)
+    assert "LabelBytesTooLong" not in error
+    if platform.system() != "Windows":
+        # std's getaddrinfo wrapper prefixes every EAI_* failure with this;
+        # Windows reports a localized WSA error instead.
+        assert "failed to lookup address information" in error
